@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Calendar, 
   ChevronLeft, 
@@ -78,21 +79,21 @@ export const PatientDashboard = () => {
             <div className="flex items-center space-x-8">
               <div className="text-white text-xl font-bold">FIATTIR</div>
               <div className="hidden md:flex items-center space-x-6">
-                <a href="#" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
+                <Link to="/patient/appointment" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
                   APPOINTMENT
-                </a>
-                <a href="#" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
+                </Link>
+                <Link to="/patient/records" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
                   RECORDS
-                </a>
-                <a href="#" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
+                </Link>
+                <Link to="/patient/prescription" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
                   PRESCRIPTION
-                </a>
-                <a href="#" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
+                </Link>
+                <Link to="/patient/insurance" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
                   INSURANCE
-                </a>
-                <a href="#" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
+                </Link>
+                <Link to="/patient/hospital" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
                   HOSPITAL
-                </a>
+                </Link>
               </div>
             </div>
             <div className="flex items-center space-x-4">
