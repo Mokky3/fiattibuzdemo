@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
+import Navbar from './Navbar';
 import { 
-  Search, 
-  Bell,
+  Search,
   User,
   MapPin,
   Phone,
@@ -18,20 +17,12 @@ import {
   Baby,
   Scissors,
   Activity,
-  Shield,
-  Settings,
-  CreditCard,
-  Link,
-  LogOut,
-  Info,
-  ChevronDown
+  Shield
 } from 'lucide-react';
 
 const Hospital = () => {
-  const [searchQuery, setSearchQuery] = useState('');
   const [hospitalSearch, setHospitalSearch] = useState('');
   const [activeTab, setActiveTab] = useState('Hospital info');
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [selectedHospital, setSelectedHospital] = useState('AKFA MEDLINE');
 
   const tabs = ['Hospital info', 'Departments', 'Doctors'];
@@ -137,13 +128,6 @@ const Hospital = () => {
     return hospitals.find(h => h.name === selectedHospital) || hospitals[0];
   };
 
-  const userMenuItems = [
-    { icon: Settings, label: 'Settings', color: 'text-gray-600' },
-    { icon: Info, label: 'My information', color: 'text-gray-600' },
-    { icon: CreditCard, label: 'Payments', color: 'text-gray-600' },
-    { icon: Link, label: 'Linked accounts', color: 'text-gray-600' },
-    { icon: LogOut, label: 'Log out', color: 'text-red-600' }
-  ];
 
   const renderTabContent = () => {
     const hospital = getCurrentHospital();
@@ -273,77 +257,7 @@ const Hospital = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
       {/* Navigation Bar */}
-      <nav className="bg-emerald-400 shadow-lg">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-8">
-              <div className="text-white text-xl font-bold">FIATTIR</div>
-              <div className="hidden md:flex items-center space-x-6">
-                <RouterLink to="/patient/appointment" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
-                  APPOINTMENT
-                </RouterLink>
-                <RouterLink to="/patient/records" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
-                  RECORDS
-                </RouterLink>
-                <RouterLink to="/patient/prescription" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
-                  PRESCRIPTION
-                </RouterLink>
-                <RouterLink to="/patient/insurance" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
-                  INSURANCE
-                </RouterLink>
-                <RouterLink to="/patient/hospital" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
-                  HOSPITAL
-                </RouterLink>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="SEARCH"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="bg-white/20 text-white placeholder-white/70 rounded-full px-4 py-2 pl-10 focus:outline-none focus:ring-2 focus:ring-white/30"
-                />
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-white/70" />
-              </div>
-              <button className="text-white hover:text-emerald-100">
-                <Bell className="h-5 w-5" />
-              </button>
-              
-              {/* User Menu */}
-              <div className="relative">
-                <button 
-                  onClick={() => setShowUserMenu(!showUserMenu)}
-                  className="bg-emerald-600 rounded-full p-2 flex items-center space-x-2 hover:bg-emerald-700 transition-colors"
-                >
-                  <User className="h-5 w-5 text-white" />
-                  <span className="text-white text-sm hidden md:block">Kubaymurodov Diyor...</span>
-                  <ChevronDown className="h-4 w-4 text-white" />
-                </button>
-                
-                {showUserMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-2 z-50">
-                    <div className="px-4 py-2 border-b border-gray-100">
-                      <p className="text-sm font-medium text-gray-800">Kubaymurodov Diyor...</p>
-                      <p className="text-xs text-gray-500">14.09.2024</p>
-                    </div>
-                    {userMenuItems.map((item, index) => (
-                      <button
-                        key={index}
-                        className={`w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors flex items-center space-x-2 ${item.color}`}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span className="text-sm">{item.label}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </nav>
+      <Navbar />
 
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Hospital Header */}
