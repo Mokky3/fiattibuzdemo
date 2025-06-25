@@ -13,11 +13,14 @@ class MedicalHistory(Base):
     diagnosis = Column(String(255))
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    # ✅ Use actual column reference here, not a string
+    # ✅ Use string references to avoid circular imports
     patient = relationship(
         "User",
         back_populates="medical_history",
         foreign_keys=[patient_id]
-)
+    )
 
-    doctor = relationship("User", foreign_keys=[doctor_id])
+    doctor = relationship(
+        "User", 
+        foreign_keys=[doctor_id]
+    )

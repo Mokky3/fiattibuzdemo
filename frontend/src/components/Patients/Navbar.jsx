@@ -10,7 +10,7 @@ const Navbar = () => {
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center space-x-8">
-            <div className="text-white text-xl font-bold">FIATTIR</div>
+            <div className="text-white text-xl font-bold">FIATTIB</div>
             <div className="hidden md:flex items-center space-x-6">
               <Link to="/patient/appointment" className="text-white hover:text-emerald-100 px-3 py-2 rounded-md text-sm font-medium">
                 APPOINTMENT

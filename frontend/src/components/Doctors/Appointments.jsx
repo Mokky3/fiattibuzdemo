@@ -3,6 +3,7 @@ import { Header } from './Header'
 import { initialAppointments } from './AppointmentsData'
 import { format, parse } from 'date-fns'
 import CalendarSidebar from './Dashboard/Calendar'
+import { appointmentsAPI, checkBackendHealth } from '../../services/apiService'
 
 const Appointments = () => {
   // Current date and selected date
@@ -10,14 +11,19 @@ const Appointments = () => {
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [isLoaded, setIsLoaded] = useState(false)
   
+  // Backend connection state
+  const [backendConnected, setBackendConnected] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  
   // Load animation effect
   useEffect(() => {
     const timer = setTimeout(() => setIsLoaded(true), 100)
     return () => clearTimeout(timer)
   }, [])
   
-  // Appointments state
-  const [appointments, setAppointments] = useState(initialAppointments)
+  // Appointments state - now connected to backend
+  const [appointments, setAppointments] = useState([])
   
   // Active section filter (null means show all sections)
   const [activeSection, setActiveSection] = useState(null)
@@ -33,6 +39,58 @@ const Appointments = () => {
     notes: ''
   })
 
+  // Check backend connection and load appointments
+  useEffect(() => {
+    const initializeAppointments = async () => {
+      try {
+        setLoading(true)
+        
+        // Check backend health
+        const isHealthy = await checkBackendHealth()
+        setBackendConnected(isHealthy)
+        
+        if (isHealthy) {
+          // Try to load appointments from backend
+          try {
+            const backendAppointments = await appointmentsAPI.getAll()
+            
+            // Transform backend data to match frontend format
+            const transformedAppointments = backendAppointments.map(apt => ({
+              id: apt.id,
+              time: apt.time || apt.appointment_time || '00:00',
+              date: new Date(apt.date || apt.appointment_date),
+              formattedDate: format(new Date(apt.date || apt.appointment_date), 'dd.MM.yyyy'),
+              patient: apt.patient || `${apt.patient_name || 'Unknown Patient'}`,
+              problem: apt.problem || apt.appointment_type || 'General consultation',
+              description: apt.description || apt.notes || 'No description available',
+              provider: apt.provider || apt.doctor_name || 'Current Doctor',
+              status: apt.status || 'upcoming'
+            }))
+            
+            setAppointments(transformedAppointments)
+          } catch (apiError) {
+            console.error('Failed to load appointments from backend:', apiError)
+            setError('Failed to load appointments from server')
+            // Fallback to mock data
+            setAppointments(initialAppointments)
+          }
+        } else {
+          // Backend not available, use mock data
+          console.log('Backend not available, using mock data')
+          setAppointments(initialAppointments)
+        }
+      } catch (err) {
+        console.error('Error initializing appointments:', err)
+        setError('Failed to initialize appointments')
+        setAppointments(initialAppointments)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    initializeAppointments()
+  }, [])
+
   // Function to handle input changes for new appointment
   const handleInputChange = (e) => {
     const { name, value } = e.target
@@ -42,42 +100,97 @@ const Appointments = () => {
     })
   }
 
-  // Function to add new appointment
-  const handleAddAppointment = () => {
-    // Parse the date string to a Date object
-    let appointmentDate
+  // Function to add new appointment - with backend integration
+  const handleAddAppointment = async () => {
     try {
-      appointmentDate = parse(newAppointment.date, 'yyyy-MM-dd', new Date())
-    } catch {
-      appointmentDate = new Date()
-    }
+      // Parse the date string to a Date object
+      let appointmentDate
+      try {
+        appointmentDate = parse(newAppointment.date, 'yyyy-MM-dd', new Date())
+      } catch {
+        appointmentDate = new Date()
+      }
 
-    // Create the new appointment object
-    const newAppointmentObj = {
-      id: appointments.length + 1,
-      time: newAppointment.time,
-      date: appointmentDate,
-      formattedDate: format(appointmentDate, 'dd.MM.yyyy'),
-      patient: newAppointment.fullName,
-      problem: newAppointment.appointmentType,
-      description: newAppointment.notes,
-      provider: "Current Doctor", // You might want to customize this
-      status: 'upcoming'
-    }
+      const appointmentData = {
+        patient_name: newAppointment.fullName,
+        patient_id: newAppointment.id || null,
+        appointment_date: newAppointment.date,
+        appointment_time: newAppointment.time,
+        appointment_type: newAppointment.appointmentType,
+        notes: newAppointment.notes,
+        status: 'upcoming'
+      }
 
-    // Add the new appointment to the appointments array
-    setAppointments([...appointments, newAppointmentObj])
-    
-    // Reset form and close modal
-    setNewAppointment({
-      fullName: '',
-      id: '',
-      date: '',
-      time: '',
-      appointmentType: '',
-      notes: ''
-    })
-    setShowNewAppointmentModal(false)
+      if (backendConnected) {
+        try {
+          // Create appointment via API
+          const createdAppointment = await appointmentsAPI.create(appointmentData)
+          
+          // Transform and add to local state
+          const newAppointmentObj = {
+            id: createdAppointment.id,
+            time: newAppointment.time,
+            date: appointmentDate,
+            formattedDate: format(appointmentDate, 'dd.MM.yyyy'),
+            patient: newAppointment.fullName,
+            problem: newAppointment.appointmentType,
+            description: newAppointment.notes,
+            provider: "Current Doctor",
+            status: 'upcoming'
+          }
+          
+          setAppointments([...appointments, newAppointmentObj])
+        } catch (apiError) {
+          console.error('Failed to create appointment via API:', apiError)
+          setError('Failed to create appointment on server')
+          
+          // Fallback to local creation
+          const newAppointmentObj = {
+            id: Date.now(), // Use timestamp as ID for local fallback
+            time: newAppointment.time,
+            date: appointmentDate,
+            formattedDate: format(appointmentDate, 'dd.MM.yyyy'),
+            patient: newAppointment.fullName,
+            problem: newAppointment.appointmentType,
+            description: newAppointment.notes,
+            provider: "Current Doctor",
+            status: 'upcoming'
+          }
+          
+          setAppointments([...appointments, newAppointmentObj])
+        }
+      } else {
+        // Backend not available, create locally
+        const newAppointmentObj = {
+          id: Date.now(),
+          time: newAppointment.time,
+          date: appointmentDate,
+          formattedDate: format(appointmentDate, 'dd.MM.yyyy'),
+          patient: newAppointment.fullName,
+          problem: newAppointment.appointmentType,
+          description: newAppointment.notes,
+          provider: "Current Doctor",
+          status: 'upcoming'
+        }
+        
+        setAppointments([...appointments, newAppointmentObj])
+      }
+      
+      // Reset form and close modal
+      setNewAppointment({
+        fullName: '',
+        id: '',
+        date: '',
+        time: '',
+        appointmentType: '',
+        notes: ''
+      })
+      setShowNewAppointmentModal(false)
+      
+    } catch (err) {
+      console.error('Error creating appointment:', err)
+      setError('Failed to create appointment')
+    }
   }
   
   // Filter appointments based on status
@@ -85,16 +198,46 @@ const Appointments = () => {
   const pendingAppointments = appointments.filter(apt => apt.status === 'pending')
   const pastAppointments = appointments.filter(apt => apt.status === 'past')
   
-  // Function to accept an appointment
-  const handleAccept = (id) => {
-    setAppointments(appointments.map(apt => 
-      apt.id === id ? { ...apt, status: 'upcoming' } : apt
-    ))
+  // Function to accept an appointment - with backend integration
+  const handleAccept = async (id) => {
+    try {
+      if (backendConnected) {
+        try {
+          await appointmentsAPI.updateStatus(id, 'upcoming')
+        } catch (apiError) {
+          console.error('Failed to update appointment status via API:', apiError)
+          setError('Failed to update appointment status on server')
+        }
+      }
+      
+      // Update local state regardless of backend success
+      setAppointments(appointments.map(apt => 
+        apt.id === id ? { ...apt, status: 'upcoming' } : apt
+      ))
+    } catch (err) {
+      console.error('Error accepting appointment:', err)
+      setError('Failed to accept appointment')
+    }
   }
   
-  // Function to decline an appointment
-  const handleDecline = (id) => {
-    setAppointments(appointments.filter(apt => apt.id !== id))
+  // Function to decline an appointment - with backend integration
+  const handleDecline = async (id) => {
+    try {
+      if (backendConnected) {
+        try {
+          await appointmentsAPI.delete(id)
+        } catch (apiError) {
+          console.error('Failed to delete appointment via API:', apiError)
+          setError('Failed to delete appointment on server')
+        }
+      }
+      
+      // Update local state regardless of backend success
+      setAppointments(appointments.filter(apt => apt.id !== id))
+    } catch (err) {
+      console.error('Error declining appointment:', err)
+      setError('Failed to decline appointment')
+    }
   }
   
   // Handle date selection - reset to default view showing all sections
@@ -133,6 +276,30 @@ const Appointments = () => {
     <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
       <Header />
       
+      {/* Backend status and error indicators */}
+      {!backendConnected && (
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 mx-4 mt-4 rounded">
+          <div className="flex items-center">
+            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            Backend disconnected - showing local data
+          </div>
+        </div>
+      )}
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 mx-4 mt-4 rounded">
+          {error}
+          <button 
+            onClick={() => setError(null)}
+            className="float-right text-red-700 hover:text-red-900"
+          >
+            ×
+          </button>
+        </div>
+      )}
+      
       <div className={`flex flex-col md:flex-row p-4 gap-6 relative transition-all duration-1000 transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}>
         {/* Enhanced medical illustrations background */}
         <div className="absolute inset-0 overflow-hidden opacity-5 pointer-events-none">
@@ -156,13 +323,17 @@ const Appointments = () => {
             <div className="flex items-center mb-4">
               <div className="w-2 h-6 bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0] rounded-full mr-3"></div>
               <h3 className="text-lg font-semibold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">Quick Actions</h3>
+              {backendConnected && (
+                <div className="ml-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+              )}
             </div>
             
             <button 
               className="w-full py-3 rounded-lg bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]/50 focus:ring-offset-2"
               onClick={() => setShowNewAppointmentModal(true)}
+              disabled={loading}
             >
-              + New Appointment
+              {loading ? 'Loading...' : '+ New Appointment'}
             </button>
             
             <button 
@@ -213,43 +384,136 @@ const Appointments = () => {
         </div>
         
         <div className="md:w-2/3 lg:w-3/4">
-          {/* Main Content Section with all appointment types */}
-          <div className="space-y-6">
-            {/* Upcoming appointments section */}
-            {shouldShowSection('upcoming') && (
-              <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg border border-gray-100 p-6 transform transition-all duration-300 hover:shadow-xl">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center">
-                    <div className="w-2 h-6 bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0] rounded-full mr-3"></div>
-                    <h2 className="text-xl font-semibold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">
-                      {activeSection === 'upcoming' 
-                        ? 'Upcoming appointments' 
-                        : `Appointments for ${formatSelectedDate(selectedDate)}`
-                      }
-                    </h2>
+          {/* Loading indicator */}
+          {loading ? (
+            <div className="flex justify-center items-center py-20">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#5ACCC3]"></div>
+              <span className="ml-4 text-gray-600">Loading appointments...</span>
+            </div>
+          ) : (
+            /* Main Content Section with all appointment types */
+            <div className="space-y-6">
+              {/* Upcoming appointments section */}
+              {shouldShowSection('upcoming') && (
+                <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg border border-gray-100 p-6 transform transition-all duration-300 hover:shadow-xl">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center">
+                      <div className="w-2 h-6 bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0] rounded-full mr-3"></div>
+                      <h2 className="text-xl font-semibold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">
+                        {activeSection === 'upcoming' 
+                          ? 'All Upcoming appointments' 
+                          : `Upcoming appointments for ${formatSelectedDate(selectedDate)}`
+                        }
+                      </h2>
+                      {backendConnected && (
+                        <div className="ml-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      )}
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 bg-[#5ACCC3] rounded-full animate-pulse"></div>
+                      <span className="text-sm text-gray-500">
+                        {activeSection === 'upcoming' 
+                          ? `${upcomingAppointments.length} upcoming`
+                          : `${getAppointmentsForDateAndStatus(selectedDate, 'upcoming').length} appointments`
+                        }
+                      </span>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 bg-[#5ACCC3] rounded-full animate-pulse"></div>
-                    <span className="text-sm text-gray-500">
-                      {activeSection === 'upcoming' 
-                        ? `${upcomingAppointments.length} upcoming`
-                        : `${getAppointmentsForDateAndStatus(selectedDate, 'upcoming').length} appointments`
+                  <div className="space-y-3">
+                    {(() => {
+                      // Get appropriate appointments based on context
+                      let displayAppointments;
+                      
+                      if (activeSection === 'upcoming') {
+                        // Show all upcoming appointments when "Upcoming Appointments" button is clicked
+                        displayAppointments = upcomingAppointments;
+                      } else {
+                        // Default view: show upcoming appointments for selected date
+                        displayAppointments = getAppointmentsForDateAndStatus(selectedDate, 'upcoming');
                       }
-                    </span>
+                        
+                      if (displayAppointments.length > 0) {
+                        return displayAppointments.map((appointment, index) => (
+                          <div 
+                            key={appointment.id} 
+                            className="bg-white rounded-lg border border-gray-100 overflow-hidden transform transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:border-[#5ACCC3]/30 cursor-pointer"
+                            style={{ animationDelay: `${index * 100}ms` }}
+                          >
+                            <div className="grid grid-cols-12 items-center">
+                              <div className="col-span-1 p-4 text-center">
+                                <div className="bg-gradient-to-br from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg p-2 font-bold text-xs shadow-md min-w-[80px]">
+                                  <div className="text-sm">{appointment.time}</div>
+                                  <div className="text-xs opacity-75 mt-1 whitespace-nowrap">{appointment.formattedDate}</div>
+                                </div>
+                              </div>
+                              <div className="col-span-2 p-4">
+                                <div className="font-semibold text-gray-800">{appointment.patient}</div>
+                              </div>
+                              <div className="col-span-2 p-4">
+                                <span className="bg-[#5ACCC3]/10 text-[#5ACCC3] px-2 py-1 rounded-full text-xs font-medium">
+                                  {appointment.problem}
+                                </span>
+                              </div>
+                              <div className="col-span-4 p-4 text-gray-600 text-sm">
+                                {appointment.description}
+                              </div>
+                              <div className="col-span-2 p-4 text-gray-500 text-xs">
+                                Provider: {appointment.provider}
+                              </div>
+                              <div className="col-span-1 p-4">
+                                <button className="px-4 py-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg text-xs font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]/50">
+                                  View
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ));
+                      } else {
+                        return (
+                          <div className="text-center py-12">
+                            <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                              <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
+                            <p className="text-gray-500 font-medium">
+                              {activeSection === 'upcoming' 
+                                ? 'No upcoming appointments' 
+                                : 'No appointments scheduled'
+                              }
+                            </p>
+                            <p className="text-gray-400 text-sm">
+                              {activeSection !== 'upcoming' && `for ${formatSelectedDate(selectedDate)}`}
+                            </p>
+                          </div>
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
-                <div className="space-y-3">
-                  {(() => {
-                    // Get appropriate appointments based on context
-                    let displayAppointments = activeSection === 'upcoming'
-                      ? upcomingAppointments
-                      : getAppointmentsForDateAndStatus(selectedDate, 'upcoming');
-                      
-                    if (displayAppointments.length > 0) {
-                      return displayAppointments.map((appointment, index) => (
+              )}
+              
+              {/* Accept appointments section */}
+              {shouldShowSection('pending') && (
+                <div className="bg-gradient-to-br from-white to-amber-50 rounded-xl shadow-lg border border-amber-100 p-6 transform transition-all duration-300 hover:shadow-xl">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center">
+                      <div className="w-2 h-6 bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0] rounded-full mr-3"></div>
+                      <h2 className="text-xl font-semibold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">Accept appointments</h2>
+                      {backendConnected && (
+                        <div className="ml-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      )}
+                    </div>
+                    <span className="bg-[#5ACCC3]/10 text-[#5ACCC3] px-3 py-1 rounded-full text-xs font-medium animate-pulse">
+                      {pendingAppointments.length} pending
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {pendingAppointments.length > 0 ? (
+                      pendingAppointments.map((appointment, index) => (
                         <div 
                           key={appointment.id} 
-                          className="bg-white rounded-lg border border-gray-100 overflow-hidden transform transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:border-[#5ACCC3]/30 cursor-pointer"
+                          className="bg-white rounded-lg border border-gray-100 overflow-hidden transform transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:border-[#5ACCC3]/30"
                           style={{ animationDelay: `${index * 100}ms` }}
                         >
                           <div className="grid grid-cols-12 items-center">
@@ -267,6 +531,82 @@ const Appointments = () => {
                                 {appointment.problem}
                               </span>
                             </div>
+                            <div className="col-span-3 p-4 text-gray-600 text-sm">
+                              {appointment.description}
+                            </div>
+                            <div className="col-span-2 p-4 text-gray-500 text-xs">
+                              Provider: {appointment.provider}
+                            </div>
+                            <div className="col-span-2 p-4 flex space-x-2">
+                              <button 
+                                onClick={() => handleDecline(appointment.id)}
+                                className="px-3 py-2 border-2 border-red-300 text-red-500 rounded-lg text-xs font-medium hover:bg-red-500 hover:text-white transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500/50"
+                              >
+                                Decline
+                              </button>
+                              <button 
+                                onClick={() => handleAccept(appointment.id)}
+                                className="px-3 py-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg text-xs font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]/50"
+                              >
+                                Accept
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-20 h-20 bg-gradient-to-br from-[#5ACCC3]/10 to-[#4DB6B0]/10 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <svg className="w-10 h-10 text-[#5ACCC3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </div>
+                        <p className="text-[#5ACCC3] font-medium">All caught up!</p>
+                        <p className="text-gray-500 text-sm">No pending appointments to review</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Past appointments section */}
+              {shouldShowSection('past') && (
+                <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg border border-gray-100 p-6 transform transition-all duration-300 hover:shadow-xl">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center">
+                      <div className="w-2 h-6 bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0] rounded-full mr-3"></div>
+                      <h2 className="text-xl font-semibold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">Past appointments</h2>
+                      {backendConnected && (
+                        <div className="ml-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      )}
+                    </div>
+                    <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium">
+                      {pastAppointments.length} completed
+                    </span>
+                  </div>
+                  <div className="space-y-3">
+                    {pastAppointments.length > 0 ? (
+                      pastAppointments.map((appointment, index) => (
+                        <div 
+                          key={appointment.id} 
+                          className="bg-white rounded-lg border border-gray-100 overflow-hidden transform transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:border-gray-300 opacity-90 hover:opacity-100"
+                          style={{ animationDelay: `${index * 100}ms` }}
+                        >
+                          <div className="grid grid-cols-12 items-center">
+                            <div className="col-span-1 p-4 text-center">
+                              <div className="bg-gradient-to-br from-gray-400 to-gray-500 text-white rounded-lg p-2 font-bold text-xs shadow-md min-w-[80px]">
+                                <div className="text-sm">{appointment.time}</div>
+                                <div className="text-xs opacity-75 mt-1 whitespace-nowrap">{appointment.formattedDate}</div>
+                              </div>
+                            </div>
+                            <div className="col-span-2 p-4">
+                              <div className="font-semibold text-gray-700">{appointment.patient}</div>
+                            </div>
+                            <div className="col-span-2 p-4">
+                              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">
+                                {appointment.problem}
+                              </span>
+                            </div>
                             <div className="col-span-4 p-4 text-gray-600 text-sm">
                               {appointment.description}
                             </div>
@@ -274,175 +614,29 @@ const Appointments = () => {
                               Provider: {appointment.provider}
                             </div>
                             <div className="col-span-1 p-4">
-                              <button className="px-4 py-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg text-xs font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]/50">
-                                View
+                              <button className="px-3 py-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg text-xs font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]/50">
+                                Report
                               </button>
                             </div>
                           </div>
                         </div>
-                      ));
-                    } else {
-                      return (
-                        <div className="text-center py-12">
-                          <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </div>
-                          <p className="text-gray-500 font-medium">
-                            {activeSection === 'upcoming' 
-                              ? 'No upcoming appointments' 
-                              : 'No appointments scheduled'
-                            }
-                          </p>
-                          <p className="text-gray-400 text-sm">
-                            {activeSection !== 'upcoming' && `for ${formatSelectedDate(selectedDate)}`}
-                          </p>
+                      ))
+                    ) : (
+                      <div className="text-center py-12">
+                        <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
+                          <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
                         </div>
-                      );
-                    }
-                  })()}
-                </div>
-              </div>
-            )}
-            
-            {/* Accept appointments section */}
-            {shouldShowSection('pending') && (
-              <div className="bg-gradient-to-br from-white to-amber-50 rounded-xl shadow-lg border border-amber-100 p-6 transform transition-all duration-300 hover:shadow-xl">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center">
-                    <div className="w-2 h-6 bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0] rounded-full mr-3"></div>
-                    <h2 className="text-xl font-semibold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">Accept appointments</h2>
+                        <p className="text-gray-500 font-medium">No past appointments</p>
+                        <p className="text-gray-400 text-sm">Completed appointments will appear here</p>
+                      </div>
+                    )}
                   </div>
-                  <span className="bg-[#5ACCC3]/10 text-[#5ACCC3] px-3 py-1 rounded-full text-xs font-medium animate-pulse">
-                    {pendingAppointments.length} pending
-                  </span>
                 </div>
-                <div className="space-y-3">
-                  {pendingAppointments.length > 0 ? (
-                    pendingAppointments.map((appointment, index) => (
-                      <div 
-                        key={appointment.id} 
-                        className="bg-white rounded-lg border border-gray-100 overflow-hidden transform transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:border-[#5ACCC3]/30"
-                        style={{ animationDelay: `${index * 100}ms` }}
-                      >
-                        <div className="grid grid-cols-12 items-center">
-                          <div className="col-span-1 p-4 text-center">
-                            <div className="bg-gradient-to-br from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg p-2 font-bold text-xs shadow-md min-w-[80px]">
-                              <div className="text-sm">{appointment.time}</div>
-                              <div className="text-xs opacity-75 mt-1 whitespace-nowrap">{appointment.formattedDate}</div>
-                            </div>
-                          </div>
-                          <div className="col-span-2 p-4">
-                            <div className="font-semibold text-gray-800">{appointment.patient}</div>
-                          </div>
-                          <div className="col-span-2 p-4">
-                            <span className="bg-[#5ACCC3]/10 text-[#5ACCC3] px-2 py-1 rounded-full text-xs font-medium">
-                              {appointment.problem}
-                            </span>
-                          </div>
-                          <div className="col-span-3 p-4 text-gray-600 text-sm">
-                            {appointment.description}
-                          </div>
-                          <div className="col-span-2 p-4 text-gray-500 text-xs">
-                            Provider: {appointment.provider}
-                          </div>
-                          <div className="col-span-2 p-4 flex space-x-2">
-                            <button 
-                              onClick={() => handleDecline(appointment.id)}
-                              className="px-3 py-2 border-2 border-red-300 text-red-500 rounded-lg text-xs font-medium hover:bg-red-500 hover:text-white transition-all duration-300 transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-red-500/50"
-                            >
-                              Decline
-                            </button>
-                            <button 
-                              onClick={() => handleAccept(appointment.id)}
-                              className="px-3 py-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg text-xs font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]/50"
-                            >
-                              Accept
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-12">
-                      <div className="w-20 h-20 bg-gradient-to-br from-[#5ACCC3]/10 to-[#4DB6B0]/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-10 h-10 text-[#5ACCC3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <p className="text-[#5ACCC3] font-medium">All caught up!</p>
-                      <p className="text-gray-500 text-sm">No pending appointments to review</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* Past appointments section */}
-            {shouldShowSection('past') && (
-              <div className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-lg border border-gray-100 p-6 transform transition-all duration-300 hover:shadow-xl">
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center">
-                    <div className="w-2 h-6 bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0] rounded-full mr-3"></div>
-                    <h2 className="text-xl font-semibold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">Past appointments</h2>
-                  </div>
-                  <span className="bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium">
-                    {pastAppointments.length} completed
-                  </span>
-                </div>
-                <div className="space-y-3">
-                  {pastAppointments.length > 0 ? (
-                    pastAppointments.map((appointment, index) => (
-                      <div 
-                        key={appointment.id} 
-                        className="bg-white rounded-lg border border-gray-100 overflow-hidden transform transition-all duration-300 hover:shadow-lg hover:scale-[1.02] hover:border-gray-300 opacity-90 hover:opacity-100"
-                        style={{ animationDelay: `${index * 100}ms` }}
-                      >
-                        <div className="grid grid-cols-12 items-center">
-                          <div className="col-span-1 p-4 text-center">
-                            <div className="bg-gradient-to-br from-gray-400 to-gray-500 text-white rounded-lg p-2 font-bold text-xs shadow-md min-w-[80px]">
-                              <div className="text-sm">{appointment.time}</div>
-                              <div className="text-xs opacity-75 mt-1 whitespace-nowrap">{appointment.formattedDate}</div>
-                            </div>
-                          </div>
-                          <div className="col-span-2 p-4">
-                            <div className="font-semibold text-gray-700">{appointment.patient}</div>
-                          </div>
-                          <div className="col-span-2 p-4">
-                            <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded-full text-xs font-medium">
-                              {appointment.problem}
-                            </span>
-                          </div>
-                          <div className="col-span-4 p-4 text-gray-600 text-sm">
-                            {appointment.description}
-                          </div>
-                          <div className="col-span-2 p-4 text-gray-500 text-xs">
-                            Provider: {appointment.provider}
-                          </div>
-                          <div className="col-span-1 p-4">
-                            <button className="px-3 py-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg text-xs font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]/50">
-                              Report
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="text-center py-12">
-                      <div className="w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                      </div>
-                      <p className="text-gray-500 font-medium">No past appointments</p>
-                      <p className="text-gray-400 text-sm">Completed appointments will appear here</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
       
@@ -453,6 +647,12 @@ const Appointments = () => {
             <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] rounded-t-2xl"></div>
             <h2 className="text-3xl font-light text-gray-800 mb-8 border-b pb-4">
               <span className="bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">New Appointment</span>
+              {backendConnected && (
+                <span className="ml-2 inline-flex items-center">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="ml-1 text-xs text-green-600">Connected</span>
+                </span>
+              )}
             </h2>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
@@ -545,8 +745,9 @@ const Appointments = () => {
               <button 
                 className="px-8 py-3 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-xl font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]/50"
                 onClick={handleAddAppointment}
+                disabled={loading}
               >
-                Create Appointment
+                {loading ? 'Creating...' : 'Create Appointment'}
               </button>
             </div>
           </div>
