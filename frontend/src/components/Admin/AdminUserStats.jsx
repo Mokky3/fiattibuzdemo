@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import AdminHeader from './AdminHeader'
-import { FiArrowLeft, FiRefreshCw, FiTrendingUp, FiActivity, FiUsers, FiCalendar, FiBarChart2, FiClock, FiFilter, FiSearch, FiChevronLeft, FiChevronRight } from 'react-icons/fi'
+import {
+  FiArrowLeft, FiRefreshCw, FiTrendingUp, FiActivity, FiUsers, FiCalendar,
+  FiBarChart2, FiClock, FiFilter, FiSearch, FiChevronLeft, FiChevronRight
+} from 'react-icons/fi'
 
 // API service functions
 const userStatsService = {
-  // Fetch user statistics by ID
   async fetchUserStats(userId) {
     try {
       const response = await fetch(`/api/admin/users/${userId}/stats`, {
@@ -13,16 +15,15 @@ const userStatsService = {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         }
-      })
-      if (!response.ok) throw new Error('Failed to fetch user stats')
-      return await response.json()
+      });
+      if (!response.ok) throw new Error('Failed to fetch user stats');
+      return await response.json();
     } catch (error) {
-      console.error('Error fetching user stats:', error)
-      throw error
+      console.error('Error fetching user stats:', error);
+      throw error;
     }
   },
 
-  // Fetch user basic info
   async fetchUserInfo(userId) {
     try {
       const response = await fetch(`/api/admin/users/${userId}`, {
@@ -30,16 +31,15 @@ const userStatsService = {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         }
-      })
-      if (!response.ok) throw new Error('Failed to fetch user info')
-      return await response.json()
+      });
+      if (!response.ok) throw new Error('Failed to fetch user info');
+      return await response.json();
     } catch (error) {
-      console.error('Error fetching user info:', error)
-      throw error
+      console.error('Error fetching user info:', error);
+      throw error;
     }
   },
 
-  // Fetch user activity history
   async fetchUserActivityHistory(userId, page = 1, limit = 20, filter = 'all') {
     try {
       const response = await fetch(`/api/admin/users/${userId}/activity?page=${page}&limit=${limit}&filter=${filter}`, {
@@ -47,162 +47,12 @@ const userStatsService = {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         }
-      })
-      if (!response.ok) throw new Error('Failed to fetch activity history')
-      return await response.json()
+      });
+      if (!response.ok) throw new Error('Failed to fetch activity history');
+      return await response.json();
     } catch (error) {
-      console.error('Error fetching activity history:', error)
-      throw error
-    }
-  }
-}
-
-// Enhanced dummy data for development (remove when connecting to backend)
-const dummyUserStats = {
-  1: {
-    user: {
-      id: 1,
-      name: 'Dr. A. Aliyev',
-      role: 'Doctor',
-      email: 'aliyev@example.com',
-      clinic: 'Main Hospital',
-      status: 'Active',
-      joinDate: '2023-01-15',
-      lastLogin: '2025-06-22 14:30'
-    },
-    stats: {
-      appointments: { total: 152, thisMonth: 24, lastMonth: 28, trend: -14.3 },
-      prescriptions: { total: 89, thisMonth: 15, lastMonth: 18, trend: -16.7 },
-      patients: { total: 87, active: 65, new: 12, trend: 18.5 },
-      consultations: { total: 142, avgDuration: 25, satisfaction: 4.7 },
-      revenue: { total: 45600, thisMonth: 7800, lastMonth: 8200, trend: -4.9 }
-    },
-    performance: {
-      punctuality: 94,
-      patientSatisfaction: 4.7,
-      responseTime: 12,
-      completionRate: 96
-    },
-    weeklyActivity: [
-      { day: 'Mon', appointments: 8, hours: 9 },
-      { day: 'Tue', appointments: 6, hours: 8 },
-      { day: 'Wed', appointments: 9, hours: 10 },
-      { day: 'Thu', appointments: 7, hours: 8 },
-      { day: 'Fri', appointments: 5, hours: 7 },
-      { day: 'Sat', appointments: 3, hours: 4 },
-      { day: 'Sun', appointments: 0, hours: 0 }
-    ],
-    activityHistory: {
-      total: 156,
-      activities: [
-        { id: 1, type: 'appointment', action: 'Completed appointment with John Smith', timestamp: '2025-06-22 14:30', status: 'completed', details: 'Regular checkup, prescribed medication' },
-        { id: 2, type: 'prescription', action: 'Prescribed Lisinopril 10mg to Maria Garcia', timestamp: '2025-06-22 11:15', status: 'active', details: 'For hypertension management' },
-        { id: 3, type: 'login', action: 'Logged into system', timestamp: '2025-06-22 08:00', status: 'success', details: 'IP: 192.168.1.100' },
-        { id: 4, type: 'consultation', action: 'Video consultation with Sarah Johnson', timestamp: '2025-06-21 16:45', status: 'completed', details: 'Follow-up consultation, 25 minutes' },
-        { id: 5, type: 'appointment', action: 'Cancelled appointment with Mike Wilson', timestamp: '2025-06-21 14:20', status: 'cancelled', details: 'Patient requested reschedule' },
-        { id: 6, type: 'prescription', action: 'Updated prescription for David Brown', timestamp: '2025-06-21 10:30', status: 'updated', details: 'Dosage adjustment for diabetes medication' },
-        { id: 7, type: 'report', action: 'Generated monthly patient report', timestamp: '2025-06-20 17:00', status: 'completed', details: '45 patients reviewed' },
-        { id: 8, type: 'appointment', action: 'Completed appointment with Lisa Chen', timestamp: '2025-06-20 15:15', status: 'completed', details: 'Annual physical examination' },
-        { id: 9, type: 'system', action: 'Updated patient records system', timestamp: '2025-06-20 09:45', status: 'success', details: 'Bulk update of 15 patient records' },
-        { id: 10, type: 'consultation', action: 'Phone consultation with Robert Davis', timestamp: '2025-06-19 13:30', status: 'completed', details: 'Discussed lab results, 15 minutes' },
-        { id: 11, type: 'appointment', action: 'Scheduled appointment for next week', timestamp: '2025-06-19 10:00', status: 'scheduled', details: 'Follow-up for chronic condition' },
-        { id: 12, type: 'prescription', action: 'Renewed prescription for chronic medication', timestamp: '2025-06-18 14:45', status: 'active', details: 'Extended prescription for 3 months' }
-      ]
-    }
-  },
-  2: {
-    user: {
-      id: 2,
-      name: 'Nurse T. Kim',
-      role: 'Nurse',
-      email: 'kim@example.com',
-      clinic: 'Main Hospital',
-      status: 'Active',
-      joinDate: '2023-03-20',
-      lastLogin: '2025-06-22 16:45'
-    },
-    stats: {
-      vitalsTaken: { total: 324, thisMonth: 45, lastMonth: 52, trend: -13.5 },
-      shifts: { total: 89, thisMonth: 12, overtime: 3, trend: 8.3 },
-      patients: { total: 156, assisted: 45, critical: 8, trend: 12.1 },
-      emergencies: { total: 23, thisMonth: 4, response: 95, trend: 25.0 },
-      medications: { administered: 234, thisMonth: 38, errors: 0 }
-    },
-    performance: {
-      punctuality: 98,
-      efficiency: 92,
-      teamwork: 4.8,
-      accuracy: 99
-    },
-    weeklyActivity: [
-      { day: 'Mon', patients: 12, hours: 12 },
-      { day: 'Tue', patients: 15, hours: 12 },
-      { day: 'Wed', patients: 11, hours: 8 },
-      { day: 'Thu', patients: 14, hours: 12 },
-      { day: 'Fri', patients: 13, hours: 12 },
-      { day: 'Sat', patients: 0, hours: 0 },
-      { day: 'Sun', patients: 0, hours: 0 }
-    ],
-    activityHistory: {
-      total: 89,
-      activities: [
-        { id: 1, type: 'vitals', action: 'Recorded vitals for patient #2847', timestamp: '2025-06-22 16:30', status: 'completed', details: 'BP: 130/85, HR: 76, Temp: 98.6°F' },
-        { id: 2, type: 'medication', action: 'Administered insulin to patient #1923', timestamp: '2025-06-22 14:15', status: 'completed', details: '10 units Humalog, subcutaneous' },
-        { id: 3, type: 'shift', action: 'Started day shift', timestamp: '2025-06-22 07:00', status: 'active', details: 'ICU Ward, 12-hour shift' },
-        { id: 4, type: 'emergency', action: 'Responded to Code Blue in Room 304', timestamp: '2025-06-21 22:45', status: 'resolved', details: 'Patient stabilized, vital signs normal' },
-        { id: 5, type: 'documentation', action: 'Updated patient care plans', timestamp: '2025-06-21 20:30', status: 'completed', details: '8 patients updated' },
-        { id: 6, type: 'vitals', action: 'Routine vitals check - Room 301-306', timestamp: '2025-06-21 18:00', status: 'completed', details: '6 patients checked, all stable' },
-        { id: 7, type: 'medication', action: 'Prepared and administered evening medications', timestamp: '2025-06-21 19:30', status: 'completed', details: '12 patients, no adverse reactions' },
-        { id: 8, type: 'training', action: 'Completed CPR recertification', timestamp: '2025-06-20 14:00', status: 'completed', details: 'Score: 98%, Certificate updated' },
-        { id: 9, type: 'handoff', action: 'Shift handoff to night nurse', timestamp: '2025-06-20 19:00', status: 'completed', details: '10 patients transferred, all notes updated' },
-        { id: 10, type: 'assessment', action: 'Conducted patient assessments', timestamp: '2025-06-20 08:30', status: 'completed', details: '14 patients assessed, 2 flagged for physician review' }
-      ]
-    }
-  },
-  5: {
-    user: {
-      id: 5,
-      name: 'John Smith',
-      role: 'Patient',
-      email: 'smith@example.com',
-      clinic: 'Main Hospital',
-      status: 'Active',
-      joinDate: '2024-05-10',
-      lastVisit: '2025-06-20 10:30'
-    },
-    stats: {
-      appointments: { total: 8, completed: 7, cancelled: 1, upcoming: 2 },
-      treatments: { total: 12, ongoing: 2, completed: 10 },
-      prescriptions: { total: 5, active: 2, filled: 15 },
-      vitals: { last: '2025-06-20', bp: '120/80', heartRate: 72, weight: 75 },
-      visits: { total: 8, thisYear: 6, emergency: 1 }
-    },
-    health: {
-      bloodPressure: 'Normal',
-      heartRate: 'Normal',
-      weight: 'Stable',
-      overallHealth: 'Good'
-    },
-    recentActivity: [
-      { date: '2025-06-20', type: 'Checkup', doctor: 'Dr. A. Aliyev', status: 'Completed' },
-      { date: '2025-06-15', type: 'Lab Results', doctor: 'Lab Tech', status: 'Normal' },
-      { date: '2025-06-10', type: 'Prescription', doctor: 'Dr. A. Aliyev', status: 'Filled' },
-      { date: '2025-06-05', type: 'Consultation', doctor: 'Dr. A. Aliyev', status: 'Completed' }
-    ],
-    activityHistory: {
-      total: 34,
-      activities: [
-        { id: 1, type: 'appointment', action: 'Attended regular checkup with Dr. A. Aliyev', timestamp: '2025-06-20 10:30', status: 'completed', details: 'Annual physical, all vitals normal' },
-        { id: 2, type: 'prescription', action: 'Picked up prescription at pharmacy', timestamp: '2025-06-18 15:20', status: 'completed', details: 'Lisinopril 10mg, 30-day supply' },
-        { id: 3, type: 'lab', action: 'Completed blood work', timestamp: '2025-06-15 09:15', status: 'completed', details: 'Fasting glucose, lipid panel - Results normal' },
-        { id: 4, type: 'portal', action: 'Logged into patient portal', timestamp: '2025-06-14 19:45', status: 'success', details: 'Viewed lab results and appointment history' },
-        { id: 5, type: 'appointment', action: 'Scheduled follow-up appointment', timestamp: '2025-06-12 14:30', status: 'scheduled', details: 'Next visit: July 15, 2025' },
-        { id: 6, type: 'prescription', action: 'Refill requested for blood pressure medication', timestamp: '2025-06-10 11:00', status: 'approved', details: 'Approved by Dr. A. Aliyev' },
-        { id: 7, type: 'vitals', action: 'Self-reported blood pressure readings', timestamp: '2025-06-08 08:30', status: 'recorded', details: 'Weekly readings: Avg 125/82' },
-        { id: 8, type: 'consultation', action: 'Phone consultation with Dr. A. Aliyev', timestamp: '2025-06-05 16:00', status: 'completed', details: 'Discussed medication side effects' },
-        { id: 9, type: 'appointment', action: 'Cancelled appointment due to illness', timestamp: '2025-06-01 10:00', status: 'cancelled', details: 'Rescheduled for June 20' },
-        { id: 10, type: 'registration', action: 'Updated insurance information', timestamp: '2025-05-28 13:15', status: 'completed', details: 'New insurance card uploaded' }
-      ]
+      console.error('Error fetching activity history:', error);
+      throw error;
     }
   }
 }
@@ -227,16 +77,22 @@ const AdminUserStats = () => {
     try {
       setLoading(true)
       setError(null)
-      
-      // For development, use dummy data. Replace with actual API calls:
-      // const [userInfo, statsData] = await Promise.all([
-      //   userStatsService.fetchUserInfo(id),
-      //   userStatsService.fetchUserStats(id)
-      // ])
-      // setUserStats({ user: userInfo, ...statsData })
-      
-      const userData = dummyUserStats[id] // Remove this line when connecting to backend
-      setUserStats(userData)
+
+      const [userInfo, statsData, activityData] = await Promise.all([
+        userStatsService.fetchUserInfo(id),
+        userStatsService.fetchUserStats(id),
+        userStatsService.fetchUserActivityHistory(id)
+      ])
+
+      setUserStats({
+        user: userInfo,
+        stats: statsData.stats,
+        performance: statsData.performance,
+        weeklyActivity: statsData.weeklyActivity,
+        health: statsData.health,
+        recentActivity: statsData.recentActivity,
+        activityHistory: activityData
+      })
     } catch (err) {
       setError('Failed to load user statistics. Please try again.')
       console.error('Error loading user stats:', err)

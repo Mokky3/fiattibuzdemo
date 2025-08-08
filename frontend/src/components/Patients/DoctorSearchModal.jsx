@@ -66,28 +66,28 @@ const DoctorSearchModal = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-transparent flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border-4 border-blue-400">
-        <div className="p-8">
-          <div className="flex justify-between items-center mb-8">
-            <h2 className="text-2xl font-semibold text-emerald-400">Search a doctor</h2>
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-xl sm:rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border-2 sm:border-4 border-blue-400">
+        <div className="p-4 sm:p-8">
+          <div className="flex justify-between items-center mb-6 sm:mb-8">
+            <h2 className="text-lg sm:text-2xl font-semibold text-emerald-400">Search a doctor</h2>
             <button
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className="text-gray-400 hover:text-gray-600 transition-colors p-1"
             >
-              <X className="h-6 w-6" />
+              <X className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
           </div>
 
-          <form onSubmit={handleDoctorSearch} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <form onSubmit={handleDoctorSearch} className="space-y-4 sm:space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
                 <input
                   type="text"
                   placeholder="Full Name"
                   value={doctorSearchData.fullName}
                   onChange={(e) => handleDoctorSearchChange('fullName', e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-emerald-200 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-emerald-200 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors text-sm sm:text-base"
                 />
               </div>
               <div>
@@ -96,7 +96,7 @@ const DoctorSearchModal = ({ isOpen, onClose }) => {
                   placeholder="Hospital"
                   value={doctorSearchData.hospital}
                   onChange={(e) => handleDoctorSearchChange('hospital', e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-emerald-200 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-emerald-200 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors text-sm sm:text-base"
                 />
               </div>
             </div>
@@ -107,7 +107,7 @@ const DoctorSearchModal = ({ isOpen, onClose }) => {
                 type="date"
                 value={doctorSearchData.appointmentDate}
                 onChange={(e) => handleDoctorSearchChange('appointmentDate', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base"
                 placeholder="date/month/year"
               />
             </div>
@@ -118,7 +118,7 @@ const DoctorSearchModal = ({ isOpen, onClose }) => {
                 type="time"
                 value={doctorSearchData.appointmentTime}
                 onChange={(e) => handleDoctorSearchChange('appointmentTime', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base"
                 placeholder="time"
               />
             </div>
@@ -129,14 +129,14 @@ const DoctorSearchModal = ({ isOpen, onClose }) => {
                 <select
                   value={doctorSearchData.appointmentType}
                   onChange={(e) => handleDoctorSearchChange('appointmentType', e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent appearance-none bg-white"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent appearance-none bg-white text-sm sm:text-base"
                 >
                   <option value="">Value</option>
                   {appointmentTypes.map((type) => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
-                <ChevronDown className="absolute right-3 top-3.5 h-4 w-4 text-gray-400 pointer-events-none" />
+                <ChevronDown className="absolute right-3 top-2.5 sm:top-3.5 h-4 w-4 text-gray-400 pointer-events-none" />
               </div>
             </div>
 
@@ -145,23 +145,23 @@ const DoctorSearchModal = ({ isOpen, onClose }) => {
               <textarea
                 value={doctorSearchData.additionalNote}
                 onChange={(e) => handleDoctorSearchChange('additionalNote', e.target.value)}
-                rows={6}
-                className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent resize-none"
+                rows={4}
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent resize-none text-sm sm:text-base"
                 placeholder="Value"
               />
             </div>
 
-            <div className="flex justify-center space-x-4 pt-4">
+            <div className="flex flex-col sm:flex-row justify-center space-y-3 sm:space-y-0 sm:space-x-4 pt-4">
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-8 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                className="px-6 sm:px-8 py-2 sm:py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm sm:text-base"
               >
                 CANCEL
               </button>
               <button
                 type="submit"
-                className="px-8 py-3 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors font-medium"
+                className="px-6 sm:px-8 py-2 sm:py-3 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors font-medium text-sm sm:text-base"
               >
                 SUBMIT
               </button>

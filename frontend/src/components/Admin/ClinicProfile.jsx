@@ -1,88 +1,25 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { FiMapPin, FiEdit2, FiTrash2, FiPlus, FiHome, FiUsers, FiActivity, FiDollarSign, FiShield, FiLock, FiSave, FiX, FiEye, FiEyeOff, FiClock, FiCalendar, FiTrendingUp, FiTrendingDown, FiUserPlus, FiSettings, FiCheckCircle, FiXCircle } from 'react-icons/fi'
 import AdminHeader from './AdminHeader'
 
-// Mock data
-const mockUsers = {
-  superadmin: {
-    id: 1,
-    name: 'Super Admin',
-    role: 'superadmin',
-    email: 'superadmin@medadmin.com',
-    clinicId: null
-  },
-  clinicadmin: {
-    id: 2,
-    name: 'Dr. Sarah Johnson',
-    role: 'clinic_admin',
-    email: 'admin@mainhospital.com',
-    clinicId: 1
-  }
-}
-
-const clinicData = {
-  id: 1,
-  name: 'Main Hospital',
-  city: 'Tashkent',
-  address: '123 Medical Street, Tashkent',
-  phone: '+998 71 123 4567',
-  email: 'info@mainhospital.com',
-  website: 'www.mainhospital.com',
-  founded: '2010',
-  status: 'Active',
-  description: 'Leading healthcare facility providing comprehensive medical services with state-of-the-art equipment and experienced medical professionals.',
-  departments: [
-    { id: 1, name: 'Cardiology', head: 'Dr. Ahmad Karimov', staff: 5, patients: 89, status: 'Active' },
-    { id: 2, name: 'Pediatrics', head: 'Dr. Malika Abdullayeva', staff: 4, patients: 156, status: 'Active' },
-    { id: 3, name: 'Emergency', head: 'Dr. Bobur Rakhimov', staff: 8, patients: 234, status: 'Active' },
-    { id: 4, name: 'Radiology', head: 'Dr. Elena Smirnova', staff: 3, patients: 67, status: 'Inactive' }
-  ],
-  staff: [
-    { id: 1, name: 'Dr. Ahmad Karimov', role: 'Doctor', department: 'Cardiology', email: 'ahmad@mainhospital.com', status: 'Active', joinDate: '2015-03-15', permissions: ['view_patients', 'edit_patients', 'prescribe'] },
-    { id: 2, name: 'Dr. Malika Abdullayeva', role: 'Doctor', department: 'Pediatrics', email: 'malika@mainhospital.com', status: 'Active', joinDate: '2018-07-22', permissions: ['view_patients', 'edit_patients', 'prescribe'] },
-    { id: 3, name: 'Nurse Anna Petrova', role: 'Nurse', department: 'Emergency', email: 'anna@mainhospital.com', status: 'Active', joinDate: '2020-01-10', permissions: ['view_patients', 'basic_care'] },
-    { id: 4, name: 'Dr. Bobur Rakhimov', role: 'Doctor', department: 'Emergency', email: 'bobur@mainhospital.com', status: 'Active', joinDate: '2012-11-05', permissions: ['view_patients', 'edit_patients', 'prescribe', 'emergency_access'] },
-    { id: 5, name: 'Receptionist Maya Kim', role: 'Receptionist', department: 'General', email: 'maya@mainhospital.com', status: 'Active', joinDate: '2019-09-18', permissions: ['view_appointments', 'schedule_appointments'] }
-  ],
-  pricing: [
-    { id: 1, service: 'General Consultation', department: 'General', price: 150000, currency: 'UZS' },
-    { id: 2, service: 'Cardiology Consultation', department: 'Cardiology', price: 250000, currency: 'UZS' },
-    { id: 3, service: 'Pediatric Checkup', department: 'Pediatrics', price: 180000, currency: 'UZS' },
-    { id: 4, service: 'X-Ray', department: 'Radiology', price: 120000, currency: 'UZS' },
-    { id: 5, service: 'Blood Test', department: 'Laboratory', price: 80000, currency: 'UZS' },
-    { id: 6, service: 'Emergency Treatment', department: 'Emergency', price: 300000, currency: 'UZS' }
-  ],
-  stats: {
-    totalPatients: 1247,
-    monthlyPatients: 234,
-    totalRevenue: 15750000,
-    monthlyRevenue: 3240000,
-    totalAppointments: 1456,
-    completedAppointments: 1289,
-    cancelledAppointments: 167,
-    patientSatisfaction: 4.8,
-    averageWaitTime: 15,
-    occupancyRate: 78
-  }
-}
-
-const availablePermissions = [
-  { id: 'view_patients', name: 'View Patients', description: 'Can view patient information' },
-  { id: 'edit_patients', name: 'Edit Patients', description: 'Can modify patient records' },
-  { id: 'delete_patients', name: 'Delete Patients', description: 'Can delete patient records' },
-  { id: 'prescribe', name: 'Prescribe Medicine', description: 'Can prescribe medications' },
-  { id: 'view_appointments', name: 'View Appointments', description: 'Can view appointment schedules' },
-  { id: 'schedule_appointments', name: 'Schedule Appointments', description: 'Can create/modify appointments' },
-  { id: 'basic_care', name: 'Basic Care', description: 'Can provide basic medical care' },
-  { id: 'emergency_access', name: 'Emergency Access', description: 'Can access emergency protocols' },
-  { id: 'financial_access', name: 'Financial Access', description: 'Can view financial reports' },
-  { id: 'admin_access', name: 'Admin Access', description: 'Can manage clinic settings' }
-]
+// TODO: Import your API service functions
+// import { clinicAPI, departmentAPI, pricingAPI, staffAPI, authAPI } from '../services/api'
 
 const ClinicProfile = () => {
-  const [currentUser, setCurrentUser] = useState(mockUsers.clinicadmin)
+  // TODO: Get current user from auth context or state management
+  const [currentUser, setCurrentUser] = useState(null)
+  
   const [activeTab, setActiveTab] = useState('overview')
-  const [clinic, setClinic] = useState(clinicData)
+  const [clinic, setClinic] = useState(null)
+  const [departments, setDepartments] = useState([])
+  const [staff, setStaff] = useState([])
+  const [pricing, setPricing] = useState([])
+  const [stats, setStats] = useState(null)
+  const [permissions, setPermissions] = useState([])
+  
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  
   const [showEditModal, setShowEditModal] = useState(false)
   const [showPriceModal, setShowPriceModal] = useState(false)
   const [showUserModal, setShowUserModal] = useState(false)
@@ -90,8 +27,136 @@ const ClinicProfile = () => {
   const [selectedItem, setSelectedItem] = useState(null)
   const [formData, setFormData] = useState({})
 
-  const isSuperAdmin = currentUser.role === 'superadmin'
-  const isClinicAdmin = currentUser.role === 'clinic_admin'
+  // TODO: Implement role checks based on your auth system
+  const isSuperAdmin = currentUser?.role === 'superadmin'
+  const isClinicAdmin = currentUser?.role === 'clinic_admin'
+
+  useEffect(() => {
+    // TODO: Fetch initial data when component mounts
+    fetchData()
+  }, [])
+
+  const fetchData = async () => {
+    try {
+      setLoading(true)
+      
+      // TODO: Replace with actual API calls
+      // const [clinicRes, deptRes, staffRes, pricingRes, statsRes, permsRes] = await Promise.all([
+      //   clinicAPI.getClinic(currentUser.clinicId),
+      //   departmentAPI.getDepartments(currentUser.clinicId),
+      //   staffAPI.getStaff(currentUser.clinicId),
+      //   pricingAPI.getPricing(currentUser.clinicId),
+      //   clinicAPI.getStats(currentUser.clinicId),
+      //   authAPI.getAvailablePermissions()
+      // ])
+      
+      // setClinic(clinicRes.data)
+      // setDepartments(deptRes.data)
+      // setStaff(staffRes.data)
+      // setPricing(pricingRes.data)
+      // setStats(statsRes.data)
+      // setPermissions(permsRes.data)
+      
+    } catch (err) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleUpdateClinic = async () => {
+    try {
+      // TODO: Call API to update clinic
+      // const response = await clinicAPI.updateClinic(clinic.id, formData)
+      // setClinic(response.data)
+      setShowEditModal(false)
+    } catch (err) {
+      console.error('Failed to update clinic:', err)
+    }
+  }
+
+  const handleAddPrice = async () => {
+    try {
+      // TODO: Call API to add new price
+      // const response = await pricingAPI.addPrice({
+      //   clinicId: clinic.id,
+      //   ...formData
+      // })
+      // setPricing([...pricing, response.data])
+      setShowPriceModal(false)
+    } catch (err) {
+      console.error('Failed to add price:', err)
+    }
+  }
+
+  const handleUpdatePrice = async () => {
+    try {
+      // TODO: Call API to update price
+      // const response = await pricingAPI.updatePrice(selectedItem.id, formData)
+      // setPricing(pricing.map(p => p.id === selectedItem.id ? response.data : p))
+      setShowPriceModal(false)
+    } catch (err) {
+      console.error('Failed to update price:', err)
+    }
+  }
+
+  const handleDeletePrice = async (priceId) => {
+    try {
+      // TODO: Call API to delete price
+      // await pricingAPI.deletePrice(priceId)
+      // setPricing(pricing.filter(p => p.id !== priceId))
+    } catch (err) {
+      console.error('Failed to delete price:', err)
+    }
+  }
+
+  const handleAddUser = async () => {
+    try {
+      // TODO: Call API to add new user
+      // const response = await staffAPI.addStaff({
+      //   clinicId: clinic.id,
+      //   ...formData
+      // })
+      // setStaff([...staff, response.data])
+      setShowUserModal(false)
+    } catch (err) {
+      console.error('Failed to add user:', err)
+    }
+  }
+
+  const handleUpdateUser = async () => {
+    try {
+      // TODO: Call API to update user
+      // const response = await staffAPI.updateStaff(selectedItem.id, formData)
+      // setStaff(staff.map(s => s.id === selectedItem.id ? response.data : s))
+      setShowUserModal(false)
+    } catch (err) {
+      console.error('Failed to update user:', err)
+    }
+  }
+
+  const handleDeleteUser = async (userId) => {
+    try {
+      // TODO: Call API to delete user
+      // await staffAPI.deleteStaff(userId)
+      // setStaff(staff.filter(s => s.id !== userId))
+    } catch (err) {
+      console.error('Failed to delete user:', err)
+    }
+  }
+
+  const handleUpdatePermissions = async () => {
+    try {
+      // TODO: Call API to update user permissions
+      // const response = await staffAPI.updatePermissions(selectedItem.id, {
+      //   permissions: selectedItem.permissions
+      // })
+      // setStaff(staff.map(s => s.id === selectedItem.id ? response.data : s))
+      setShowPermissionModal(false)
+    } catch (err) {
+      console.error('Failed to update permissions:', err)
+    }
+  }
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('uz-UZ', {
@@ -101,8 +166,28 @@ const ClinicProfile = () => {
     }).format(amount)
   }
 
-  const handleRoleSwitch = (role) => {
-    setCurrentUser(mockUsers[role])
+  // Loading state
+  if (loading) {
+    return (
+      <div className="bg-gray-50 min-h-screen">
+        <AdminHeader />
+        <div className="flex items-center justify-center h-96">
+          <div className="text-gray-500">Loading...</div>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="bg-gray-50 min-h-screen">
+        <AdminHeader />
+        <div className="flex items-center justify-center h-96">
+          <div className="text-red-500">Error: {error}</div>
+        </div>
+      </div>
+    )
   }
 
   const Modal = ({ show, onClose, title, children, size = 'md' }) => {
@@ -161,15 +246,15 @@ const ClinicProfile = () => {
               <FiHome className="text-white text-2xl" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{clinic.name}</h2>
+              <h2 className="text-xl font-bold text-gray-900">{clinic?.name || 'Loading...'}</h2>
               <div className="flex items-center gap-2 text-gray-600 mt-1">
                 <FiMapPin className="text-sm" />
-                <span>{clinic.address}</span>
+                <span>{clinic?.address || 'Loading...'}</span>
               </div>
               <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                <span>📞 {clinic.phone}</span>
-                <span>✉️ {clinic.email}</span>
-                <span>🌐 {clinic.website}</span>
+                <span>📞 {clinic?.phone || 'Loading...'}</span>
+                <span>✉️ {clinic?.email || 'Loading...'}</span>
+                <span>🌐 {clinic?.website || 'Loading...'}</span>
               </div>
             </div>
           </div>
@@ -187,14 +272,14 @@ const ClinicProfile = () => {
             </button>
           )}
         </div>
-        <p className="text-gray-600">{clinic.description}</p>
+        <p className="text-gray-600">{clinic?.description || 'Loading...'}</p>
         <div className="flex items-center gap-4 mt-4">
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            clinic.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+            clinic?.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
           }`}>
-            {clinic.status}
+            {clinic?.status || 'Loading...'}
           </span>
-          <span className="text-sm text-gray-500">Founded: {clinic.founded}</span>
+          <span className="text-sm text-gray-500">Founded: {clinic?.founded || 'Loading...'}</span>
         </div>
       </div>
 
@@ -203,32 +288,32 @@ const ClinicProfile = () => {
         <StatCard
           icon={<FiUsers className="text-[#4DB6B0] text-xl" />}
           title="Total Patients"
-          value={clinic.stats.totalPatients.toLocaleString()}
-          subtitle={`${clinic.stats.monthlyPatients} this month`}
+          value={stats?.totalPatients?.toLocaleString() || '0'}
+          subtitle={`${stats?.monthlyPatients || 0} this month`}
           trend="up"
           trendValue="+12%"
         />
         <StatCard
           icon={<FiDollarSign className="text-[#4DB6B0] text-xl" />}
           title="Total Revenue"
-          value={formatCurrency(clinic.stats.totalRevenue)}
-          subtitle={`${formatCurrency(clinic.stats.monthlyRevenue)} this month`}
+          value={formatCurrency(stats?.totalRevenue || 0)}
+          subtitle={`${formatCurrency(stats?.monthlyRevenue || 0)} this month`}
           trend="up"
           trendValue="+8%"
         />
         <StatCard
           icon={<FiCalendar className="text-[#4DB6B0] text-xl" />}
           title="Appointments"
-          value={clinic.stats.totalAppointments.toLocaleString()}
-          subtitle={`${clinic.stats.completedAppointments} completed`}
+          value={stats?.totalAppointments?.toLocaleString() || '0'}
+          subtitle={`${stats?.completedAppointments || 0} completed`}
           trend="up"
           trendValue="+5%"
         />
         <StatCard
           icon={<FiClock className="text-[#4DB6B0] text-xl" />}
           title="Avg Wait Time"
-          value={`${clinic.stats.averageWaitTime} min`}
-          subtitle={`${clinic.stats.patientSatisfaction}/5 satisfaction`}
+          value={`${stats?.averageWaitTime || 0} min`}
+          subtitle={`${stats?.patientSatisfaction || 0}/5 satisfaction`}
           trend="down"
           trendValue="-3%"
         />
@@ -241,15 +326,15 @@ const ClinicProfile = () => {
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Active Departments</span>
-              <span className="font-medium">{clinic.departments.filter(d => d.status === 'Active').length}</span>
+              <span className="font-medium">{departments.filter(d => d.status === 'Active').length}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Total Staff</span>
-              <span className="font-medium">{clinic.departments.reduce((sum, d) => sum + d.staff, 0)}</span>
+              <span className="font-medium">{departments.reduce((sum, d) => sum + (d.staff || 0), 0)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Active Patients</span>
-              <span className="font-medium">{clinic.departments.reduce((sum, d) => sum + d.patients, 0)}</span>
+              <span className="font-medium">{departments.reduce((sum, d) => sum + (d.patients || 0), 0)}</span>
             </div>
           </div>
         </div>
@@ -259,15 +344,18 @@ const ClinicProfile = () => {
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Occupancy Rate</span>
-              <span className="font-medium">{clinic.stats.occupancyRate}%</span>
+              <span className="font-medium">{stats?.occupancyRate || 0}%</span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Completed Appointments</span>
-              <span className="font-medium">{((clinic.stats.completedAppointments / clinic.stats.totalAppointments) * 100).toFixed(1)}%</span>
+              <span className="font-medium">
+                {stats?.totalAppointments ? 
+                  ((stats.completedAppointments / stats.totalAppointments) * 100).toFixed(1) : 0}%
+              </span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Patient Satisfaction</span>
-              <span className="font-medium">{clinic.stats.patientSatisfaction}/5.0</span>
+              <span className="font-medium">{stats?.patientSatisfaction || 0}/5.0</span>
             </div>
           </div>
         </div>
@@ -277,7 +365,7 @@ const ClinicProfile = () => {
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span>Monthly Revenue</span>
-              <span className="font-medium">{formatCurrency(clinic.stats.monthlyRevenue)}</span>
+              <span className="font-medium">{formatCurrency(stats?.monthlyRevenue || 0)}</span>
             </div>
             <div className="flex justify-between text-sm">
               <span>Revenue Growth</span>
@@ -285,7 +373,7 @@ const ClinicProfile = () => {
             </div>
             <div className="flex justify-between text-sm">
               <span>Services Offered</span>
-              <span className="font-medium">{clinic.pricing.length}</span>
+              <span className="font-medium">{pricing.length}</span>
             </div>
           </div>
         </div>
@@ -298,7 +386,13 @@ const ClinicProfile = () => {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">Departments</h3>
         {(isSuperAdmin || isClinicAdmin) && (
-          <button className="flex items-center gap-2 px-4 py-2 bg-[#4DB6B0] text-white rounded-lg hover:bg-[#43b0a8] transition-colors">
+          <button 
+            onClick={() => {
+              // TODO: Handle add department
+              // setShowDepartmentModal(true)
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-[#4DB6B0] text-white rounded-lg hover:bg-[#43b0a8] transition-colors"
+          >
             <FiPlus />
             Add Department
           </button>
@@ -306,7 +400,7 @@ const ClinicProfile = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {clinic.departments.map(dept => (
+        {departments.map(dept => (
           <div key={dept.id} className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
             <div className="flex items-start justify-between mb-4">
               <div>
@@ -322,26 +416,41 @@ const ClinicProfile = () => {
             
             <div className="grid grid-cols-3 gap-4 mb-4">
               <div className="text-center">
-                <div className="text-lg font-bold text-gray-900">{dept.staff}</div>
+                <div className="text-lg font-bold text-gray-900">{dept.staff || 0}</div>
                 <div className="text-xs text-gray-500">Staff</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-bold text-gray-900">{dept.patients}</div>
+                <div className="text-lg font-bold text-gray-900">{dept.patients || 0}</div>
                 <div className="text-xs text-gray-500">Patients</div>
               </div>
               <div className="text-center">
-                <div className="text-lg font-bold text-[#4DB6B0]">{((dept.patients / dept.staff) || 0).toFixed(1)}</div>
+                <div className="text-lg font-bold text-[#4DB6B0]">
+                  {dept.staff ? (dept.patients / dept.staff).toFixed(1) : 0}
+                </div>
                 <div className="text-xs text-gray-500">Ratio</div>
               </div>
             </div>
 
             {(isSuperAdmin || isClinicAdmin) && (
               <div className="flex gap-2">
-                <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm">
+                <button 
+                  onClick={() => {
+                    // TODO: Handle view department
+                    // navigate(`/departments/${dept.id}`)
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
+                >
                   <FiEye />
                   View
                 </button>
-                <button className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm">
+                <button 
+                  onClick={() => {
+                    // TODO: Handle edit department
+                    // setSelectedDepartment(dept)
+                    // setShowDepartmentModal(true)
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm"
+                >
                   <FiEdit2 />
                   Edit
                 </button>
@@ -385,7 +494,7 @@ const ClinicProfile = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {clinic.pricing.map(price => (
+            {pricing.map(price => (
               <tr key={price.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="font-medium text-gray-900">{price.service}</div>
@@ -411,7 +520,14 @@ const ClinicProfile = () => {
                       >
                         <FiEdit2 />
                       </button>
-                      <button className="text-red-600 hover:text-red-900">
+                      <button 
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to delete this service?')) {
+                            handleDeletePrice(price.id)
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-900"
+                      >
                         <FiTrash2 />
                       </button>
                     </div>
@@ -459,40 +575,40 @@ const ClinicProfile = () => {
             </tr>
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
-            {clinic.staff.map(staff => (
-              <tr key={staff.id} className="hover:bg-gray-50">
+            {staff.map(user => (
+              <tr key={user.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div>
-                    <div className="font-medium text-gray-900">{staff.name}</div>
-                    <div className="text-sm text-gray-500">{staff.email}</div>
+                    <div className="font-medium text-gray-900">{user.name}</div>
+                    <div className="text-sm text-gray-500">{user.email}</div>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className="px-2 py-1 bg-purple-100 text-purple-700 rounded-full text-xs">
-                    {staff.role}
+                    {user.role}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                  {staff.department}
+                  {user.department}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 w-fit ${
-                    staff.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    user.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                   }`}>
-                    {staff.status === 'Active' ? <FiCheckCircle /> : <FiXCircle />}
-                    {staff.status}
+                    {user.status === 'Active' ? <FiCheckCircle /> : <FiXCircle />}
+                    {user.status}
                   </span>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-wrap gap-1">
-                    {staff.permissions.slice(0, 2).map(perm => (
+                    {user.permissions?.slice(0, 2).map(perm => (
                       <span key={perm} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                        {availablePermissions.find(p => p.id === perm)?.name || perm}
+                        {permissions.find(p => p.id === perm)?.name || perm}
                       </span>
                     ))}
-                    {staff.permissions.length > 2 && (
+                    {user.permissions?.length > 2 && (
                       <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-xs">
-                        +{staff.permissions.length - 2} more
+                        +{user.permissions.length - 2} more
                       </span>
                     )}
                   </div>
@@ -502,7 +618,7 @@ const ClinicProfile = () => {
                     <div className="flex items-center justify-end gap-2">
                       <button
                         onClick={() => {
-                          setSelectedItem(staff)
+                          setSelectedItem(user)
                           setShowPermissionModal(true)
                         }}
                         className="text-purple-600 hover:text-purple-900"
@@ -512,15 +628,22 @@ const ClinicProfile = () => {
                       </button>
                       <button
                         onClick={() => {
-                          setSelectedItem(staff)
-                          setFormData(staff)
+                          setSelectedItem(user)
+                          setFormData(user)
                           setShowUserModal(true)
                         }}
                         className="text-blue-600 hover:text-blue-900"
                       >
                         <FiEdit2 />
                       </button>
-                      <button className="text-red-600 hover:text-red-900">
+                      <button 
+                        onClick={() => {
+                          if (window.confirm('Are you sure you want to delete this user?')) {
+                            handleDeleteUser(user.id)
+                          }
+                        }}
+                        className="text-red-600 hover:text-red-900"
+                      >
                         <FiTrash2 />
                       </button>
                     </div>
@@ -539,38 +662,6 @@ const ClinicProfile = () => {
       <AdminHeader />
 
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Demo Role Switcher */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <FiShield className="text-yellow-600" />
-              <span className="text-sm font-medium text-yellow-800">Demo: Switch User Role</span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleRoleSwitch('superadmin')}
-                className={`px-3 py-1 rounded text-xs font-medium ${
-                  currentUser.role === 'superadmin' 
-                    ? 'bg-yellow-200 text-yellow-800' 
-                    : 'bg-white text-yellow-600 hover:bg-yellow-100'
-                }`}
-              >
-                Super Admin
-              </button>
-              <button
-                onClick={() => handleRoleSwitch('clinicadmin')}
-                className={`px-3 py-1 rounded text-xs font-medium ${
-                  currentUser.role === 'clinic_admin' 
-                    ? 'bg-yellow-200 text-yellow-800' 
-                    : 'bg-white text-yellow-600 hover:bg-yellow-100'
-                }`}
-              >
-                Clinic Admin
-              </button>
-            </div>
-          </div>
-        </div>
-
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-2">
@@ -711,10 +802,7 @@ const ClinicProfile = () => {
               Cancel
             </button>
             <button
-              onClick={() => {
-                setClinic(prev => ({ ...prev, ...formData }))
-                setShowEditModal(false)
-              }}
+              onClick={handleUpdateClinic}
               className="flex items-center gap-2 bg-[#4DB6B0] hover:bg-[#43b0a8] text-white px-4 py-2 rounded-md text-sm"
             >
               <FiSave />
@@ -749,7 +837,7 @@ const ClinicProfile = () => {
               onChange={e => setFormData(prev => ({ ...prev, department: e.target.value }))}
             >
               <option value="">Select Department</option>
-              {clinic.departments.map(dept => (
+              {departments.map(dept => (
                 <option key={dept.id} value={dept.name}>{dept.name}</option>
               ))}
               <option value="General">General</option>
@@ -787,21 +875,7 @@ const ClinicProfile = () => {
               Cancel
             </button>
             <button
-              onClick={() => {
-                if (selectedItem) {
-                  setClinic(prev => ({
-                    ...prev,
-                    pricing: prev.pricing.map(p => p.id === selectedItem.id ? { ...p, ...formData } : p)
-                  }))
-                } else {
-                  setClinic(prev => ({
-                    ...prev,
-                    pricing: [...prev.pricing, { id: Date.now(), ...formData }]
-                  }))
-                }
-                setShowPriceModal(false)
-                setSelectedItem(null)
-              }}
+              onClick={selectedItem ? handleUpdatePrice : handleAddPrice}
               className="flex items-center gap-2 bg-[#4DB6B0] hover:bg-[#43b0a8] text-white px-4 py-2 rounded-md text-sm"
             >
               <FiSave />
@@ -865,7 +939,7 @@ const ClinicProfile = () => {
                 onChange={e => setFormData(prev => ({ ...prev, department: e.target.value }))}
               >
                 <option value="">Select Department</option>
-                {clinic.departments.map(dept => (
+                {departments.map(dept => (
                   <option key={dept.id} value={dept.name}>{dept.name}</option>
                 ))}
                 <option value="General">General</option>
@@ -876,7 +950,7 @@ const ClinicProfile = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
             <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto border border-gray-200 rounded-md p-3">
-              {availablePermissions.map(perm => (
+              {permissions.map(perm => (
                 <label key={perm.id} className="flex items-start space-x-2">
                   <input
                     type="checkbox"
@@ -906,26 +980,7 @@ const ClinicProfile = () => {
               Cancel
             </button>
             <button
-              onClick={() => {
-                if (selectedItem) {
-                  setClinic(prev => ({
-                    ...prev,
-                    staff: prev.staff.map(s => s.id === selectedItem.id ? { ...s, ...formData } : s)
-                  }))
-                } else {
-                  setClinic(prev => ({
-                    ...prev,
-                    staff: [...prev.staff, { 
-                      id: Date.now(), 
-                      ...formData, 
-                      status: 'Active',
-                      joinDate: new Date().toISOString().split('T')[0]
-                    }]
-                  }))
-                }
-                setShowUserModal(false)
-                setSelectedItem(null)
-              }}
+              onClick={selectedItem ? handleUpdateUser : handleAddUser}
               className="flex items-center gap-2 bg-[#4DB6B0] hover:bg-[#43b0a8] text-white px-4 py-2 rounded-md text-sm"
             >
               <FiSave />
@@ -959,7 +1014,7 @@ const ClinicProfile = () => {
           <div>
             <h4 className="font-medium text-gray-900 mb-3">Available Permissions</h4>
             <div className="space-y-3 max-h-60 overflow-y-auto">
-              {availablePermissions.map(perm => {
+              {permissions.map(perm => {
                 const hasPermission = selectedItem?.permissions?.includes(perm.id)
                 return (
                   <div key={perm.id} className="flex items-start justify-between p-3 border border-gray-200 rounded-lg">
@@ -970,16 +1025,8 @@ const ClinicProfile = () => {
                         onChange={() => {
                           const updatedPermissions = hasPermission
                             ? selectedItem.permissions.filter(p => p !== perm.id)
-                            : [...selectedItem.permissions, perm.id]
+                            : [...(selectedItem.permissions || []), perm.id]
                           
-                          setClinic(prev => ({
-                            ...prev,
-                            staff: prev.staff.map(s => 
-                              s.id === selectedItem.id 
-                                ? { ...s, permissions: updatedPermissions }
-                                : s
-                            )
-                          }))
                           setSelectedItem(prev => ({ ...prev, permissions: updatedPermissions }))
                         }}
                         className="rounded border-gray-300 text-[#4DB6B0] focus:ring-[#4DB6B0] mt-0.5"
@@ -1008,7 +1055,7 @@ const ClinicProfile = () => {
               Close
             </button>
             <button
-              onClick={() => setShowPermissionModal(false)}
+              onClick={handleUpdatePermissions}
               className="flex items-center gap-2 bg-[#4DB6B0] hover:bg-[#43b0a8] text-white px-4 py-2 rounded-md text-sm"
             >
               <FiSave />

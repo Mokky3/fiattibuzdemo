@@ -180,11 +180,11 @@ const PatientRegister = () => {
     <div className="min-h-screen bg-gray-50">
       <ReceptionistHeader />
 
-      <div className="flex max-w-screen-xl mx-auto px-4 py-10 gap-8">
+      <div className="flex flex-col lg:flex-row max-w-screen-xl mx-auto px-2 sm:px-4 py-6 sm:py-10 gap-4 sm:gap-8">
         {/* Enhanced Sidebar */}
-        <div className="w-1/4 bg-white rounded-xl shadow-sm border border-gray-100 h-fit">
-          <div className="p-4 border-b border-gray-100">
-            <h3 className="text-lg font-semibold text-[#4DB6B0] mb-3">Registered Patients</h3>
+        <div className="lg:w-1/4 bg-white rounded-xl shadow-sm border border-gray-100 h-fit">
+          <div className="p-3 sm:p-4 border-b border-gray-100">
+            <h3 className="text-base sm:text-lg font-semibold text-[#4DB6B0] mb-3">Registered Patients</h3>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
@@ -200,12 +200,12 @@ const PatientRegister = () => {
             </div>
           </div>
           
-          <div className="p-4 max-h-96 overflow-y-auto">
+          <div className="p-3 sm:p-4 max-h-96 overflow-y-auto">
             {filteredPatients.length > 0 ? (
               <div className="space-y-3">
                 {filteredPatients.map((p) => (
                   <div key={p.id} className="border border-gray-100 rounded-lg p-3 text-sm hover:bg-gray-50 transition-colors cursor-pointer">
-                    <div className="font-medium text-gray-800">{p.full_name}</div>
+                    <div className="font-medium text-gray-800 text-sm">{p.full_name}</div>
                     <div className="text-gray-500 text-xs mt-1">{p.date_of_birth}</div>
                   </div>
                 ))}
@@ -220,28 +220,28 @@ const PatientRegister = () => {
         </div>
 
         {/* Enhanced Form Panel */}
-        <div className="w-3/4">
-          <div className="flex items-center gap-3 mb-6">
-            <UserPlus className="w-6 h-6 text-[#4DB6B0]" />
-            <h2 className="text-2xl font-bold text-[#4DB6B0]">Register New Patient</h2>
+        <div className="lg:w-3/4">
+          <div className="flex items-center gap-3 mb-4 sm:mb-6">
+            <UserPlus className="w-5 h-5 sm:w-6 sm:h-6 text-[#4DB6B0]" />
+            <h2 className="text-xl sm:text-2xl font-bold text-[#4DB6B0]">Register New Patient</h2>
           </div>
 
           {/* Enhanced Message Display */}
           {message && (
-            <div className={`mb-6 p-4 rounded-lg border flex items-center gap-3 ${getMessageStyles()}`}>
+            <div className={`mb-4 sm:mb-6 p-3 sm:p-4 rounded-lg border flex items-center gap-3 ${getMessageStyles()}`}>
               {getMessageIcon()}
-              <span className="font-medium">{message}</span>
+              <span className="font-medium text-sm sm:text-base">{message}</span>
             </div>
           )}
 
           <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-6 border-b border-gray-100">
-              <h3 className="text-lg font-medium text-gray-800 mb-1">Patient Information</h3>
-              <p className="text-sm text-gray-600">Fill in the patient's details below</p>
+            <div className="p-4 sm:p-6 border-b border-gray-100">
+              <h3 className="text-base sm:text-lg font-medium text-gray-800 mb-1">Patient Information</h3>
+              <p className="text-xs sm:text-sm text-gray-600">Fill in the patient's details below</p>
             </div>
 
-            <div className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Enhanced Input Fields */}
                 <div className="relative">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -255,7 +255,7 @@ const PatientRegister = () => {
                       value={form.full_name}
                       onChange={handleChange}
                       placeholder="Enter full name"
-                      className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors"
+                      className="w-full pl-10 pr-3 py-2 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors text-sm sm:text-base"
                       required
                     />
                   </div>
@@ -270,7 +270,7 @@ const PatientRegister = () => {
                     name="date_of_birth"
                     value={form.date_of_birth}
                     onChange={handleChange}
-                    className="w-full px-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors"
+                    className="w-full px-3 py-2 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors text-sm sm:text-base"
                     required
                   />
                 </div>
@@ -283,7 +283,7 @@ const PatientRegister = () => {
                     name="gender"
                     value={form.gender}
                     onChange={handleChange}
-                    className="w-full px-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors"
+                    className="w-full px-3 py-2 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors text-sm sm:text-base"
                     required
                   >
                     <option value="">Select Gender</option>
@@ -303,7 +303,7 @@ const PatientRegister = () => {
                     onChange={handleChange}
                     placeholder="Enter PINFL number"
                     maxLength={14}
-                    className="w-full px-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors"
+                    className="w-full px-3 py-2 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors text-sm sm:text-base"
                     required
                   />
                 </div>
@@ -320,7 +320,7 @@ const PatientRegister = () => {
                       value={form.phone_number}
                       onChange={handleChange}
                       placeholder="+998XXXXXXXXX"
-                      className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors"
+                      className="w-full pl-10 pr-3 py-2 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors text-sm sm:text-base"
                       required
                     />
                   </div>
@@ -336,7 +336,7 @@ const PatientRegister = () => {
                       value={form.email}
                       onChange={handleChange}
                       placeholder="Enter email address"
-                      className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors"
+                      className="w-full pl-10 pr-3 py-2 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors text-sm sm:text-base"
                     />
                   </div>
                 </div>
@@ -351,12 +351,12 @@ const PatientRegister = () => {
                       value={form.emergency_contact}
                       onChange={handleChange}
                       placeholder="Emergency contact number"
-                      className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors"
+                      className="w-full pl-10 pr-3 py-2 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors text-sm sm:text-base"
                     />
                   </div>
                 </div>
 
-                <div className="relative">
+                <div className="relative sm:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
                   <div className="relative">
                     <MapPin className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -366,19 +366,19 @@ const PatientRegister = () => {
                       value={form.address}
                       onChange={handleChange}
                       placeholder="Enter full address"
-                      className="w-full pl-10 pr-3 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors"
+                      className="w-full pl-10 pr-3 py-2 sm:py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent transition-colors text-sm sm:text-base"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="px-6 py-4 bg-gray-50 rounded-b-xl border-t border-gray-100">
-              <div className="flex flex-wrap gap-4">
+            <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 rounded-b-xl border-t border-gray-100">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
                 <button
                   type="submit"
                   disabled={isLoading}
-                  className="bg-[#4DB6B0] text-white px-6 py-3 rounded-lg hover:bg-[#45a9a3] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="bg-[#4DB6B0] text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-[#45a9a3] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {isLoading ? (
                     <>
@@ -396,7 +396,7 @@ const PatientRegister = () => {
                   type="button"
                   onClick={handleFindAndInvite}
                   disabled={isLoading}
-                  className="bg-indigo-500 text-white px-6 py-3 rounded-lg hover:bg-indigo-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="bg-indigo-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg hover:bg-indigo-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {isLoading ? (
                     <>

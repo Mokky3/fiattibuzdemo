@@ -139,23 +139,23 @@ const Records = () => {
       {/* Navigation Bar */}
       <Navbar />
 
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-8">
           {/* Left Sidebar - Filters */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-xl shadow-lg p-6">
-              <div className="flex items-center space-x-2 mb-6">
-                <Filter className="h-5 w-5 text-emerald-400" />
-                <h3 className="text-lg font-semibold text-gray-800">Filter records</h3>
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+              <div className="flex items-center space-x-2 mb-4 sm:mb-6">
+                <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400" />
+                <h3 className="text-base sm:text-lg font-semibold text-gray-800">Filter records</h3>
               </div>
               
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {filterCategories.map((category, index) => (
                   <button
                     key={index}
                     onClick={() => handleFilterChange(category.name)}
                     className={`
-                      w-full text-left px-4 py-3 rounded-lg transition-all duration-200 border
+                      w-full text-left px-3 sm:px-4 py-2 sm:py-3 rounded-lg transition-all duration-200 border text-xs sm:text-sm
                       ${selectedFilter === category.name 
                         ? 'bg-emerald-400 text-white border-emerald-400 shadow-md' 
                         : 'bg-gray-50 text-gray-700 border-gray-200 hover:bg-gray-100 hover:border-gray-300'
@@ -173,8 +173,8 @@ const Records = () => {
           <div className="lg:col-span-3">
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               {/* Header */}
-              <div className="bg-emerald-400 px-6 py-4">
-                <h2 className="text-xl font-semibold text-white">Medical card</h2>
+              <div className="bg-emerald-400 px-4 sm:px-6 py-3 sm:py-4">
+                <h2 className="text-lg sm:text-xl font-semibold text-white">Medical card</h2>
               </div>
 
               {/* Table */}
@@ -182,24 +182,24 @@ const Records = () => {
                 <table className="w-full">
                   <thead className="bg-emerald-100">
                     <tr>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Date</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Record type</th>
-                      <th className="px-6 py-4 text-left text-sm font-semibold text-gray-800">Description</th>
-                      <th className="px-6 py-4 text-center text-sm font-semibold text-gray-800">Actions</th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-800">Date</th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-800">Record type</th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-left text-xs sm:text-sm font-semibold text-gray-800">Description</th>
+                      <th className="px-3 sm:px-6 py-3 sm:py-4 text-center text-xs sm:text-sm font-semibold text-gray-800">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
                     {currentRecords.map((record, index) => (
                       <tr key={record.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-emerald-50 transition-colors`}>
-                        <td className="px-6 py-4 text-sm text-gray-800 font-medium">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-800 font-medium">
                           {record.date}
                         </td>
-                        <td className="px-6 py-4">
-                          <span className="text-blue-600 hover:text-blue-800 font-medium text-sm cursor-pointer underline">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4">
+                          <span className="text-blue-600 hover:text-blue-800 font-medium text-xs sm:text-sm cursor-pointer underline">
                             {record.recordType}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600">
+                        <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-600">
                           <div>
                             <div className="font-medium">{record.description}</div>
                             <div className="text-xs text-gray-500 mt-1">
@@ -207,14 +207,14 @@ const Records = () => {
                             </div>
                           </div>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex justify-center space-x-2">
-                            <button className="bg-emerald-400 text-white px-3 py-1.5 rounded-md hover:bg-emerald-500 transition-colors text-sm font-medium flex items-center space-x-1">
-                              <FileText className="h-3 w-3" />
+                        <td className="px-3 sm:px-6 py-3 sm:py-4">
+                          <div className="flex flex-col sm:flex-row justify-center space-y-1 sm:space-y-0 sm:space-x-2">
+                            <button className="bg-emerald-400 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-emerald-500 transition-colors text-xs sm:text-sm font-medium flex items-center justify-center space-x-1">
+                              <FileText className="h-2 w-2 sm:h-3 sm:w-3" />
                               <span>summary</span>
                             </button>
-                            <button className="bg-gray-400 text-white px-3 py-1.5 rounded-md hover:bg-gray-500 transition-colors text-sm font-medium flex items-center space-x-1">
-                              <Download className="h-3 w-3" />
+                            <button className="bg-gray-400 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-gray-500 transition-colors text-xs sm:text-sm font-medium flex items-center justify-center space-x-1">
+                              <Download className="h-2 w-2 sm:h-3 sm:w-3" />
                               <span>download</span>
                             </button>
                           </div>
@@ -226,20 +226,20 @@ const Records = () => {
               </div>
 
               {/* Pagination */}
-              <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm text-gray-500">
+              <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                  <div className="text-xs sm:text-sm text-gray-500 text-center sm:text-left">
                     Showing {startIndex + 1} to {Math.min(endIndex, medicalRecords.length)} of {medicalRecords.length} records
                   </div>
                   
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center justify-center space-x-1 sm:space-x-2">
                     <button 
                       onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
                       disabled={currentPage === 1}
-                      className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                      className="px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
                     >
                       <ChevronLeft className="h-3 w-3" />
-                      <span>Previous</span>
+                      <span className="hidden sm:inline">Previous</span>
                     </button>
                     
                     {generatePageNumbers().map((page, index) => (
@@ -248,7 +248,7 @@ const Records = () => {
                         onClick={() => typeof page === 'number' && handlePageChange(page)}
                         disabled={page === '...'}
                         className={`
-                          px-3 py-1 text-sm border rounded-md
+                          px-2 sm:px-3 py-1 text-xs sm:text-sm border rounded-md
                           ${page === currentPage 
                             ? 'bg-emerald-400 text-white border-emerald-400' 
                             : page === '...' 
@@ -264,9 +264,9 @@ const Records = () => {
                     <button 
                       onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
                       disabled={currentPage === totalPages}
-                      className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
+                      className="px-2 sm:px-3 py-1 text-xs sm:text-sm border border-gray-300 rounded-md hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
                     >
-                      <span>Next</span>
+                      <span className="hidden sm:inline">Next</span>
                       <ChevronRight className="h-3 w-3" />
                     </button>
                   </div>

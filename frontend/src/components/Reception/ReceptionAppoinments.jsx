@@ -886,17 +886,17 @@ const ReceptionAppointments = () => {
   };
 
   const renderCard = (appt, actions = null) => (
-    <div key={appt.id} className="bg-white p-6 rounded-lg shadow border border-gray-100 mb-4 hover:shadow-md transition-shadow">
-      <div className="flex justify-between items-start">
-        <div className="flex items-start gap-4 flex-1">
-          <div className="bg-[#4DB6B0] text-white px-4 py-3 rounded-lg text-center min-w-[80px]">
-            <div className="text-lg font-bold">{appt.time}</div>
+    <div key={appt.id} className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-100 mb-4 hover:shadow-md transition-shadow">
+      <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
+        <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 flex-1">
+          <div className="bg-[#4DB6B0] text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-center min-w-[70px] sm:min-w-[80px]">
+            <div className="text-base sm:text-lg font-bold">{appt.time}</div>
             <div className="text-xs opacity-90">{appt.date}</div>
           </div>
           
           <div className="flex-1">
-            <div className="flex items-center gap-3 mb-2">
-              <h3 className="font-semibold text-gray-800 text-lg">{appt.patient}</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+              <h3 className="font-semibold text-gray-800 text-base sm:text-lg">{appt.patient}</h3>
               <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(appt.priority)}`}>
                 {appt.priority} priority
               </span>
@@ -906,53 +906,53 @@ const ReceptionAppointments = () => {
             <div className="text-sm text-[#4DB6B0] font-medium mb-2">{appt.reason}</div>
             <div className="text-sm text-gray-600 mb-3">{appt.description}</div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-500">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 text-sm text-gray-500">
               <div className="flex items-center gap-2">
                 <FiUser className="text-[#4DB6B0]" />
-                <span>Provider: {appt.doctor}</span>
+                <span className="text-xs sm:text-sm">Provider: {appt.doctor}</span>
               </div>
               <div className="flex items-center gap-2">
                 <FiPhone className="text-[#4DB6B0]" />
-                <span>{appt.phone}</span>
+                <span className="text-xs sm:text-sm">{appt.phone}</span>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-1">
                 <FiMail className="text-[#4DB6B0]" />
-                <span>{appt.email}</span>
+                <span className="text-xs sm:text-sm">{appt.email}</span>
               </div>
             </div>
           </div>
         </div>
         
-        <div className="flex flex-col gap-2 ml-4">
+        <div className="flex flex-col gap-2 w-full lg:w-auto">
           {actions ? (
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2">
               <button 
                 onClick={() => openConfirmationModal(appt, 'decline')}
-                className="bg-red-100 hover:bg-red-200 text-red-600 px-4 py-2 rounded-lg transition-colors flex items-center gap-1"
+                className="bg-red-100 hover:bg-red-200 text-red-600 px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-1 text-sm"
               >
                 <FiTrash2 className="text-xs" />
                 Decline
               </button>
               <button 
                 onClick={() => acceptAppointment(appt.id)} 
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+                className="bg-green-500 hover:bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm"
               >
                 Accept
               </button>
             </div>
           ) : (
-            <div className="flex gap-2">
-              <button className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-4 py-2 rounded-lg transition-colors">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm">
                 View Details
               </button>
               {appt.status !== 'completed' && (
                 <>
-                  <button className="bg-blue-100 hover:bg-blue-200 text-blue-600 px-3 py-2 rounded-lg transition-colors">
+                  <button className="bg-blue-100 hover:bg-blue-200 text-blue-600 px-3 py-2 rounded-lg transition-colors text-sm">
                     <FiEdit className="text-sm" />
                   </button>
                   <button 
                     onClick={() => openConfirmationModal(appt, 'delete')}
-                    className="bg-red-100 hover:bg-red-200 text-red-600 px-3 py-2 rounded-lg transition-colors"
+                    className="bg-red-100 hover:bg-red-200 text-red-600 px-3 py-2 rounded-lg transition-colors text-sm"
                   >
                     <FiTrash2 className="text-sm" />
                   </button>
@@ -971,26 +971,26 @@ const ReceptionAppointments = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
       <ReceptionistHeader />
       
-      <div className="max-w-7xl mx-auto px-6 py-8">
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-8">
         {/* Header Section with Search and Filters */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 mb-8">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-6">
+        <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100 mb-6 sm:mb-8">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4 sm:mb-6">
             <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">
+              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">
                 Appointment Management
               </h1>
-              <p className="text-gray-600 mt-1">Manage all patient appointments and schedules</p>
+              <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage all patient appointments and schedules</p>
             </div>
             
-            <div className="flex items-center gap-3">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
               <button 
                 onClick={() => setShowNewAppointmentModal(true)}
-                className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-4 py-2 rounded-lg flex items-center gap-2 transition-colors"
+                className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
               >
                 <FiPlus className="text-sm" />
                 New Appointment
               </button>
-              <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg flex items-center gap-2 transition-colors">
+              <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm">
                 <FiDownload className="text-sm" />
                 Export
               </button>
@@ -998,7 +998,7 @@ const ReceptionAppointments = () => {
           </div>
           
           {/* Search and Filter Controls */}
-          <div className="flex flex-col md:flex-row gap-4">
+          <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
             <div className="relative flex-1">
               <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
               <input
@@ -1006,30 +1006,30 @@ const ReceptionAppointments = () => {
                 placeholder="Search patients, doctors, or reasons..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent text-sm sm:text-base"
               />
             </div>
             
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
               <div className="relative">
                 <FiCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
                 <input
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  className="pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                  className="w-full sm:w-auto pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent text-sm sm:text-base"
                 />
               </div>
               
               <button 
                 onClick={() => setShowFilters(!showFilters)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg flex items-center gap-2 transition-colors"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
               >
                 <FiFilter className="text-sm" />
                 Filters
               </button>
               
-              <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg transition-colors">
+              <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg transition-colors text-sm">
                 <FiRefreshCw className="text-sm" />
               </button>
             </div>
@@ -1085,96 +1085,96 @@ const ReceptionAppointments = () => {
         </div>
 
         {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
+          <div className="bg-white p-4 sm:p-6 rounded-xl shadow border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Total Appointments</p>
-                <p className="text-2xl font-bold text-gray-800">{totalAppointments}</p>
+                <p className="text-xs sm:text-sm text-gray-600">Total Appointments</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-800">{totalAppointments}</p>
               </div>
-              <FiCalendar className="text-2xl text-[#4DB6B0]" />
+              <FiCalendar className="text-xl sm:text-2xl text-[#4DB6B0]" />
             </div>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+          <div className="bg-white p-4 sm:p-6 rounded-xl shadow border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Upcoming Today</p>
-                <p className="text-2xl font-bold text-blue-600">{appointments.upcoming.length}</p>
+                <p className="text-xs sm:text-sm text-gray-600">Upcoming Today</p>
+                <p className="text-xl sm:text-2xl font-bold text-blue-600">{appointments.upcoming.length}</p>
               </div>
-              <FiClock className="text-2xl text-blue-500" />
+              <FiClock className="text-xl sm:text-2xl text-blue-500" />
             </div>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+          <div className="bg-white p-4 sm:p-6 rounded-xl shadow border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Pending Approval</p>
-                <p className="text-2xl font-bold text-yellow-600">{appointments.pending.length}</p>
+                <p className="text-xs sm:text-sm text-gray-600">Pending Approval</p>
+                <p className="text-xl sm:text-2xl font-bold text-yellow-600">{appointments.pending.length}</p>
               </div>
-              <FiClock className="text-2xl text-yellow-500" />
+              <FiClock className="text-xl sm:text-2xl text-yellow-500" />
             </div>
           </div>
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+          <div className="bg-white p-4 sm:p-6 rounded-xl shadow border border-gray-100">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600">Completed</p>
-                <p className="text-2xl font-bold text-green-600">{appointments.past.length}</p>
+                <p className="text-xs sm:text-sm text-gray-600">Completed</p>
+                <p className="text-xl sm:text-2xl font-bold text-green-600">{appointments.past.length}</p>
               </div>
-              <FiClock className="text-2xl text-green-500" />
+              <FiClock className="text-xl sm:text-2xl text-green-500" />
             </div>
           </div>
         </div>
 
-        <div className="space-y-8">
+        <div className="space-y-6 sm:space-y-8">
           {/* Upcoming Appointments */}
-          <div className="bg-white rounded-xl p-6 shadow border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold text-[#4DB6B0]">Upcoming appointments for June 22, 2025</h2>
-              <span className="text-sm bg-blue-100 text-blue-800 px-3 py-1 rounded-full font-medium">
+          <div className="bg-white rounded-xl p-4 sm:p-6 shadow border border-gray-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-2 sm:gap-0">
+              <h2 className="text-lg sm:text-xl font-semibold text-[#4DB6B0]">Upcoming appointments for June 22, 2025</h2>
+              <span className="text-xs sm:text-sm bg-blue-100 text-blue-800 px-2 sm:px-3 py-1 rounded-full font-medium">
                 {appointments.upcoming.length} appointments
               </span>
             </div>
             {appointments.upcoming.length > 0 ? (
               appointments.upcoming.map(appt => renderCard(appt))
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                <FiCalendar className="text-4xl mx-auto mb-3 text-gray-300" />
-                <p>No upcoming appointments</p>
+              <div className="text-center py-6 sm:py-8 text-gray-500">
+                <FiCalendar className="text-3xl sm:text-4xl mx-auto mb-3 text-gray-300" />
+                <p className="text-sm sm:text-base">No upcoming appointments</p>
               </div>
             )}
           </div>
 
           {/* Pending Appointments */}
-          <div className="bg-yellow-50 rounded-xl p-6 shadow border border-yellow-200">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold text-green-600">Accept appointments</h2>
-              <span className="text-sm bg-green-100 text-green-800 px-3 py-1 rounded-full font-medium">
+          <div className="bg-yellow-50 rounded-xl p-4 sm:p-6 shadow border border-yellow-200">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-2 sm:gap-0">
+              <h2 className="text-lg sm:text-xl font-semibold text-green-600">Accept appointments</h2>
+              <span className="text-xs sm:text-sm bg-green-100 text-green-800 px-2 sm:px-3 py-1 rounded-full font-medium">
                 {appointments.pending.length} pending
               </span>
             </div>
             {appointments.pending.length > 0 ? (
               appointments.pending.map(appt => renderCard(appt, true))
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                <FiClock className="text-4xl mx-auto mb-3 text-gray-300" />
-                <p>No pending appointments</p>
+              <div className="text-center py-6 sm:py-8 text-gray-500">
+                <FiClock className="text-3xl sm:text-4xl mx-auto mb-3 text-gray-300" />
+                <p className="text-sm sm:text-base">No pending appointments</p>
               </div>
             )}
           </div>
 
           {/* Past Appointments */}
-          <div className="bg-white rounded-xl p-6 shadow border border-gray-100">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-semibold text-gray-700">Past appointments</h2>
-              <span className="text-sm bg-gray-100 text-gray-600 px-3 py-1 rounded-full font-medium">
+          <div className="bg-white rounded-xl p-4 sm:p-6 shadow border border-gray-100">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-2 sm:gap-0">
+              <h2 className="text-lg sm:text-xl font-semibold text-gray-700">Past appointments</h2>
+              <span className="text-xs sm:text-sm bg-gray-100 text-gray-600 px-2 sm:px-3 py-1 rounded-full font-medium">
                 {appointments.past.length} completed
               </span>
             </div>
             {appointments.past.length > 0 ? (
               appointments.past.map(appt => renderCard(appt))
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                <FiClock className="text-4xl mx-auto mb-3 text-gray-300" />
-                <p>No past appointments</p>
+              <div className="text-center py-6 sm:py-8 text-gray-500">
+                <FiClock className="text-3xl sm:text-4xl mx-auto mb-3 text-gray-300" />
+                <p className="text-sm sm:text-base">No past appointments</p>
               </div>
             )}
           </div>

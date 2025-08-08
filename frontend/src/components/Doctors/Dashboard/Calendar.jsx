@@ -46,40 +46,46 @@ const CalendarSidebar = ({
   const pendingToday = totalToday - confirmedToday;
 
   return (
-    <div className="bg-gray-200 rounded-md shadow p-2 mb-4 border-2 border-blue-400">
+    <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-4 mb-4">
       <div className="flex items-center space-x-2 mb-4 p-2">
-        <Calendar className="w-5 h-5 text-blue-600" />
-        <h3 className="text-lg font-semibold text-gray-900">Calendar</h3>
+        <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-[#5ACCC3]" />
+        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Calendar</h3>
       </div>
       
       <div className="mb-4">
         <div className="flex justify-between items-center p-2">
           <button 
             onClick={previousMonth} 
-            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+            className="p-1 sm:p-2 text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-[#5ACCC3] focus:ring-opacity-50"
+            aria-label="Previous month"
           >
-            &lt;
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
           </button>
-          <h2 className="font-bold text-gray-700 text-center">
+          <h2 className="font-bold text-gray-700 text-center text-sm sm:text-base">
             {format(currentDate, 'MMMM').toUpperCase()}
           </h2>
           <button 
             onClick={nextMonth} 
-            className="p-1 text-blue-600 hover:bg-blue-100 rounded"
+            className="p-1 sm:p-2 text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10 rounded transition-colors focus:outline-none focus:ring-2 focus:ring-[#5ACCC3] focus:ring-opacity-50"
+            aria-label="Next month"
           >
-            &gt;
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
           </button>
         </div>
         
         <div className="grid grid-cols-7 gap-1 text-center">
           {daysOfWeek.map((day, i) => (
-            <div key={i} className="py-2 text-sm font-semibold text-gray-600">
+            <div key={i} className="py-1 sm:py-2 text-xs sm:text-sm font-semibold text-gray-600">
               {day}
             </div>
           ))}
           
           {Array.from({ length: new Date(monthStart).getDay() }).map((_, i) => (
-            <div key={`empty-${i}`} className="p-2"></div>
+            <div key={`empty-${i}`} className="p-1 sm:p-2"></div>
           ))}
           
           {daysInMonth.map((day, i) => {
@@ -92,13 +98,22 @@ const CalendarSidebar = ({
                 key={i} 
                 onClick={() => onDateSelect(day)}
                 className={`
-                  p-2 text-center rounded-full w-10 h-10 mx-auto flex items-center justify-center
-                  cursor-pointer text-sm 
-                  ${isSelected ? 'bg-[#5ACCC3] text-white' : 'hover:bg-gray-300'}
-                  ${isTodayDate && !isSelected ? 'border border-[#5ACCC3]' : ''}
-                  ${hasAppointments && !isSelected ? 'bg-gray-300' : ''}
+                  p-1 sm:p-2 text-center rounded-lg w-8 h-8 sm:w-10 sm:h-10 mx-auto flex items-center justify-center
+                  cursor-pointer text-xs sm:text-sm transition-all duration-200 hover:scale-110
+                  ${isSelected ? 'bg-[#5ACCC3] text-white shadow-md' : 'hover:bg-gray-100'}
+                  ${isTodayDate && !isSelected ? 'border-2 border-[#5ACCC3]' : ''}
+                  ${hasAppointments && !isSelected ? 'bg-[#5ACCC3] bg-opacity-20' : ''}
                   ${!isSameMonth(day, currentDate) ? 'text-gray-400' : 'text-gray-700'}
                 `}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onDateSelect(day);
+                  }
+                }}
+                aria-label={`Select ${format(day, 'MMMM d, yyyy')}`}
               >
                 {format(day, 'd')}
               </div>
@@ -107,12 +122,12 @@ const CalendarSidebar = ({
         </div>
       </div>
       
-      <div className="pt-4 border-t border-gray-200">
-        <h4 className="text-sm font-medium text-gray-900 mb-2">Today's Summary</h4>
-        <div className="space-y-2 text-sm">
+      <div className="pt-3 sm:pt-4 border-t border-gray-200">
+        <h4 className="text-xs sm:text-sm font-medium text-gray-900 mb-2">Today's Summary</h4>
+        <div className="space-y-1 sm:space-y-2 text-xs sm:text-sm">
           <div className="flex justify-between">
-            <span className="text-gray-600">Total Appointments:</span>
-            <span className="font-medium text-blue-600">{totalToday}</span>
+            <span className="text-gray-600">Total:</span>
+            <span className="font-medium text-[#5ACCC3]">{totalToday}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Pending:</span>

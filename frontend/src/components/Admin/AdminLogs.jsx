@@ -1,24 +1,34 @@
-import React, { useState } from 'react'
-import { FiClock, FiSearch, FiAlertCircle, FiLogIn, FiActivity } from 'react-icons/fi'
+import React, { useState, useEffect } from 'react'
+import {
+  FiClock, FiSearch, FiAlertCircle, FiLogIn, FiActivity
+} from 'react-icons/fi'
 import AdminHeader from './AdminHeader'
-
-const dummyLogs = [
-  { id: 1, type: 'Login', user: 'Dr. A. Aliyev', action: 'Login Success', status: 'Success', time: '2025-06-23 09:22' },
-  { id: 2, type: 'Action', user: 'Admin A. Johnson', action: 'Updated clinic settings', status: 'Success', time: '2025-06-23 09:10' },
-  { id: 3, type: 'Error', user: 'System', action: 'Failed backup at 03:00', status: 'Error', time: '2025-06-23 03:00' },
-  { id: 4, type: 'Login', user: 'Nurse T. Kim', action: 'Login Failed', status: 'Failed', time: '2025-06-22 19:41' }
-]
 
 const logTypes = ['All', 'Login', 'Action', 'Error', 'System']
 
 const AdminLogs = () => {
-  const [logs] = useState(dummyLogs)
+  const [logs, setLogs] = useState([])
   const [filterType, setFilterType] = useState('All')
   const [search, setSearch] = useState('')
 
+  useEffect(() => {
+    const fetchLogs = async () => {
+      try {
+        const res = await fetch('/api/admin/logs') // adjust endpoint if needed
+        const data = await res.json()
+        setLogs(data)
+      } catch (err) {
+        console.error('Failed to fetch logs:', err)
+      }
+    }
+
+    fetchLogs()
+  }, [])
+
   const filteredLogs = logs.filter(log =>
     (filterType === 'All' || log.type === filterType) &&
-    (log.user.toLowerCase().includes(search.toLowerCase()) || log.action.toLowerCase().includes(search.toLowerCase()))
+    (log.user.toLowerCase().includes(search.toLowerCase()) ||
+     log.action.toLowerCase().includes(search.toLowerCase()))
   )
 
   const getIcon = (type) => {

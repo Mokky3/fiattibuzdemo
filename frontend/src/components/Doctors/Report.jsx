@@ -1,62 +1,77 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { Header } from './Header';
 import MidwiferyForm from './MidwiferyForm';
 import GeneralForm from './GeneralForm';
-import { useNavigate } from 'react-router-dom';
 
 const Report = () => {
+  const { patientId } = useParams();
   const navigate = useNavigate();
+
   const [selectedSpecialty, setSelectedSpecialty] = useState('midwifery & gynecology');
   const [selectedCode, setSelectedCode] = useState('#025');
-  
-  // Patient info (would be passed as props in real implementation)
-  const patient = {
-    name: 'Muhammad Hariton',
-    gender: 'male',
-    dob: '30.06.2004',
-    age: '20 y.o.',
-    height: '',
-    weight: '',
-    bmi: '',
-    temperature: '',
-    bloodPressure: '',
-    bloodGroup: '',
-    rhFactor: '',
-    phoneNumber: '',
-    emailAddress: '',
-    address: '',
-    temporaryAddress: '',
-    workPlace: '',
-    occupation: '',
-    hazards: '',
-    deregistration: '',
-    registration: '',
-    anotherInstitution: ''
+  const [patient, setPatient] = useState(null);
+  const [formData, setFormData] = useState({});
+
+  useEffect(() => {
+    const fetchPatient = async () => {
+      try {
+        const res = await fetch(`/api/doctor/patients/${patientId}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!res.ok) throw new Error('Failed to fetch patient');
+        const data = await res.json();
+        setPatient(data);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+    fetchPatient();
+  }, [patientId]);
+
+  const handleSaveReport = async () => {
+    try {
+      const res = await fetch('/api/doctor/reports', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          patientId,
+          specialty: selectedSpecialty,
+          code: selectedCode,
+          data: formData
+        })
+      });
+      if (!res.ok) throw new Error('Failed to save report');
+      const data = await res.json();
+      navigate(`/doctor/reports/${data.id}`);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to save report');
+    }
   };
 
-  // Available specialties
   const specialties = [
-    'general', 
-    'ophthalmology', 
-    'neurology', 
-    'traumatology', 
-    'midwifery & gynecology', 
-    'urology', 
-    'general oncology', 
-    'cardiology', 
-    'allergology'
+    'general', 'ophthalmology', 'neurology', 'traumatology',
+    'midwifery & gynecology', 'urology', 'general oncology',
+    'cardiology', 'allergology'
   ];
-  
-  // Available codes
+
   const codes = ['#025', '#003-1', '#025-1', '#096'];
 
-  // Render the appropriate form based on selected specialty
   const renderSpecialtyForm = () => {
+    const props = { formData, setFormData };
+
     if (selectedSpecialty === 'midwifery & gynecology' && selectedCode === '#025') {
-      return <MidwiferyForm />;
+      return <MidwiferyForm {...props} />;
     }
     if (selectedSpecialty === 'general') {
-      return <GeneralForm />;
+      return <GeneralForm {...props} />;
     }
     return (
       <div className="flex items-center justify-center h-[400px] text-gray-400">
@@ -65,17 +80,20 @@ const Report = () => {
     );
   };
 
+  if (!patient) {
+    return <div className="p-8 text-center text-gray-500">Loading patient info...</div>;
+  }
+
   return (
     <div className="flex flex-col min-h-screen bg-white">
       <Header />
-      
+
       <div className="flex md:flex-row gap-6 bg-white relative px-8 py-4">
-        {/* Medical illustrations background */}
         <div className="absolute inset-0 overflow-hidden opacity-10 pointer-events-none">
           <div className="w-full h-full bg-repeat" style={{ backgroundImage: "url('/medical-icons.svg')" }}></div>
         </div>
-        
-        {/* Left sidebar - Patient info */}
+
+        {/* Patient Sidebar */}
         <div className="md:w-1/5 lg:w-1/6">
           <div className="mb-3">
             <div className="flex items-center justify-between mb-2">
@@ -86,93 +104,53 @@ const Report = () => {
                 </svg>
               </button>
             </div>
-            
-            <button 
-              onClick={() => navigate('/patients')}
-              className="text-gray-600 text-sm mb-4 hover:text-[#5ACCC3]"
-            >
+
+            <button onClick={() => navigate('/patients')} className="text-gray-600 text-sm mb-4 hover:text-[#5ACCC3]">
               &larr; back
             </button>
-            
+
             <div className="border border-gray-200 rounded-md p-4 mb-4">
               <div className="flex justify-center mb-4">
                 <div className="w-20 h-20 bg-gray-200 rounded-md"></div>
               </div>
-              
+
               <div className="text-center mb-4">
                 <h3 className="text-[#5ACCC3] font-medium">{patient.name} {patient.gender === 'male' ? '♂' : '♀'}</h3>
                 <p className="text-sm text-gray-600">{patient.dob} ({patient.age})</p>
               </div>
-              
+
               <div className="grid grid-cols-3 gap-2 mb-4">
-                <div>
-                  <p className="text-gray-600 text-xs">Height:</p>
-                  <p className="text-sm">{patient.height || ''}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600 text-xs">Weight:</p>
-                  <p className="text-sm">{patient.weight || ''}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600 text-xs">BMI:</p>
-                  <p className="text-sm">{patient.bmi || ''}</p>
-                </div>
+                <Info label="Height" value={patient.height} />
+                <Info label="Weight" value={patient.weight} />
+                <Info label="BMI" value={patient.bmi} />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-2 mb-4">
-                <div>
-                  <p className="text-gray-600 text-xs">Temperature:</p>
-                  <p className="text-sm">{patient.temperature || ''}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600 text-xs">Blood Pressure:</p>
-                  <p className="text-sm">{patient.bloodPressure || ''}</p>
-                </div>
+                <Info label="Temperature" value={patient.temperature} />
+                <Info label="Blood Pressure" value={patient.bloodPressure} />
               </div>
-              
+
               <p className="text-xs text-gray-400 text-center mb-4">Last measured:</p>
-              
+
               <div className="grid grid-cols-2 gap-2 mb-4">
-                <div>
-                  <p className="text-gray-600 text-xs">Blood Group:</p>
-                  <p className="text-sm">{patient.bloodGroup || ''}</p>
-                </div>
-                <div>
-                  <p className="text-gray-600 text-xs">Blood rh factor:</p>
-                  <p className="text-sm">{patient.rhFactor || ''}</p>
-                </div>
+                <Info label="Blood Group" value={patient.bloodGroup} />
+                <Info label="Blood rh factor" value={patient.rhFactor} />
               </div>
-              
-              <div className="mb-3">
-                <p className="text-gray-600 text-xs">phone number:</p>
-                <p className="text-sm">{patient.phoneNumber || ''}</p>
-              </div>
-              
-              <div className="mb-3">
-                <p className="text-gray-600 text-xs">email address:</p>
-                <p className="text-sm">{patient.emailAddress || ''}</p>
-              </div>
-              
-              <div className="mb-3">
-                <p className="text-gray-600 text-xs">address:</p>
-                <p className="text-sm">{patient.address || ''}</p>
-              </div>
-              
-              <div className="mb-1">
-                <p className="text-gray-600 text-xs">temporary address:</p>
-                <p className="text-sm">{patient.temporaryAddress || ''}</p>
-              </div>
+
+              <Info label="Phone Number" value={patient.phoneNumber} />
+              <Info label="Email Address" value={patient.emailAddress} />
+              <Info label="Address" value={patient.address} />
+              <Info label="Temporary Address" value={patient.temporaryAddress} />
             </div>
           </div>
         </div>
-        
-        {/* Subtle vertical divider */}
+
+        {/* Vertical Divider */}
         <div className="hidden md:block w-px bg-gray-200 h-auto"></div>
-        
-        {/* Main content - Report form */}
+
+        {/* Form Area */}
         <div className="md:w-4/5 lg:w-5/6">
           <div className="bg-white">
-            {/* Specialty tabs */}
             <div className="flex flex-wrap gap-2 mb-4">
               {specialties.map(specialty => (
                 <button
@@ -184,8 +162,7 @@ const Report = () => {
                 </button>
               ))}
             </div>
-            
-            {/* Report codes */}
+
             <div className="bg-[#5ACCC3]/10 rounded-md p-4 mb-6">
               <div className="flex flex-wrap gap-2">
                 {codes.map(code => (
@@ -199,19 +176,19 @@ const Report = () => {
                 ))}
               </div>
             </div>
-            
-            {/* Report content area */}
+
             <div className="bg-white rounded-md border border-gray-200">
               {renderSpecialtyForm()}
-              
+
               <div className="flex justify-end p-4 border-t">
-                <button 
+                <button
                   onClick={() => window.history.back()}
                   className="px-4 py-2 border border-gray-300 text-gray-600 rounded-md text-sm mr-2"
                 >
                   Cancel
                 </button>
-                <button 
+                <button
+                  onClick={handleSaveReport}
                   className="px-4 py-2 bg-[#5ACCC3] text-white rounded-md text-sm"
                 >
                   Save Report
@@ -224,5 +201,12 @@ const Report = () => {
     </div>
   );
 };
+
+const Info = ({ label, value }) => (
+  <div className="mb-3">
+    <p className="text-gray-600 text-xs">{label}:</p>
+    <p className="text-sm">{value || '-'}</p>
+  </div>
+);
 
 export default Report;

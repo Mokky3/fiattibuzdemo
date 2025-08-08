@@ -5,7 +5,6 @@ import { FiArrowLeft, FiSave, FiUser, FiShield, FiSettings, FiRefreshCw } from '
 
 // API service functions
 const userProfileService = {
-  // Fetch user profile by ID
   async fetchUserProfile(userId) {
     try {
       const response = await fetch(`/api/admin/users/${userId}`, {
@@ -22,7 +21,6 @@ const userProfileService = {
     }
   },
 
-  // Update user profile
   async updateUserProfile(userId, userData) {
     try {
       const response = await fetch(`/api/admin/users/${userId}`, {
@@ -41,7 +39,6 @@ const userProfileService = {
     }
   },
 
-  // Reset user password
   async resetUserPassword(userId) {
     try {
       const response = await fetch(`/api/admin/users/${userId}/reset-password`, {
@@ -59,7 +56,6 @@ const userProfileService = {
     }
   },
 
-  // Fetch available clinics
   async fetchClinics() {
     try {
       const response = await fetch('/api/admin/clinics', {
@@ -74,31 +70,6 @@ const userProfileService = {
       console.error('Error fetching clinics:', error)
       throw error
     }
-  }
-}
-
-// Dummy data for development (remove when connecting to backend)
-const dummyClinics = [
-  { id: 'clinic1', name: 'Main Hospital' },
-  { id: 'clinic2', name: 'Downtown Clinic' },
-  { id: 'clinic3', name: 'Pediatric Center' }
-]
-
-const dummyUser = {
-  id: '12345',
-  name: 'Dr. A. Aliyev',
-  email: 'aliyev@example.com',
-  phone: '+998901234567',
-  role: 'Doctor',
-  status: 'Active',
-  clinicId: 'clinic1',
-  lastLogin: '2025-06-22 14:30',
-  createdAt: '2024-01-15 09:00',
-  access: {
-    viewHistory: true,
-    prescribe: true,
-    editMedical: true,
-    accessAnalytics: true
   }
 }
 
@@ -147,11 +118,7 @@ const AdminUserProfile = () => {
     try {
       setLoading(true)
       setError(null)
-      
-      // For development, use dummy data. Replace with actual API call:
-      // const userData = await userProfileService.fetchUserProfile(userId)
-      const userData = dummyUser // Remove this line when connecting to backend
-      
+      const userData = await userProfileService.fetchUserProfile(userId)
       setUser(userData)
       setEdited(userData)
     } catch (err) {
@@ -164,10 +131,7 @@ const AdminUserProfile = () => {
 
   const loadClinics = async () => {
     try {
-      // For development, use dummy data. Replace with actual API call:
-      // const clinicData = await userProfileService.fetchClinics()
-      const clinicData = dummyClinics // Remove this line when connecting to backend
-      
+      const clinicData = await userProfileService.fetchClinics()
       setClinics(clinicData)
     } catch (err) {
       console.error('Error loading clinics:', err)
@@ -189,12 +153,11 @@ const AdminUserProfile = () => {
   }
 
   const handleRoleChange = (newRole) => {
-    // Reset access permissions when role changes
     const newAccess = {}
     accessOptionsByRole[newRole]?.forEach(permission => {
       newAccess[permission] = false
     })
-    
+
     setEdited(prev => ({
       ...prev,
       role: newRole,
@@ -206,7 +169,7 @@ const AdminUserProfile = () => {
     try {
       setSaving(true)
       setError(null)
-      
+
       await userProfileService.updateUserProfile(userId, edited)
       setUser(edited)
       setHasChanges(false)
@@ -220,9 +183,10 @@ const AdminUserProfile = () => {
   }
 
   const handleResetPassword = async () => {
-    if (!window.confirm('Are you sure you want to reset this user\'s password? They will receive an email with reset instructions.')) {
-      return
-    }
+    const confirmed = window.confirm(
+      'Are you sure you want to reset this user\'s password? They will receive an email with reset instructions.'
+    )
+    if (!confirmed) return
 
     try {
       setResetPasswordLoading(true)
@@ -244,7 +208,6 @@ const AdminUserProfile = () => {
     setHasChanges(false)
   }
 
-  // Show loading state
   if (loading) {
     return (
       <div className="bg-gray-50 min-h-screen">
@@ -269,11 +232,11 @@ const AdminUserProfile = () => {
         <div className="max-w-screen-md mx-auto px-4 sm:px-6 lg:px-8 py-10">
           <div className="flex justify-center items-center h-64">
             <div className="text-center">
-              <div className="text-red-500 text-xl mb-4">⚠️</div>
+              <div className="text-red-500 text-3xl mb-4">⚠️</div>
               <p className="text-red-600 mb-4">{error}</p>
               <button
                 onClick={loadUserProfile}
-                className="bg-[#4DB6B0] text-white px-4 py-2 rounded-md hover:bg-[#43b0a8] transition-colors"
+                className="bg-[#4DB6B0] text-white px-4 py-2 rounded-md hover:bg-[#43b0a8] transition"
               >
                 Try Again
               </button>
@@ -284,6 +247,7 @@ const AdminUserProfile = () => {
     )
   }
 
+  // Avoid rendering if user is still undefined (but not error)
   if (!user) return null
 
   const isPatient = edited.role === 'Patient'
@@ -293,28 +257,26 @@ const AdminUserProfile = () => {
     <div className="bg-gray-50 min-h-screen">
       <AdminHeader />
       <div className="max-w-screen-md mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+        
         {/* Header */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button 
-              onClick={() => navigate(-1)} 
-              className="text-gray-600 hover:text-[#4DB6B0] flex items-center gap-1 text-sm transition-colors"
-            >
-              <FiArrowLeft /> Back
-            </button>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={loadUserProfile}
-              disabled={loading}
-              className="text-gray-600 hover:text-[#4DB6B0] p-2 transition-colors"
-              title="Refresh"
-            >
-              <FiRefreshCw className={loading ? 'animate-spin' : ''} />
-            </button>
-          </div>
+          <button 
+            onClick={() => navigate(-1)} 
+            className="text-gray-600 hover:text-[#4DB6B0] flex items-center gap-1 text-sm transition"
+          >
+            <FiArrowLeft /> Back
+          </button>
+          
+          <button
+            onClick={loadUserProfile}
+            disabled={loading}
+            className="text-gray-600 hover:text-[#4DB6B0] p-2 transition"
+            title="Refresh"
+          >
+            <FiRefreshCw className={loading ? 'animate-spin' : ''} />
+          </button>
         </div>
-
+        
         {/* Title and Status */}
         <div className="flex items-center justify-between">
           <div>

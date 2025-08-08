@@ -1,0 +1,11 @@
+{
+  "Name": "Orthanc",
+  "StorageDirectory": "/var/lib/orthanc/db",
+  "Plugins": ["/usr/share/orthanc/plugins"],
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/"
+  },
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": false
+}

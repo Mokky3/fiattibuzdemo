@@ -1,0 +1,48 @@
+version: '3.7'
+
+services:
+  orthanc:
+    image: jodogne/orthanc-plugins:1.12.3
+    container_name: fiattib-orthanc
+    ports:
+      - "8042:8042"
+      - "4242:4242"
+    volumes:
+      - ./config/orthanc.json:/etc/orthanc/orthanc.json
+      - orthanc-db:/var/lib/orthanc/db
+    restart: unless-stopped
+
+  ohif:
+    image: ohif-local
+    container_name: fiattib-ohif
+    ports:
+      - "3000:80"
+    environment:
+      - APP_CONFIG=config/default.js
+      - PUBLIC_URL=http://localhost:3001/
+      - REACT_APP_CONFIG_FILE=config/default.js
+    volumes:
+      - orthanc-db:/some/path/if-needed
+      - ./ohif/app-config.js:/usr/share/nginx/html/app-config.js
+      - ./ohif/extensions:/usr/share/nginx/html/extensions
+
+  monai:
+    image: projectmonai/monailabel:latest
+    container_name: fiattib-monai
+    ports:
+      - "8000:8000"
+    volumes:
+      - /c/Users/kubay/monai/apps:/app/apps
+      - /c/Users/kubay/monai/datasets:/datasets
+    working_dir: /app
+    command: [
+      "monailabel", "start_server",
+      "--app", "apps/radiology",
+      "--studies", "/datasets",
+      "--conf", "models", "deepedit"
+    ]
+    restart: unless-stopped
+
+
+volumes:
+  orthanc-db:

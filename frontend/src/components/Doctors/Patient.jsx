@@ -507,7 +507,7 @@ const Patient = () => {
       
       {/* Backend status and error indicators */}
       {!backendConnected && (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 mx-4 mt-4 rounded">
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 mx-2 sm:mx-4 mt-4 rounded">
           <div className="flex items-center">
             <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
@@ -518,7 +518,7 @@ const Patient = () => {
       )}
       
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 mx-4 mt-4 rounded">
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 mx-2 sm:mx-4 mt-4 rounded">
           {error}
           <button 
             onClick={() => setError(null)}
@@ -529,18 +529,18 @@ const Patient = () => {
         </div>
       )}
       
-      <div className="flex md:flex-row gap-8 bg-gray-50 relative px-8 py-6">
+      <div className="flex flex-col lg:flex-row gap-4 sm:gap-8 bg-gray-50 relative px-4 sm:px-8 py-4 sm:py-6">
         {/* Medical illustrations background */}
         <div className="absolute inset-0 overflow-hidden opacity-5 pointer-events-none">
           <div className="w-full h-full bg-repeat" style={{ backgroundImage: "url('/medical-icons.svg')" }}></div>
         </div>
         
         {/* Left sidebar - Patient list */}
-        <div className="md:w-1/5 lg:w-1/6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-            <div className="mb-6">
+        <div className="lg:w-1/5 xl:w-1/6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
+            <div className="mb-4 sm:mb-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[#5ACCC3] font-semibold text-base">Patients List</h2>
+                <h2 className="text-[#5ACCC3] font-semibold text-sm sm:text-base">Patients List</h2>
                 <div className="flex items-center space-x-2">
                   {backendConnected && (
                     <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Backend connected"></div>
@@ -550,7 +550,7 @@ const Patient = () => {
                     className="text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10 p-1 rounded-md transition-colors duration-200"
                     title="Refresh data"
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
                     </svg>
                   </button>
@@ -564,13 +564,13 @@ const Patient = () => {
                   <div 
                     key={patient.id} 
                     onClick={() => handlePatientSelect(index)}
-                    className={`py-4 px-4 cursor-pointer border rounded-xl text-center transition-all duration-200 ${
+                    className={`py-3 sm:py-4 px-3 sm:px-4 cursor-pointer border rounded-xl text-center transition-all duration-200 ${
                       selectedPatient === index 
                         ? 'bg-[#5ACCC3] text-white shadow-md transform scale-105' 
                         : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-[#5ACCC3] hover:shadow-sm'
                     }`}
                   >
-                    <h3 className={`font-semibold text-sm ${selectedPatient === index ? 'text-white' : 'text-gray-900'}`}>
+                    <h3 className={`font-semibold text-xs sm:text-sm ${selectedPatient === index ? 'text-white' : 'text-gray-900'}`}>
                       {patient.first_name} {patient.last_name}
                     </h3>
                     <p className={`text-xs mt-1 ${selectedPatient === index ? 'text-white text-opacity-90' : 'text-gray-500'}`}>
@@ -579,8 +579,8 @@ const Patient = () => {
                   </div>
                 ))
               ) : (
-                <div className="text-center text-gray-500 py-8">
-                  <p className="text-sm">No patients found</p>
+                <div className="text-center text-gray-500 py-6 sm:py-8">
+                  <p className="text-xs sm:text-sm">No patients found</p>
                   <p className="text-xs mt-1">Please check backend connection</p>
                 </div>
               )}
@@ -589,87 +589,87 @@ const Patient = () => {
         </div>
         
         {/* Main content - Patient details */}
-        <div className="md:w-4/5 lg:w-5/6">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+        <div className="lg:w-4/5 xl:w-5/6">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-8">
             {patients[selectedPatient] ? (
               <>
-                <div className="flex mb-10">
+                <div className="flex flex-col lg:flex-row mb-6 sm:mb-10">
                   {/* Patient photo and basic info */}
-                  <div className="w-36 h-36 bg-gradient-to-br from-gray-100 to-gray-200 mr-10 flex-shrink-0 rounded-xl shadow-inner flex items-center justify-center">
-                    <svg className="w-16 h-16 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                  <div className="w-24 h-24 sm:w-36 sm:h-36 bg-gradient-to-br from-gray-100 to-gray-200 mb-4 lg:mb-0 lg:mr-10 flex-shrink-0 rounded-xl shadow-inner flex items-center justify-center">
+                    <svg className="w-10 h-10 sm:w-16 sm:h-16 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
                       <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                     </svg>
                   </div>
-                  <div className="mt-2">
-                    <h2 className="text-2xl font-bold text-[#5ACCC3] mb-3">
+                  <div className="mt-2 flex-1">
+                    <h2 className="text-xl sm:text-2xl font-bold text-[#5ACCC3] mb-3">
                       {patients[selectedPatient].first_name} {patients[selectedPatient].last_name}
                     </h2>
-                    <div className="flex items-center space-x-4 mb-2">
-                      <p className="text-gray-700 text-base font-medium">
+                    <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 mb-2">
+                      <p className="text-gray-700 text-sm sm:text-base font-medium">
                         {patients[selectedPatient].date_of_birth} ({patients[selectedPatient].age})
                       </p>
-                      <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
-                      <p className="text-gray-700 text-base font-medium capitalize">
+                      <span className="hidden sm:block w-1 h-1 bg-gray-400 rounded-full"></span>
+                      <p className="text-gray-700 text-sm sm:text-base font-medium capitalize">
                         {patients[selectedPatient].gender}
                       </p>
                     </div>
                     
-                    <div className="grid grid-cols-3 gap-x-12 gap-y-4 mt-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 sm:gap-x-12 gap-y-4 mt-6 sm:mt-8">
                       <div className="space-y-1">
                         <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Blood Group</p>
-                        <p className="text-base font-semibold text-gray-900">{patients[selectedPatient].blood_group || '—'}</p>
+                        <p className="text-sm sm:text-base font-semibold text-gray-900">{patients[selectedPatient].blood_group || '—'}</p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Blood Rh Factor</p>
-                        <p className="text-base font-semibold text-gray-900">{patients[selectedPatient].rh_factor || '—'}</p>
+                        <p className="text-sm sm:text-base font-semibold text-gray-900">{patients[selectedPatient].rh_factor || '—'}</p>
                       </div>
                       <div></div>
                       <div className="space-y-1">
                         <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Height</p>
-                        <p className="text-base font-semibold text-gray-900">{patients[selectedPatient].height || '—'}</p>
+                        <p className="text-sm sm:text-base font-semibold text-gray-900">{patients[selectedPatient].height || '—'}</p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Weight</p>
-                        <p className="text-base font-semibold text-gray-900">{patients[selectedPatient].weight || '—'}</p>
+                        <p className="text-sm sm:text-base font-semibold text-gray-900">{patients[selectedPatient].weight || '—'}</p>
                       </div>
                       <div className="space-y-1">
                         <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">BMI</p>
-                        <p className="text-base font-semibold text-gray-900">{patients[selectedPatient].bmi || '—'}</p>
+                        <p className="text-sm sm:text-base font-semibold text-gray-900">{patients[selectedPatient].bmi || '—'}</p>
                         <p className="text-xs text-gray-400">Last measured</p>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="ml-auto space-y-6">
+                  <div className="mt-6 lg:mt-0 lg:ml-auto space-y-4 sm:space-y-6">
                     <div className="space-y-1">
                       <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Email</p>
-                      <p className="text-sm text-gray-900">{patients[selectedPatient].email || '—'}</p>
+                      <p className="text-xs sm:text-sm text-gray-900">{patients[selectedPatient].email || '—'}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Address</p>
-                      <p className="text-sm text-gray-900">{patients[selectedPatient].address || '—'}</p>
+                      <p className="text-xs sm:text-sm text-gray-900">{patients[selectedPatient].address || '—'}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Temporary Address</p>
-                      <p className="text-sm text-gray-900">{patients[selectedPatient].temporary_address || '—'}</p>
+                      <p className="text-xs sm:text-sm text-gray-900">{patients[selectedPatient].temporary_address || '—'}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Work Place</p>
-                      <p className="text-sm text-gray-900">{patients[selectedPatient].work_place || '—'}</p>
+                      <p className="text-xs sm:text-sm text-gray-900">{patients[selectedPatient].work_place || '—'}</p>
                     </div>
                     <div className="space-y-1">
                       <p className="text-gray-500 text-xs font-medium uppercase tracking-wide">Occupation</p>
-                      <p className="text-sm text-gray-900">{patients[selectedPatient].occupation || '—'}</p>
+                      <p className="text-xs sm:text-sm text-gray-900">{patients[selectedPatient].occupation || '—'}</p>
                     </div>
                   </div>
                 </div>
                 
-                <div className="border-t border-gray-200 pt-8">
-                  <div className="flex justify-between items-center mb-8">
+                <div className="border-t border-gray-200 pt-6 sm:pt-8">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 space-y-4 sm:space-y-0">
                     <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
                       <button 
                         onClick={() => handleTabChange('reports')}
-                        className={`px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                        className={`px-4 sm:px-6 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 ${
                           activeTab === 'reports' 
                             ? 'bg-[#5ACCC3] text-white shadow-sm' 
                             : 'text-[#5ACCC3] hover:bg-white hover:shadow-sm'
@@ -679,7 +679,7 @@ const Patient = () => {
                       </button>
                       <button 
                         onClick={() => handleTabChange('prescriptions')}
-                        className={`px-6 py-2 rounded-md text-sm font-medium transition-all duration-200 ${
+                        className={`px-4 sm:px-6 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 ${
                           activeTab === 'prescriptions' 
                             ? 'bg-[#5ACCC3] text-white shadow-sm' 
                             : 'text-[#5ACCC3] hover:bg-white hover:shadow-sm'
@@ -688,26 +688,26 @@ const Patient = () => {
                         Prescriptions
                       </button>
                     </div>
-                    <div className="flex items-center space-x-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-3">
                       <div className="relative">
                         <button 
                           onClick={() => setShowFilterMenu(!showFilterMenu)}
                           className="text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10 p-2 rounded-md transition-colors duration-200"
                           title="Filter and sort"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
                           </svg>
                         </button>
                         {showFilterMenu && (
-                          <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
+                          <div className="absolute right-0 mt-2 w-40 sm:w-48 bg-white rounded-md shadow-lg z-10 border border-gray-200">
                             <div className="py-1">
                               <button 
                                 onClick={() => {
                                   setFilterOption('all');
                                   setShowFilterMenu(false);
                                 }}
-                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                className="block px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
                               >
                                 All {activeTab}
                               </button>
@@ -716,7 +716,7 @@ const Patient = () => {
                                   setFilterOption('recent');
                                   setShowFilterMenu(false);
                                 }}
-                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                className="block px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
                               >
                                 Recent (Last 7 days)
                               </button>
@@ -725,7 +725,7 @@ const Patient = () => {
                                   setFilterOption('month');
                                   setShowFilterMenu(false);
                                 }}
-                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                className="block px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
                               >
                                 Last Month
                               </button>
@@ -735,7 +735,7 @@ const Patient = () => {
                                   setSortOption('date');
                                   setShowFilterMenu(false);
                                 }}
-                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                className="block px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
                               >
                                 Sort by Date
                               </button>
@@ -744,7 +744,7 @@ const Patient = () => {
                                   setSortOption('name');
                                   setShowFilterMenu(false);
                                 }}
-                                className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                                className="block px-4 py-2 text-xs sm:text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
                               >
                                 Sort by Name
                               </button>
@@ -757,7 +757,7 @@ const Patient = () => {
                         className="text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10 p-2 rounded-md transition-colors duration-200"
                         title="Export data"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                         </svg>
                       </button>
@@ -766,29 +766,29 @@ const Patient = () => {
                         className="text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10 p-2 rounded-md transition-colors duration-200"
                         title="Print"
                       >
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
                         </svg>
                       </button>
                       {activeTab === 'reports' ? (
-                        <>
+                        <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                           <button 
                             onClick={handleViewAllReports}
-                            className="px-6 py-2 border-2 border-[#5ACCC3] text-[#5ACCC3] rounded-lg text-sm font-medium hover:bg-[#5ACCC3] hover:text-white transition-all duration-200"
+                            className="px-4 sm:px-6 py-2 border-2 border-[#5ACCC3] text-[#5ACCC3] rounded-lg text-xs sm:text-sm font-medium hover:bg-[#5ACCC3] hover:text-white transition-all duration-200"
                           >
                             View All
                           </button>
                           <button 
                             onClick={handleAddReport}
-                            className="px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm"
+                            className="px-4 sm:px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm"
                           >
                             Add Report
                           </button>
-                        </>
+                        </div>
                       ) : (
                         <button 
                           onClick={() => setShowPrescriptionModal(true)}
-                          className="px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm"
+                          className="px-4 sm:px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm"
                         >
                           Add Prescription
                         </button>
@@ -801,11 +801,11 @@ const Patient = () => {
                 </div>
               </>
             ) : (
-              <div className="flex flex-col items-center justify-center h-[400px] text-gray-400">
-                <svg className="w-16 h-16 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className="flex flex-col items-center justify-center h-[300px] sm:h-[400px] text-gray-400">
+                <svg className="w-12 h-12 sm:w-16 sm:h-16 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-                <p className="text-lg font-medium">No Patient Selected</p>
+                <p className="text-base sm:text-lg font-medium">No Patient Selected</p>
                 <p className="text-sm text-gray-400 mt-1">Please select a patient from the list to view details</p>
               </div>
             )}
@@ -815,9 +815,9 @@ const Patient = () => {
 
       {/* Prescription Modal */}
       {showPrescriptionModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-8 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold text-gray-900 mb-6">Add New Prescription</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-4 sm:p-8 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-6">Add New Prescription</h3>
             
             <div className="space-y-4">
               <div>
@@ -829,7 +829,7 @@ const Patient = () => {
                   name="medication_name"
                   value={newPrescription.medication_name}
                   onChange={handlePrescriptionInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
                   placeholder="Enter medication name"
                   required
                 />
@@ -844,7 +844,7 @@ const Patient = () => {
                   name="dosage"
                   value={newPrescription.dosage}
                   onChange={handlePrescriptionInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
                   placeholder="e.g., 50mg"
                   required
                 />
@@ -859,7 +859,7 @@ const Patient = () => {
                   name="frequency"
                   value={newPrescription.frequency}
                   onChange={handlePrescriptionInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
                   placeholder="e.g., Once daily"
                   required
                 />
@@ -874,7 +874,7 @@ const Patient = () => {
                   name="duration"
                   value={newPrescription.duration}
                   onChange={handlePrescriptionInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
                   placeholder="e.g., 3 months"
                   required
                 />
@@ -888,14 +888,14 @@ const Patient = () => {
                   name="instructions"
                   value={newPrescription.instructions}
                   onChange={handlePrescriptionInputChange}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
                   placeholder="Special instructions for the patient"
                   rows="3"
                 />
               </div>
             </div>
             
-            <div className="flex justify-end space-x-3 mt-6">
+            <div className="flex flex-col sm:flex-row justify-end space-y-3 sm:space-y-0 sm:space-x-3 mt-6">
               <button
                 onClick={() => {
                   setShowPrescriptionModal(false);
@@ -908,14 +908,14 @@ const Patient = () => {
                     status: 'active'
                   });
                 }}
-                className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors duration-200"
+                className="px-4 sm:px-6 py-2 border border-gray-300 text-gray-700 rounded-lg text-xs sm:text-sm font-medium hover:bg-gray-50 transition-colors duration-200"
               >
                 Cancel
               </button>
               <button
                 onClick={handleCreatePrescription}
                 disabled={!newPrescription.medication_name || !newPrescription.dosage || !newPrescription.frequency || !newPrescription.duration || !backendConnected}
-                className="px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-4 sm:px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Add Prescription
               </button>

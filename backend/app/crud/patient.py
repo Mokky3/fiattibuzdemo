@@ -1,275 +1,420 @@
-from sqlalchemy.orm import Session
-from sqlalchemy import or_, and_, desc
+# app/crud/patient.py
+"""CRUD operations for Patient-related models."""
 from typing import Optional, List, Dict, Any
-from datetime import date, datetime
+from sqlalchemy.orm import Session
+from sqlalchemy import and_, or_, func, desc
+from datetime import datetime, date, timedelta
+import uuid
 
-from app.models.patient import Patient, PatientInvitation
-from app.schemas.patient import PatientCreate, PatientBase
+from app.crud.base import CRUDBase
+from app.crud.user import user as user_crud
+from app.common.models.admin import User, UserRole
 
 
-# Keep your existing functions and add new ones
-def create_patient(db: Session, patient: PatientCreate):
-    """Your existing create function - enhanced with validation"""
-    # Convert the frontend field names to your database field names
-    patient_data = patient.dict()
+class PatientInfo:
+    """Patient information model (would be a proper SQLAlchemy model in real implementation)."""
+    def __init__(self, **kwargs):
+        self.id = kwargs.get('id')
+        self.user_id = kwargs.get('user_id')
+        self.patient_code = kwargs.get('patient_code')
+        self.date_of_birth = kwargs.get('date_of_birth')
+        self.gender = kwargs.get('gender')
+        self.blood_group = kwargs.get('blood_group')
+        self.rh_factor = kwargs.get('rh_factor')
+        self.height = kwargs.get('height')
+        self.weight = kwargs.get('weight')
+        self.bmi = kwargs.get('bmi')
+        self.temperature = kwargs.get('temperature')
+        self.blood_pressure = kwargs.get('blood_pressure')
+        self.address = kwargs.get('address')
+        self.temporary_address = kwargs.get('temporary_address')
+        self.work_place = kwargs.get('work_place')
+        self.occupation = kwargs.get('occupation')
+        self.emergency_contact = kwargs.get('emergency_contact')
+        self.insurance_info = kwargs.get('insurance_info')
+        self.allergies = kwargs.get('allergies', [])
+        self.chronic_conditions = kwargs.get('chronic_conditions', [])
+        self.created_at = kwargs.get('created_at', datetime.utcnow())
+        self.updated_at = kwargs.get('updated_at')
+
+
+class CRUDPatient:
+    """CRUD operations for patients."""
     
-    # Map frontend fields to your database fields
-    if 'date_of_birth' in patient_data:
-        patient_data['birth_date'] = patient_data.pop('date_of_birth')
-    if 'phone_number' in patient_data:
-        patient_data['phone'] = patient_data.pop('phone_number')
+    def __init__(self):
+        self.user_crud = user_crud
     
-    db_patient = Patient(**patient_data)
-    db.add(db_patient)
-    db.commit()
-    db.refresh(db_patient)
-    return db_patient
-
-
-def get_patient(db: Session, patient_id: int):
-    """Your existing get function"""
-    return db.query(Patient).filter(Patient.id == patient_id).first()
-
-
-def update_patient(db: Session, patient_id: int, patient_data: PatientBase):
-    """Your existing update function"""
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
-    if patient:
-        for field, value in patient_data.dict().items():
-            setattr(patient, field, value)
-        db.commit()
-        db.refresh(patient)
-    return patient
-
-
-def delete_patient(db: Session, patient_id: int):
-    """Your existing delete function"""
-    patient = db.query(Patient).filter(Patient.id == patient_id).first()
-    if patient:
-        db.delete(patient)
-        db.commit()
-    return patient
-
-
-# Additional functions for the registration system
-def get_patient_by_phone(db: Session, phone: str) -> Optional[Patient]:
-    """Get patient by phone number"""
-    return db.query(Patient).filter(Patient.phone == phone).first()
-
-
-def get_patient_by_email(db: Session, email: str) -> Optional[Patient]:
-    """Get patient by email"""
-    return db.query(Patient).filter(Patient.email == email).first()
-
-
-def get_patient_by_pinfl(db: Session, pinfl: str) -> Optional[Patient]:
-    """Get patient by PINFL"""
-    return db.query(Patient).filter(Patient.pinfl == pinfl).first()
-
-
-def get_patient_by_passport(db: Session, passport_number: str) -> Optional[Patient]:
-    """Get patient by passport number"""
-    return db.query(Patient).filter(Patient.passport_number == passport_number).first()
-
-
-def get_all_patients(
-    db: Session,
-    skip: int = 0,
-    limit: int = 100,
-    search: Optional[str] = None,
-    status: Optional[str] = None
-) -> List[Patient]:
-    """Get all patients with optional filtering and pagination"""
-    query = db.query(Patient)
-    
-    # Apply status filter
-    if status:
-        query = query.filter(Patient.status == status)
-    
-    # Apply search filter
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            or_(
-                Patient.full_name.ilike(search_term),
-                Patient.phone.like(search_term),
-                Patient.patient_id.like(search_term) if search_term else False,
-                Patient.email.ilike(search_term) if search_term else False
+    def get_patient_by_id(
+        self, db: Session, *, patient_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get patient by ID."""
+        # In real implementation, would join User and PatientInfo tables
+        user = db.query(User).filter(
+            and_(
+                User.id == patient_id,
+                User.role == UserRole.PATIENT
             )
-        )
-    
-    return query.order_by(desc(Patient.created_at)).offset(skip).limit(limit).all()
-
-
-def count_patients(
-    db: Session,
-    search: Optional[str] = None,
-    status: Optional[str] = None
-) -> int:
-    """Count total patients with optional filtering"""
-    query = db.query(Patient)
-    
-    if status:
-        query = query.filter(Patient.status == status)
-    
-    if search:
-        search_term = f"%{search}%"
-        query = query.filter(
-            or_(
-                Patient.full_name.ilike(search_term),
-                Patient.phone.like(search_term),
-                Patient.patient_id.like(search_term) if search_term else False,
-                Patient.email.ilike(search_term) if search_term else False
-            )
-        )
-    
-    return query.count()
-
-
-def search_patients(
-    db: Session,
-    full_name: Optional[str] = None,
-    birth_date: Optional[date] = None,
-    pinfl: Optional[str] = None,
-    phone: Optional[str] = None,
-    passport_number: Optional[str] = None
-) -> List[Patient]:
-    """Search patients by multiple criteria"""
-    query = db.query(Patient)
-    filters = []
-    
-    if full_name:
-        filters.append(Patient.full_name.ilike(f"%{full_name}%"))
-    if birth_date:
-        filters.append(Patient.birth_date == birth_date)
-    if pinfl:
-        filters.append(Patient.pinfl == pinfl)
-    if phone:
-        filters.append(Patient.phone == phone)
-    if passport_number:
-        filters.append(Patient.passport_number == passport_number)
-    
-    if filters:
-        query = query.filter(and_(*filters))
-    
-    return query.all()
-
-
-def patient_exists(
-    db: Session,
-    pinfl: Optional[str] = None,
-    phone: Optional[str] = None,
-    email: Optional[str] = None,
-    passport_number: Optional[str] = None,
-    exclude_id: Optional[int] = None
-) -> bool:
-    """Check if patient exists with given criteria"""
-    query = db.query(Patient)
-    
-    if exclude_id:
-        query = query.filter(Patient.id != exclude_id)
-    
-    filters = []
-    if pinfl:
-        filters.append(Patient.pinfl == pinfl)
-    if phone:
-        filters.append(Patient.phone == phone)
-    if email:
-        filters.append(Patient.email == email)
-    if passport_number:
-        filters.append(Patient.passport_number == passport_number)
-    
-    if filters:
-        query = query.filter(or_(*filters))
-        return query.first() is not None
-    
-    return False
-
-
-def deactivate_patient(db: Session, patient_id: int) -> Optional[Patient]:
-    """Soft delete (deactivate) patient"""
-    patient = get_patient(db, patient_id)
-    if patient:
-        patient.status = "inactive"
-        db.commit()
-        db.refresh(patient)
-    return patient
-
-
-def activate_patient(db: Session, patient_id: int) -> Optional[Patient]:
-    """Activate patient"""
-    patient = get_patient(db, patient_id)
-    if patient:
-        patient.status = "active"
-        db.commit()
-        db.refresh(patient)
-    return patient
-
-
-# Invitation CRUD functions
-def create_invitation(db: Session, patient_id: int) -> PatientInvitation:
-    """Create a new patient invitation"""
-    invitation = PatientInvitation(patient_id=patient_id)
-    db.add(invitation)
-    db.commit()
-    db.refresh(invitation)
-    return invitation
-
-
-def get_invitation_by_token(db: Session, token: str) -> Optional[PatientInvitation]:
-    """Get invitation by token"""
-    return db.query(PatientInvitation).filter(
-        PatientInvitation.invitation_token == token
-    ).first()
-
-
-def get_valid_invitation(db: Session, patient_id: int) -> Optional[PatientInvitation]:
-    """Get valid (unused and not expired) invitation for patient"""
-    return db.query(PatientInvitation).filter(
-        and_(
-            PatientInvitation.patient_id == patient_id,
-            PatientInvitation.used == False,
-            PatientInvitation.expires_at > datetime.utcnow()
-        )
-    ).first()
-
-
-def mark_invitation_used(db: Session, token: str) -> Optional[PatientInvitation]:
-    """Mark invitation as used"""
-    invitation = get_invitation_by_token(db, token)
-    if invitation and invitation.is_valid():
-        invitation.mark_as_used()
-        db.commit()
-        db.refresh(invitation)
-        return invitation
-    return None
-
-
-def get_patient_statistics(db: Session) -> Dict[str, Any]:
-    """Get patient statistics"""
-    total_patients = db.query(Patient).count()
-    active_patients = db.query(Patient).filter(Patient.status == "active").count()
-    inactive_patients = db.query(Patient).filter(Patient.status == "inactive").count()
-    
-    # Patients registered today
-    today = datetime.now().date()
-    today_patients = (
-        db.query(Patient)
-        .filter(Patient.created_at >= today)
-        .count()
-    )
-    
-    # Gender distribution
-    male_count = db.query(Patient).filter(Patient.gender == "Male").count()
-    female_count = db.query(Patient).filter(Patient.gender == "Female").count()
-    
-    return {
-        "total_patients": total_patients,
-        "active_patients": active_patients,
-        "inactive_patients": inactive_patients,
-        "today_registrations": today_patients,
-        "gender_distribution": {
-            "male": male_count,
-            "female": female_count
+        ).first()
+        
+        if not user:
+            return None
+        
+        # Mock patient info (would come from PatientInfo table)
+        age = self._calculate_age("1990-01-01")  # Mock DOB
+        
+        return {
+            "id": str(user.id),
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "patient_code": f"PT-{str(user.id)[:8].upper()}",
+            "gender": "male",  # Would come from PatientInfo
+            "date_of_birth": "1990-01-01",
+            "age": age,
+            "height": "175 cm",
+            "weight": "70 kg",
+            "bmi": "22.9",
+            "temperature": "36.6 °C",
+            "blood_pressure": "120/80",
+            "blood_group": "O",
+            "rh_factor": "+",
+            "phone_number": user.phone,
+            "email": user.email,
+            "address": "Demo Address",
+            "temporary_address": None,
+            "work_place": "Demo Company",
+            "occupation": "Software Engineer"
         }
-    }
+    
+    def get_patient_by_code(
+        self, db: Session, *, patient_code: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get patient by patient code."""
+        # In real implementation, would query PatientInfo table
+        # For now, extract ID from code and use that
+        if patient_code.startswith("PT-"):
+            patient_id_part = patient_code[3:11].lower()
+            # Search for user with matching ID prefix
+            users = db.query(User).filter(
+                and_(
+                    User.role == UserRole.PATIENT,
+                    func.cast(User.id, String).like(f"{patient_id_part}%")
+                )
+            ).all()
+            
+            if users:
+                return self.get_patient_by_id(db, patient_id=str(users[0].id))
+        
+        return None
+    
+    def get_all_patients(
+        self,
+        db: Session,
+        *,
+        organization_id: Optional[uuid.UUID] = None,
+        doctor_id: Optional[uuid.UUID] = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Get all patients with optional filtering."""
+        query = db.query(User).filter(User.role == UserRole.PATIENT)
+        
+        if organization_id:
+            query = query.filter(User.organization_id == organization_id)
+        
+        # In real implementation, would filter by doctor assignments
+        
+        users = query.offset(skip).limit(limit).all()
+        
+        patients = []
+        for user in users:
+            patient_data = self.get_patient_by_id(db, patient_id=str(user.id))
+            if patient_data:
+                patients.append(patient_data)
+        
+        return patients
+    
+    def create_patient(
+        self,
+        db: Session,
+        *,
+        patient_data: Dict[str, Any],
+        created_by: uuid.UUID
+    ) -> Dict[str, Any]:
+        """Create a new patient."""
+        # Create user account
+        user_create = {
+            "email": patient_data.get("email"),
+            "password": patient_data.get("password", "temporary123"),  # Would be properly handled
+            "confirm_password": patient_data.get("password", "temporary123"),
+            "first_name": patient_data.get("first_name"),
+            "last_name": patient_data.get("last_name"),
+            "role": UserRole.PATIENT,
+            "phone": patient_data.get("phone_number")
+        }
+        
+        user = self.user_crud.create(db, obj_in=user_create)
+        
+        # In real implementation, would also create PatientInfo record
+        
+        return self.get_patient_by_id(db, patient_id=str(user.id))
+    
+    def update_patient(
+        self,
+        db: Session,
+        *,
+        patient_id: str,
+        patient_data: Dict[str, Any]
+    ) -> Optional[Dict[str, Any]]:
+        """Update patient information."""
+        user = db.query(User).filter(
+            and_(
+                User.id == patient_id,
+                User.role == UserRole.PATIENT
+            )
+        ).first()
+        
+        if not user:
+            return None
+        
+        # Update user fields
+        if "first_name" in patient_data:
+            user.first_name = patient_data["first_name"]
+        if "last_name" in patient_data:
+            user.last_name = patient_data["last_name"]
+        if "email" in patient_data:
+            user.email = patient_data["email"]
+        if "phone_number" in patient_data:
+            user.phone = patient_data["phone_number"]
+        
+        user.updated_at = datetime.utcnow()
+        db.commit()
+        
+        # In real implementation, would also update PatientInfo
+        
+        return self.get_patient_by_id(db, patient_id=patient_id)
+    
+    def search_patients(
+        self,
+        db: Session,
+        *,
+        search_term: str,
+        organization_id: Optional[uuid.UUID] = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Search patients by name, code, phone, or email."""
+        filters = {'role': UserRole.PATIENT}
+        
+        if organization_id:
+            filters['organization_id'] = organization_id
+        
+        users = self.user_crud.search_users(
+            db,
+            search_term=search_term,
+            skip=skip,
+            limit=limit,
+            filters=filters
+        )
+        
+        patients = []
+        for user in users:
+            patient_data = self.get_patient_by_id(db, patient_id=str(user.id))
+            if patient_data:
+                patients.append(patient_data)
+        
+        return patients
+    
+    def get_patient_vitals(
+        self,
+        db: Session,
+        *,
+        patient_id: str,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None
+    ) -> List[Dict[str, Any]]:
+        """Get patient vital signs history."""
+        # In real implementation, would fetch from vitals table
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "patient_id": patient_id,
+                "date": datetime.utcnow().isoformat(),
+                "temperature": "36.6 °C",
+                "blood_pressure": "120/80",
+                "heart_rate": "72 bpm",
+                "weight": "70 kg",
+                "height": "175 cm",
+                "bmi": "22.9",
+                "oxygen_saturation": "98%"
+            }
+        ]
+    
+    def update_patient_vitals(
+        self,
+        db: Session,
+        *,
+        patient_id: str,
+        vitals_data: Dict[str, Any],
+        recorded_by: uuid.UUID
+    ) -> Dict[str, Any]:
+        """Update patient vital signs."""
+        # In real implementation, would create new vitals record
+        vitals_data["id"] = str(uuid.uuid4())
+        vitals_data["patient_id"] = patient_id
+        vitals_data["recorded_by"] = str(recorded_by)
+        vitals_data["recorded_at"] = datetime.utcnow().isoformat()
+        
+        return vitals_data
+    
+    def get_patient_allergies(
+        self, db: Session, *, patient_id: str
+    ) -> List[Dict[str, Any]]:
+        """Get patient allergies."""
+        # In real implementation, would fetch from allergies table
+        return [
+            {
+                "id": str(uuid.uuid4()),
+                "patient_id": patient_id,
+                "allergen": "Penicillin",
+                "reaction": "Rash",
+                "severity": "Moderate",
+                "noted_date": "2020-01-15"
+            }
+        ]
+    
+    def add_patient_allergy(
+        self,
+        db: Session,
+        *,
+        patient_id: str,
+        allergy_data: Dict[str, Any],
+        added_by: uuid.UUID
+    ) -> Dict[str, Any]:
+        """Add patient allergy."""
+        # In real implementation, would create allergy record
+        allergy_data["id"] = str(uuid.uuid4())
+        allergy_data["patient_id"] = patient_id
+        allergy_data["added_by"] = str(added_by)
+        allergy_data["added_at"] = datetime.utcnow().isoformat()
+        
+        return allergy_data
+    
+    def get_patient_medical_history(
+        self,
+        db: Session,
+        *,
+        patient_id: str,
+        category: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get patient medical history."""
+        # In real implementation, would fetch from medical history table
+        history = [
+            {
+                "id": str(uuid.uuid4()),
+                "patient_id": patient_id,
+                "date": "2023-06-15",
+                "category": "diagnosis",
+                "title": "Hypertension",
+                "description": "Diagnosed with mild hypertension",
+                "doctor_name": "Dr. Smith"
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "patient_id": patient_id,
+                "date": "2023-03-10",
+                "category": "surgery",
+                "title": "Appendectomy",
+                "description": "Laparoscopic appendectomy performed",
+                "doctor_name": "Dr. Johnson"
+            }
+        ]
+        
+        if category:
+            history = [h for h in history if h["category"] == category]
+        
+        return history
+    
+    def get_patient_appointments(
+        self,
+        db: Session,
+        *,
+        patient_id: str,
+        status: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None
+    ) -> List[Dict[str, Any]]:
+        """Get patient appointments."""
+        # In real implementation, would fetch from appointments table
+        return []
+    
+    def get_patient_prescriptions(
+        self,
+        db: Session,
+        *,
+        patient_id: str,
+        status: Optional[str] = None,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Get patient prescriptions."""
+        # In real implementation, would fetch from prescriptions table
+        return []
+    
+    def get_patient_lab_results(
+        self,
+        db: Session,
+        *,
+        patient_id: str,
+        test_type: Optional[str] = None,
+        date_from: Optional[date] = None,
+        date_to: Optional[date] = None
+    ) -> List[Dict[str, Any]]:
+        """Get patient lab results."""
+        # In real implementation, would fetch from lab results table
+        return []
+    
+    def get_patient_documents(
+        self,
+        db: Session,
+        *,
+        patient_id: str,
+        document_type: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get patient documents."""
+        # In real implementation, would fetch from documents table
+        return []
+    
+    def _calculate_age(self, date_of_birth: str) -> int:
+        """Calculate age from date of birth."""
+        dob = datetime.strptime(date_of_birth, "%Y-%m-%d").date()
+        today = date.today()
+        age = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+        return age
+    
+    def get_patient_summary(
+        self, db: Session, *, patient_id: str
+    ) -> Dict[str, Any]:
+        """Get comprehensive patient summary."""
+        patient = self.get_patient_by_id(db, patient_id=patient_id)
+        if not patient:
+            return None
+        
+        # In real implementation, would aggregate data from multiple tables
+        return {
+            "patient": patient,
+            "summary": {
+                "total_appointments": 24,
+                "upcoming_appointments": 2,
+                "total_prescriptions": 18,
+                "active_prescriptions": 3,
+                "total_lab_results": 12,
+                "recent_vitals": self.get_patient_vitals(db, patient_id=patient_id),
+                "allergies_count": len(self.get_patient_allergies(db, patient_id=patient_id)),
+                "last_visit": "2024-12-15",
+                "next_visit": "2025-01-20"
+            }
+        }
+
+
+# Create instance
+patient = CRUDPatient()

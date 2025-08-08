@@ -1,6 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import SignIn from './components/Auth/SignIn';
-import SignUp from './components/Auth/SignUp';
+import SignIn from './components/Auth/SignIn.jsx';
+import SignUp from './components/Auth/SignUp.jsx';
 import './App.css';
 import Dashboard from './components/Doctors/Dashboard';
 import Appointments from './components/Doctors/Appointments';
@@ -13,6 +13,8 @@ import PatientAppointment from './components/Patients/PatientAppointment';
 import Records from './components/Patients/Records';
 import Prescription from './components/Patients/Prescription';
 import Hospital from './components/Patients/Hospital';
+import PatientProfile from './components/Patients/profile';
+import PatientSettings from './components/Patients/settings';
 import DoctorStats from './components/Doctors/DoctorStats';
 import DoctorMessages from './components/Doctors/DoctorMessages';
 import DoctorProfile from './components/Doctors/DoctorProfile';
@@ -21,6 +23,8 @@ import ReceptionistDashboard from './components/Reception/ReceptionDashboard';
 import ReceptionistHeader from './components/Reception/ReceptionHeader';
 import PatientRegister from './components/Reception/PatientRegister';
 import ReceptionAppointments from './components/Reception/ReceptionAppoinments';
+import ReceptionProfile from './components/Reception/profile.jsx';
+import ReceptionSettings from './components/Reception/settings.jsx';
 import AdminDashboard from './components/Admin/AdminDashboard';
 import AdminUsers from './components/Admin/AdminUsers';
 import AdminClinics from './components/Admin/AdminClinics';
@@ -29,6 +33,42 @@ import AdminLogs from './components/Admin/AdminLogs';
 import AdminUserProfile from './components/Admin/AdminUserProfile';
 import ClinicProfile from './components/Admin/ClinicProfile';
 import AdminUserStats from './components/Admin/AdminUserStats';
+import adminprofile from './components/Admin/profile';
+import doctorsettings from './components/Doctors/settings';
+import LabTechnicianDashboard from './components/Lab/dashboard';
+import LabHeader from './components/Lab/header';
+import LabMessages from './components/Lab/messages';
+import LabOrdersModule from './components/Lab/orders';
+import LabPatientsModule from './components/Lab/patients';
+import LabProfileModule from './components/Lab/profile';
+import LabReportsModule from './components/Lab/Reports';
+import LabSettingsModule from './components/Lab/settings';
+import LabResultsModule from './components/Lab/results';
+import NurseHeader from './components/Nurse/header';
+import NursePortalDashboard from './components/Nurse/dashboard';
+import NursePatients from './components/Nurse/patients';
+import NurseMedicationsModule from './components/Nurse/medications';
+import NurseVitalsModule from './components/Nurse/vitals';
+import NurseTasksModule from './components/Nurse/tasks';
+import NurseSettingsModule from './components/Nurse/settings';
+import RadiologyDashboard from './components/Radiology/dashboard';
+import RadiologyStudies from './components/Radiology/studies';
+import RadiologyWorklist from './components/Radiology/worklist';
+import RadiologyMessages from './components/Radiology/messages';
+import RadiologyProfileModule from './components/Radiology/profile';
+import RadiologySettingsModule from './components/Radiology/settings';
+import RadiologyTemplates from './components/Radiology/templates';
+import PACSViewer from './components/Radiology/PACS';
+import RadiologyHeader from './components/Radiology/header';
+
+
+
+
+
+
+
+
+
 
 
 
@@ -61,6 +101,8 @@ function App() {
         <Route path="/doctor/messages" element={<DoctorMessages />} />
         <Route path="/doctor/profile" element={<DoctorProfile />} />
         <Route path="/doctor/change-password" element={<ChangePassword />} />
+        <Route path="/doctor/settings" element={<doctorsettings />} />
+        <Route path="/doctor/profile/:patientId" element={<PatientProfile />} />
 
 
         {/* 🧑‍⚕️ Patient Pages */}
@@ -69,12 +111,18 @@ function App() {
         <Route path="/patient/records" element={<Records />} />
         <Route path="/patient/prescription" element={<Prescription />} />
         <Route path="/patient/hospital" element={<Hospital />} />
+        <Route path="/patient/profile" element={<PatientProfile />} />
+        <Route path="/patient/settings" element={<PatientSettings />} />
+
 
         {/* 🏥 Receptionist Pages */}
         <Route path="/reception/dashboard" element={<ReceptionistDashboard />} />
         <Route path="/reception/header" element={<ReceptionistHeader />} />
         <Route path="/reception/register" element={<PatientRegister />} />
         <Route path="/reception/appointments" element={<ReceptionAppointments />} />
+        <Route path="/reception/profile" element={<ReceptionProfile />} />
+        <Route path="/reception/settings" element={<ReceptionSettings />} />
+
 
         {/* 🏢 Admin Pages */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
@@ -85,8 +133,44 @@ function App() {
         <Route path="/admin/users/:userId" element={<AdminUserProfile />} />
         <Route path="/admin/clinics/:clinicId" element={<ClinicProfile />} />
         <Route path="/admin/users/:userId/stats" element={<AdminUserStats />} />
+        <Route path="/admin/profile" element={<adminprofile />} />
+
+        {/* 🧪 Lab Technician Pages */}
+        <Route path="/lab/dashboard" element={<LabTechnicianDashboard />} />
+        <Route path="/lab/messages" element={<LabMessages />} />
+        <Route path="/lab/orders" element={<LabOrdersModule />} />
+        <Route path="/lab/patients" element={<LabPatientsModule />} />
+        <Route path="/lab/profile" element={<LabProfileModule />} />
+        <Route path="/lab/results" element={<LabResultsModule />} />
+        <Route path="/lab/reports" element={<LabReportsModule />} />
+        <Route path="/lab/settings" element={<LabSettingsModule />} />
+
+        {/* 🩺 Nurse Pages */}
+        <Route path="/nurse/dashboard" element={<NursePortalDashboard />} />
+        <Route path="/nurse/patients" element={<NursePatients />} />
+        <Route path="/nurse/medications" element={<NurseMedicationsModule />} />
+        <Route path="/nurse/vitals" element={<NurseVitalsModule />} />
+        <Route path="/nurse/tasks" element={<NurseTasksModule />} />
+        <Route path="/nurse/settings" element={<NurseSettingsModule />} />
+        <Route path="/nurse/profile" element={<PatientProfile />} />
+
+        {/* 🩻 Radiology Pages */}
+        <Route path="/radiology/dashboard" element={<RadiologyDashboard />} />
+        <Route path="/radiology/studies" element={<RadiologyStudies />} />
+        <Route path="/radiology/worklist" element={<RadiologyWorklist />} />
+        <Route path="/radiology/messages" element={<RadiologyMessages />} />
+        <Route path="/radiology/profile" element={<RadiologyProfileModule />} />
+        <Route path="/radiology/settings" element={<RadiologySettingsModule />} />
+        <Route path="/radiology/templates" element={<RadiologyTemplates />} />
+        <Route path="/radiology/pacs" element={<PACSViewer />} />
+
+        
 
         {/* Redirects */}
+
+
+        <Route path="*" element={<h1 className="text-center mt-10 text-red-600 text-2xl">404 — Page not found</h1>} />
+
       </Routes>
     </Router>
   );

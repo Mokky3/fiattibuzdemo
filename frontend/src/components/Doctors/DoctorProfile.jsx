@@ -1,19 +1,67 @@
 import React, { useEffect, useState } from 'react'
+import axios from 'axios'
 import { Header } from './Header'
 
 const DoctorProfile = () => {
-  const [doctor, setDoctor] = useState({
-    fullName: 'Dr. Muhammad Hariton',
-    email: 'hariton@fiattib.uz',
-    specialty: 'Psychiatry',
-    licenseNumber: 'PSY-54321',
-    organization: 'City Mental Health Clinic',
-    initials: 'MH'
-  })
+  const [doctor, setDoctor] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    // TODO: fetch doctor profile from backend here
+    const fetchDoctorProfile = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        const response = await axios.get('/api/doctor/profile', {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        })
+
+        const data = response.data
+        setDoctor({
+          fullName: data.full_name,
+          email: data.email,
+          specialty: data.specialty,
+          licenseNumber: data.license_number,
+          organization: data.organization,
+          initials: getInitials(data.full_name)
+        })
+      } catch (err) {
+        console.error('Failed to fetch doctor profile:', err)
+        setError('Failed to load profile. Please try again later.')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDoctorProfile()
   }, [])
+
+  const getInitials = (name) => {
+    return name
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
+        <Header />
+        <div className="flex justify-center items-center h-96 text-gray-600">Loading profile...</div>
+      </div>
+    )
+  }
+
+  if (error || !doctor) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
+        <Header />
+        <div className="flex justify-center items-center h-96 text-red-500">{error}</div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
