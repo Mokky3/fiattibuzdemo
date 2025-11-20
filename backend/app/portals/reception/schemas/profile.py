@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, validator
 
-from app.common.schemas.base import TimeRange
+from app.common.schemas.base_enhanced import TimeRange
 
 
 # ============================= Profile Models =============================

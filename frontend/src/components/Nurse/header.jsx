@@ -37,6 +37,7 @@ export const NurseHeader = () => {
             { name: "MEDICATIONS", path: "/nurse/medications" },
             { name: "VITALS", path: "/nurse/vitals" },
             { name: "TASKS", path: "/nurse/tasks" },
+            { name: "MESSAGES", path: "/nurse/messages" },
             { name: "REPORTS", path: "/nurse/reports" }
           ].map((item) => (
             <Link

@@ -1,170 +1,48 @@
 import React, { useState, useEffect } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Search, Filter, FileText, Download, Eye, Calendar, Clock, CheckCircle, AlertTriangle, Plus, Edit, Trash2, User, Beaker, Activity, BarChart3, Clipboard } from 'lucide-react';
 // Import the header component
 import LabHeader from './header';
+import { getOrders, updateOrderStatus as updateOrderStatusSvc } from '../../services/labService';
 
 const LabOrdersModule = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(searchParams.get('status') || 'all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [sortBy, setSortBy] = useState('date');
   const [showFilters, setShowFilters] = useState(false);
   const [showNewOrderForm, setShowNewOrderForm] = useState(false);
 
-  // Mock orders data
-  const [labOrders, setLabOrders] = useState([
-    {
-      id: 'LO-001',
-      patientName: 'Muhammad Hariton',
-      patientId: 'P-025',
-      age: 20,
-      gender: 'Male',
-      orderDate: '2025-06-28',
-      orderTime: '10:00',
-      physician: 'Dr. Johnson',
-      department: 'Internal Medicine',
-      status: 'not-received',
-      priority: 'urgent',
-      sampleType: 'Blood',
-      tests: [
-        { id: 'T-001', name: 'Complete Blood Count', category: 'Hematology', code: 'CBC', cost: 45.00 },
-        { id: 'T-002', name: 'Blood Glucose', category: 'Chemistry', code: 'GLU', cost: 25.00 }
-      ],
-      clinicalInfo: 'Patient reports fatigue and dizziness. Rule out anemia.',
-      instructions: 'Patient fasting for 12 hours. Draw early morning.',
-      estimatedTime: '2-4 hours',
-      totalCost: 70.00,
-      insurance: 'Medicare',
-      authorizedBy: 'Dr. Johnson',
-      notes: 'Urgent - patient experiencing symptoms'
-    },
-    {
-      id: 'LO-002',
-      patientName: 'Sarah Davis',
-      patientId: 'P-012',
-      age: 45,
-      gender: 'Female',
-      orderDate: '2025-06-28',
-      orderTime: '11:30',
-      physician: 'Dr. Wilson',
-      department: 'Cardiology',
-      status: 'received',
-      priority: 'routine',
-      sampleType: 'Blood',
-      tests: [
-        { id: 'T-003', name: 'Lipid Panel', category: 'Chemistry', code: 'LIPID', cost: 65.00 },
-        { id: 'T-004', name: 'Cardiac Enzymes', category: 'Chemistry', code: 'CENZ', cost: 85.00 }
-      ],
-      clinicalInfo: 'Annual cardiovascular screening. Family history of heart disease.',
-      instructions: 'Patient fasting for 12 hours.',
-      estimatedTime: '3-5 hours',
-      totalCost: 150.00,
-      insurance: 'Blue Cross',
-      authorizedBy: 'Dr. Wilson',
-      notes: 'Regular follow-up'
-    },
-    {
-      id: 'LO-003',
-      patientName: 'Mike Johnson',
-      patientId: 'P-047',
-      age: 52,
-      gender: 'Male',
-      orderDate: '2025-06-28',
-      orderTime: '14:15',
-      physician: 'Dr. Brown',
-      department: 'Endocrinology',
-      status: 'pending',
-      priority: 'urgent',
-      sampleType: 'Blood',
-      tests: [
-        { id: 'T-005', name: 'HbA1c', category: 'Chemistry', code: 'HBA1C', cost: 55.00 },
-        { id: 'T-006', name: 'Fasting Glucose', category: 'Chemistry', code: 'FBG', cost: 20.00 }
-      ],
-      clinicalInfo: 'Diabetes follow-up. Poor glucose control reported.',
-      instructions: 'Patient fasting for 8 hours minimum.',
-      estimatedTime: '1-2 hours',
-      totalCost: 75.00,
-      insurance: 'Aetna',
-      authorizedBy: 'Dr. Brown',
-      notes: 'Critical for diabetes management'
-    },
-    {
-      id: 'LO-004',
-      patientName: 'Emma Wilson',
-      patientId: 'P-089',
-      age: 35,
-      gender: 'Female',
-      orderDate: '2025-06-27',
-      orderTime: '16:45',
-      physician: 'Dr. Smith',
-      department: 'Endocrinology',
-      status: 'ready',
-      priority: 'routine',
-      sampleType: 'Blood',
-      tests: [
-        { id: 'T-007', name: 'TSH', category: 'Endocrinology', code: 'TSH', cost: 40.00 },
-        { id: 'T-008', name: 'Free T4', category: 'Endocrinology', code: 'FT4', cost: 45.00 }
-      ],
-      clinicalInfo: 'Thyroid function evaluation. Patient reports weight changes.',
-      instructions: 'No special preparation required.',
-      estimatedTime: '2-3 hours',
-      totalCost: 85.00,
-      insurance: 'United Healthcare',
-      authorizedBy: 'Dr. Smith',
-      notes: 'Routine thyroid screening'
-    },
-    {
-      id: 'LO-005',
-      patientName: 'David Brown',
-      patientId: 'P-156',
-      age: 48,
-      gender: 'Male',
-      orderDate: '2025-06-27',
-      orderTime: '09:30',
-      physician: 'Dr. Davis',
-      department: 'Gastroenterology',
-      status: 'sent',
-      priority: 'routine',
-      sampleType: 'Blood',
-      tests: [
-        { id: 'T-009', name: 'Liver Function Panel', category: 'Chemistry', code: 'LFT', cost: 75.00 }
-      ],
-      clinicalInfo: 'Follow-up liver function after medication change.',
-      instructions: 'No alcohol for 24 hours prior to test.',
-      estimatedTime: '2-4 hours',
-      totalCost: 75.00,
-      insurance: 'Cigna',
-      authorizedBy: 'Dr. Davis',
-      notes: 'Post-medication monitoring'
-    },
-    {
-      id: 'LO-006',
-      patientName: 'Anna Martinez',
-      patientId: 'P-203',
-      age: 28,
-      gender: 'Female',
-      orderDate: '2025-06-26',
-      orderTime: '13:20',
-      physician: 'Dr. Garcia',
-      department: 'Family Medicine',
-      status: 'cancelled',
-      priority: 'routine',
-      sampleType: 'Urine',
-      tests: [
-        { id: 'T-010', name: 'Urinalysis', category: 'Microbiology', code: 'UA', cost: 30.00 }
-      ],
-      clinicalInfo: 'UTI symptoms. Urinary frequency and burning.',
-      instructions: 'Midstream clean catch specimen.',
-      estimatedTime: '1-2 hours',
-      totalCost: 30.00,
-      insurance: 'Self-pay',
-      authorizedBy: 'Dr. Garcia',
-      notes: 'Patient cancelled appointment'
+  const [labOrders, setLabOrders] = useState([]);
+
+  // Update status filter when URL query parameter changes
+  useEffect(() => {
+    const statusFromUrl = searchParams.get('status');
+    if (statusFromUrl) {
+      setStatusFilter(statusFromUrl);
+      // Also set the active tab based on status
+      if (statusFromUrl === 'active' || statusFromUrl === 'pending') {
+        setActiveTab('pending');
+      } else if (statusFromUrl === 'completed') {
+        setActiveTab('completed');
+      }
     }
-  ]);
+  }, [searchParams]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await getOrders();
+        if (active) setLabOrders(data);
+      } catch (e) {}
+    })();
+    return () => { active = false };
+  }, []);
 
   // Filter and sort orders
   const filteredOrders = labOrders.filter(order => {
@@ -238,15 +116,18 @@ const LabOrdersModule = () => {
     }
   };
 
-  const updateOrderStatus = (orderId, newStatus) => {
-    setLabOrders(prev => prev.map(order => 
-      order.id === orderId 
-        ? { ...order, status: newStatus }
-        : order
-    ));
-    if (selectedOrder && selectedOrder.id === orderId) {
-      setSelectedOrder(prev => ({ ...prev, status: newStatus }));
-    }
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      await updateOrderStatusSvc(orderId, newStatus);
+      setLabOrders(prev => prev.map(order => 
+        order.id === orderId 
+          ? { ...order, status: newStatus }
+          : order
+      ));
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
+      }
+    } catch (e) {}
   };
 
   const getNextStatusAction = (status) => {
@@ -497,48 +378,57 @@ const LabOrdersModule = () => {
       {/* Header Component */}
       <LabHeader />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {!selectedOrder ? (
-          <>
+      <div className="flex h-[calc(100vh-64px)]">
+        {/* Left Sidebar - Fixed */}
+        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+          <div className="p-6 space-y-6">
             {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-l-4 border-teal-500 pl-3">Order Statistics</h3>
+              <div className="bg-gradient-to-br from-teal-50 to-blue-50 rounded-lg border border-teal-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Clipboard className="w-8 h-8 text-gray-500" />
+                  <Clipboard className="w-6 h-6 text-gray-500" />
                 </div>
                 <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
                 <div className="text-sm text-gray-600">Total Orders</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Activity className="w-8 h-8 text-yellow-500" />
+                  <Activity className="w-6 h-6 text-yellow-500" />
                 </div>
                 <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
                 <div className="text-sm text-gray-600">Pending</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <CheckCircle className="w-8 h-8 text-green-500" />
+                  <CheckCircle className="w-6 h-6 text-green-500" />
                 </div>
                 <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
                 <div className="text-sm text-gray-600">Completed</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertTriangle className="w-8 h-8 text-red-500" />
+                  <AlertTriangle className="w-6 h-6 text-red-500" />
                 </div>
                 <div className="text-2xl font-bold text-red-600">{stats.urgent}</div>
                 <div className="text-sm text-gray-600">Urgent</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Trash2 className="w-8 h-8 text-gray-500" />
+                  <Trash2 className="w-6 h-6 text-gray-500" />
                 </div>
                 <div className="text-2xl font-bold text-gray-600">{stats.cancelled}</div>
                 <div className="text-sm text-gray-600">Cancelled</div>
               </div>
             </div>
+              </div>
+            </div>
 
+        {/* Main Content Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {!selectedOrder ? (
+              <>
             {/* Orders List */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               {/* Header with Filters */}
@@ -547,13 +437,13 @@ const LabOrdersModule = () => {
                   Lab Orders
                 </h2>
                 <div className="flex items-center space-x-4">
-                  <button
-                    onClick={() => setShowNewOrderForm(true)}
-                    className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                  <Link
+                    to="/lab/reports/new"
+                    className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 no-underline"
                   >
                     <Plus className="w-4 h-4" />
                     New Order
-                  </button>
+                  </Link>
                   <button
                     onClick={() => setShowFilters(!showFilters)}
                     className="text-gray-500 hover:text-gray-700"
@@ -674,6 +564,8 @@ const LabOrdersModule = () => {
         ) : (
           <OrderDetails order={selectedOrder} />
         )}
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -43,8 +43,8 @@ export const Header = () => {
           </Link>
         </div>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex space-x-4 lg:space-x-8">
+        {/* Navigation */}
+        <nav className="flex space-x-4 lg:space-x-8">
           {navigationItems.map((item) => (
             <Link
               key={item.path}
@@ -72,10 +72,10 @@ export const Header = () => {
             </button>
           </div>
 
-          {/* Mobile Menu Button */}
+          {/* Mobile Menu Button (disabled since nav is always visible) */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-2 text-white hover:bg-white hover:bg-opacity-10 rounded-md transition-colors"
+            className="hidden p-2 text-white hover:bg-white hover:bg-opacity-10 rounded-md transition-colors"
             aria-label="Toggle mobile menu"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">

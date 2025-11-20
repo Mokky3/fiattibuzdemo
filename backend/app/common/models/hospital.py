@@ -1,6 +1,7 @@
 # app/common/models/hospital.py
 """Hospital and organization models for the EHR system."""
 from sqlalchemy import Column, String, Boolean, DateTime, Integer, Float, JSON, ForeignKey, Enum, Text, Date
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy import String
@@ -8,138 +9,100 @@ import uuid
 import enum
 
 from app.db.base_class import Base
+from .doctor import doctor_hospitals, doctor_departments
 
 
 class HospitalType(str, enum.Enum):
-    GENERAL = "general"
-    SPECIALTY = "specialty"
-    CLINIC = "clinic"
-    DIAGNOSTIC_CENTER = "diagnostic_center"
-    URGENT_CARE = "urgent_care"
-    REHABILITATION = "rehabilitation"
+    GENERAL = "GENERAL"
+    SPECIALTY = "SPECIALTY"
+    CLINIC = "CLINIC"
+    DIAGNOSTIC_CENTER = "DIAGNOSTIC_CENTER"
+    URGENT_CARE = "URGENT_CARE"
+    REHABILITATION = "REHABILITATION"
 
 
 class HospitalStatus(str, enum.Enum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    SUSPENDED = "suspended"
-    UNDER_REVIEW = "under_review"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    SUSPENDED = "SUSPENDED"
+    UNDER_REVIEW = "UNDER_REVIEW"
 
 
 class DepartmentType(str, enum.Enum):
-    EMERGENCY = "emergency"
-    OUTPATIENT = "outpatient"
-    INPATIENT = "inpatient"
-    ICU = "icu"
-    SURGERY = "surgery"
-    RADIOLOGY = "radiology"
-    LABORATORY = "laboratory"
-    PHARMACY = "pharmacy"
-    ADMINISTRATION = "administration"
+    EMERGENCY = "EMERGENCY"
+    OUTPATIENT = "OUTPATIENT"
+    INPATIENT = "INPATIENT"
+    ICU = "ICU"
+    SURGERY = "SURGERY"
+    SURGICAL = "SURGICAL"
+    RADIOLOGY = "RADIOLOGY"
+    LABORATORY = "LABORATORY"
+    PHARMACY = "PHARMACY"
+    ADMINISTRATION = "ADMINISTRATION"
+    MEDICAL = "MEDICAL"
+    DIAGNOSTIC = "DIAGNOSTIC"
+    CARDIOLOGY = "CARDIOLOGY"
+    NEUROLOGY = "NEUROLOGY"
+    ONCOLOGY = "ONCOLOGY"
+    PEDIATRICS = "PEDIATRICS"
+    OBSTETRICS = "OBSTETRICS"
+    GYNECOLOGY = "GYNECOLOGY"
+    ORTHOPEDICS = "ORTHOPEDICS"
+    DERMATOLOGY = "DERMATOLOGY"
+    PSYCHIATRY = "PSYCHIATRY"
+    ANESTHESIOLOGY = "ANESTHESIOLOGY"
+    PATHOLOGY = "PATHOLOGY"
+    PHYSICAL_THERAPY = "PHYSICAL_THERAPY"
+    REHABILITATION = "REHABILITATION"
+    NURSING = "NURSING"
+    SUPPORT = "SUPPORT"
+    MAINTENANCE = "MAINTENANCE"
+    SECURITY = "SECURITY"
+    HOUSEKEEPING = "HOUSEKEEPING"
 
 
 class Hospital(Base):
-    """Hospital/Organization model - primary organization entity."""
+    """Hospital/Organization model - simplified to match database structure."""
     __tablename__ = "hospitals"
+    __table_args__ = {"schema": "ref"}
     
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     
-    # Basic information
+    # Basic information (matching database structure)
     name = Column(String(200), nullable=False)
-    legal_name = Column(String(200), nullable=True)
-    code = Column(String(50), unique=True, nullable=False)
-    hospital_type = Column(Enum(HospitalType), nullable=False)
-    
-    # Registration details
-    registration_number = Column(String(100), unique=True, nullable=False)
-    tax_id = Column(String(50), unique=True, nullable=False)
-    license_number = Column(String(100), nullable=False)
-    license_valid_until = Column(Date, nullable=True)
-    
-    # Contact information
-    phone = Column(String(20), nullable=False)
-    phone_emergency = Column(String(20), nullable=True)
-    email = Column(String(255), nullable=False)
-    website = Column(String(500), nullable=True)
-    
-    # Address
-    address_line1 = Column(String(200), nullable=False)
-    address_line2 = Column(String(200), nullable=True)
-    city = Column(String(100), nullable=False)
-    state = Column(String(100), nullable=False)
-    zip_code = Column(String(20), nullable=False)
-    country = Column(String(2), default="UZ")
-    latitude = Column(Float, nullable=True)
-    longitude = Column(Float, nullable=True)
-    
-    # Operating information
-    operating_hours = Column(JSON, nullable=True)  # Structured hours per day
-    is_24_hours = Column(Boolean, default=False)
-    emergency_services = Column(Boolean, default=False)
-    
-    # Capacity
-    total_beds = Column(Integer, nullable=True)
-    icu_beds = Column(Integer, nullable=True)
-    emergency_beds = Column(Integer, nullable=True)
-    operating_rooms = Column(Integer, nullable=True)
-    
-    # Services and specialties
-    services_offered = Column(JSON, nullable=True)  # Array of service codes
-    specialties = Column(JSON, nullable=True)  # Array of specialty codes
-    certifications = Column(JSON, nullable=True)  # Array of certifications
-    
-    # Financial
-    accepts_insurance = Column(Boolean, default=True)
-    accepted_insurance_providers = Column(JSON, nullable=True)  # Array of provider IDs
-    default_currency = Column(String(3), default="UZS")
-    
-    # Branding
-    logo_url = Column(String(500), nullable=True)
-    primary_color = Column(String(7), nullable=True)  # Hex color
-    secondary_color = Column(String(7), nullable=True)
-    
-    # Status
-    status = Column(Enum(HospitalStatus), default=HospitalStatus.ACTIVE)
+    code = Column(String(50), nullable=True)
+    address = Column(Text, nullable=True)
+    phone = Column(String(20), nullable=True)
+    email = Column(String(255), nullable=True)
+    logo_url = Column(String(500), nullable=True)  # URL to clinic logo
     is_active = Column(Boolean, default=True)
-    
-    # Parent organization (for multi-facility systems)
-    parent_organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=True)
-    
-    # FHIR reference
-    fhir_organization_id = Column(String(255), unique=True, nullable=True)
-    
-    # Metadata
-    established_date = Column(Date, nullable=True)
-    accreditation_date = Column(Date, nullable=True)
-    last_inspection_date = Column(Date, nullable=True)
-    next_inspection_date = Column(Date, nullable=True)
-    
-    # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
-    # Relationships
-    parent_organization = relationship("Hospital", remote_side=[id])
-    child_organizations = relationship("Hospital", back_populates="parent_organization")
+    # Relationships (simplified - only essential ones to avoid circular dependencies)
+    users = relationship("User", back_populates="organization", foreign_keys="User.organization_id")
+    doctors = relationship("Doctor", secondary=doctor_hospitals, back_populates="hospitals")
     departments = relationship("HospitalDepartment", back_populates="hospital", cascade="all, delete-orphan")
-    users = relationship("User", back_populates="organization")
-    doctors = relationship("Doctor", secondary="doctor_hospitals", back_populates="hospitals")
-    stats = relationship("OrganizationStats", back_populates="organization", uselist=False)
-    system_configs = relationship("SystemConfig", back_populates="organization")
-    service_prices = relationship("ServicePrice", back_populates="organization")
+    general_reports = relationship("GeneralReport", back_populates="clinic", cascade="all, delete-orphan")
+    organization_patients = relationship("OrganizationPatient", back_populates="organization", cascade="all, delete-orphan")
+    
+    # Commented out to avoid circular dependency issues
+    # stats = relationship("OrganizationStats", back_populates="organization", uselist=False)
+    # service_prices = relationship("ServicePrice", back_populates="organization", cascade="all, delete-orphan")
+    # system_configs = relationship("SystemConfig", back_populates="organization", cascade="all, delete-orphan")
 
 
 class HospitalDepartment(Base):
     """Hospital department model."""
     __tablename__ = "hospital_departments"
+    __table_args__ = {"schema": "ref"}
     
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    hospital_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey("ref.hospitals.id"), nullable=False)
     
     # Basic information
     name = Column(String(100), nullable=False)
     code = Column(String(20), nullable=False)
-    department_type = Column(Enum(DepartmentType), nullable=False)
+    department_type = Column(Enum(DepartmentType, native_enum=False), nullable=False)
     description = Column(Text, nullable=True)
     
     # Location within hospital
@@ -171,11 +134,11 @@ class HospitalDepartment(Base):
     equipment_available = Column(JSON, nullable=True)  # Array of equipment
     
     # Department head
-    head_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    deputy_head_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    head_id = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), nullable=True)
+    deputy_head_id = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), nullable=True)
     
     # Parent department (for sub-departments)
-    parent_department_id = Column(String(36), ForeignKey("hospital_departments.id"), nullable=True)
+    parent_department_id = Column(UUID(as_uuid=True), ForeignKey("ref.hospital_departments.id"), nullable=True)
     
     # Status
     is_active = Column(Boolean, default=True)
@@ -199,20 +162,21 @@ class HospitalDepartment(Base):
     # Relationships
     hospital = relationship("Hospital", back_populates="departments")
     users = relationship("User", foreign_keys="User.department_id", back_populates="department")
-    doctors = relationship("Doctor", secondary="doctor_departments", back_populates="departments")
+    doctors = relationship("Doctor", secondary=doctor_departments, back_populates="departments")
     head = relationship("User", foreign_keys=[head_id])
     deputy_head = relationship("User", foreign_keys=[deputy_head_id])
     parent_department = relationship("HospitalDepartment", remote_side=[id])
-    sub_departments = relationship("HospitalDepartment", back_populates="parent_department")
+    sub_departments = relationship("HospitalDepartment", back_populates="parent_department", cascade="all, delete-orphan")
 
 
 class Location(Base):
     """Physical locations within hospital (rooms, wards, etc)."""
     __tablename__ = "locations"
+    __table_args__ = {"schema": "ref"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    hospital_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
-    department_id = Column(String(36), ForeignKey("hospital_departments.id"), nullable=True)
+    hospital_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=False)
+    department_id = Column(String(36), ForeignKey("ref.hospital_departments.id"), nullable=True)
     
     # Location details
     name = Column(String(100), nullable=False)
@@ -229,7 +193,7 @@ class Location(Base):
     # Capacity and usage
     capacity = Column(Integer, default=1)
     is_occupied = Column(Boolean, default=False)
-    current_patient_id = Column(String(36), ForeignKey("patients.id"), nullable=True)
+    current_patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=True)
     
     # Features
     features = Column(JSON, nullable=True)  # Array of features (TV, bathroom, window, etc.)

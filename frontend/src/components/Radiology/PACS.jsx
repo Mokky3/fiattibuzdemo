@@ -6,10 +6,11 @@ import {
   ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize, Minimize, Move, Square,
   Circle, Ruler, MousePointer, Save, Download, Share, Settings, Info,
   ChevronLeft, ChevronRight, SkipBack, SkipForward, Volume2, VolumeX,
-  Contrast, Sun , Sliders, Grid3X3, Layout, Layers, Target
+  Contrast, Sun, Sliders, Grid3X3, Layout, Layers, Target
 } from 'lucide-react';
 // Import the radiology header component
 import RadiologyHeader from './header';
+import { getPACSStudies, getPACSStudyDetails, getPACSSeries, getPACSImages, getPACSStats, savePACSAnnotations, getPACSAnnotations } from '../../services/radiologyService';
 
 const PACSViewer = () => {
   const [currentStudy, setCurrentStudy] = useState(null);
@@ -33,8 +34,76 @@ const PACSViewer = () => {
   const [annotations, setAnnotations] = useState([]);
   const viewerRef = useRef(null);
 
-  // Mock study data
-  const study = {
+  // API data state
+  const [pacsStudies, setPacsStudies] = useState([]);
+  const [pacsStats, setPacsStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [filters, setFilters] = useState({
+    modality: 'all',
+    bodyPart: 'all',
+    dateFrom: '',
+    dateTo: '',
+    search: ''
+  });
+  const [pagination, setPagination] = useState({
+    page: 1,
+    size: 50,
+    total: 0
+  });
+
+  // Fetch PACS data from API
+  useEffect(() => {
+    let mounted = true;
+    const fetchPACSData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const [studiesData, statsData] = await Promise.all([
+          getPACSStudies({
+            modality: filters.modality === 'all' ? undefined : filters.modality,
+            bodyPart: filters.bodyPart === 'all' ? undefined : filters.bodyPart,
+            dateFrom: filters.dateFrom || undefined,
+            dateTo: filters.dateTo || undefined,
+            search: filters.search || undefined,
+            page: pagination.page,
+            size: pagination.size
+          }),
+          getPACSStats()
+        ]);
+        
+        if (mounted) {
+          setPacsStudies(studiesData.items || []);
+          setPacsStats(statsData);
+          setPagination(prev => ({
+            ...prev,
+            total: studiesData.total || 0
+          }));
+          
+          // Set first study as current if available
+          if (studiesData.items && studiesData.items.length > 0) {
+            setCurrentStudy(studiesData.items[0]);
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching PACS data:', err);
+        if (mounted) {
+          setError(err.message);
+          setPacsStudies([]);
+          setPacsStats({});
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    fetchPACSData();
+    return () => { mounted = false };
+  }, [filters, pagination.page, pagination.size]);
+
+  // Mock study data for fallback
+  const mockStudy = {
     id: 'RAD-001',
     accessionNumber: 'ACC2025001',
     patientName: 'Smith, John',
@@ -91,9 +160,8 @@ const PACSViewer = () => {
     ]
   };
 
-  useEffect(() => {
-    setCurrentStudy(study);
-  }, []);
+  // Use currentStudy from API data or fallback to mock
+  const study = currentStudy || mockStudy;
 
   // PACS Tools
   const tools = [
@@ -138,13 +206,67 @@ const PACSViewer = () => {
   };
 
   const handleImageNavigation = (direction) => {
-    const currentSeriesData = currentStudy?.series[currentSeries];
+    const currentSeriesData = study?.series[currentSeries];
     if (!currentSeriesData) return;
 
     if (direction === 'next') {
       setCurrentImage(prev => Math.min(prev + 1, currentSeriesData.imageCount - 1));
     } else {
       setCurrentImage(prev => Math.max(prev - 1, 0));
+    }
+  };
+
+  const handleStudySelect = async (studyId) => {
+    try {
+      const studyData = await getPACSStudyDetails(studyId);
+      if (studyData) {
+        setCurrentStudy(studyData);
+        setCurrentSeries(0);
+        setCurrentImage(0);
+      }
+    } catch (err) {
+      console.error('Error loading study details:', err);
+    }
+  };
+
+  const handleSaveAnnotations = async () => {
+    if (!study || !study.series[currentSeries]) return;
+    
+    try {
+      const currentSeriesData = study.series[currentSeries];
+      const currentImageData = currentSeriesData.images[currentImage];
+      
+      await savePACSAnnotations(
+        study.id,
+        currentSeriesData.id,
+        currentImageData.id,
+        { measurements, annotations }
+      );
+      
+      console.log('Annotations saved successfully');
+    } catch (err) {
+      console.error('Error saving annotations:', err);
+    }
+  };
+
+  const handleLoadAnnotations = async () => {
+    if (!study || !study.series[currentSeries]) return;
+    
+    try {
+      const currentSeriesData = study.series[currentSeries];
+      const currentImageData = currentSeriesData.images[currentImage];
+      
+      const annotationsData = await getPACSAnnotations(
+        study.id,
+        currentSeriesData.id,
+        currentImageData.id
+      );
+      
+      if (annotationsData && annotationsData.length > 0) {
+        setAnnotations(annotationsData);
+      }
+    } catch (err) {
+      console.error('Error loading annotations:', err);
     }
   };
 
@@ -159,41 +281,86 @@ const PACSViewer = () => {
 
   // Header Component
   const PACSHeader = () => (
-    <div className="bg-gray-900 text-white p-4 flex items-center justify-between">
-      <div className="flex items-center space-x-4">
-        <div className="flex items-center space-x-2">
-          <Monitor className="w-6 h-6 text-blue-400" />
-          <span className="font-semibold">PACS Viewer</span>
-        </div>
-        {currentStudy && (
-          <div className="text-sm">
-            <span className="text-gray-300">{currentStudy.patientName}</span>
-            <span className="mx-2">•</span>
-            <span className="text-gray-300">{currentStudy.studyDescription}</span>
-            <span className="mx-2">•</span>
-            <span className="text-gray-400">{currentStudy.accessionNumber}</span>
+    <div className="bg-gray-900 text-white p-4">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <Monitor className="w-6 h-6 text-blue-400" />
+            <span className="font-semibold">PACS Viewer</span>
           </div>
-        )}
+          {study && (
+            <div className="text-sm">
+              <span className="text-gray-300">{study.patientName}</span>
+              <span className="mx-2">•</span>
+              <span className="text-gray-300">{study.studyDescription}</span>
+              <span className="mx-2">•</span>
+              <span className="text-gray-400">{study.accessionNumber}</span>
+            </div>
+          )}
+        </div>
+        
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2">
+            <button className="p-2 hover:bg-gray-700 rounded">
+              <Save className="w-4 h-4" />
+            </button>
+            <button className="p-2 hover:bg-gray-700 rounded">
+              <Download className="w-4 h-4" />
+            </button>
+            <button className="p-2 hover:bg-gray-700 rounded">
+              <Share className="w-4 h-4" />
+            </button>
+            <button className="p-2 hover:bg-gray-700 rounded">
+              <Settings className="w-4 h-4" />
+            </button>
+          </div>
+          <button className="p-2 hover:bg-gray-700 rounded">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
       </div>
       
+      {/* Study Selection and Filtering */}
       <div className="flex items-center space-x-4">
         <div className="flex items-center space-x-2">
-          <button className="p-2 hover:bg-gray-700 rounded">
-            <Save className="w-4 h-4" />
-          </button>
-          <button className="p-2 hover:bg-gray-700 rounded">
-            <Download className="w-4 h-4" />
-          </button>
-          <button className="p-2 hover:bg-gray-700 rounded">
-            <Share className="w-4 h-4" />
-          </button>
-          <button className="p-2 hover:bg-gray-700 rounded">
-            <Settings className="w-4 h-4" />
-          </button>
+          <Search className="w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search studies..."
+            value={filters.search}
+            onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+            className="bg-gray-800 text-white px-3 py-1 rounded text-sm border border-gray-600 focus:border-blue-500 focus:outline-none"
+          />
         </div>
-        <button className="p-2 hover:bg-gray-700 rounded">
-          <X className="w-4 h-4" />
-        </button>
+        
+        <select
+          value={filters.modality}
+          onChange={(e) => setFilters(prev => ({ ...prev, modality: e.target.value }))}
+          className="bg-gray-800 text-white px-3 py-1 rounded text-sm border border-gray-600 focus:border-blue-500 focus:outline-none"
+        >
+          <option value="all">All Modalities</option>
+          <option value="CT">CT</option>
+          <option value="MRI">MRI</option>
+          <option value="XR">X-Ray</option>
+          <option value="US">Ultrasound</option>
+        </select>
+        
+        <select
+          value={filters.bodyPart}
+          onChange={(e) => setFilters(prev => ({ ...prev, bodyPart: e.target.value }))}
+          className="bg-gray-800 text-white px-3 py-1 rounded text-sm border border-gray-600 focus:border-blue-500 focus:outline-none"
+        >
+          <option value="all">All Body Parts</option>
+          <option value="Head">Head</option>
+          <option value="Chest">Chest</option>
+          <option value="Abdomen">Abdomen</option>
+          <option value="Pelvis">Pelvis</option>
+          <option value="Extremities">Extremities</option>
+        </select>
+        
+        <div className="text-sm text-gray-400">
+          {pacsStudies.length} studies loaded
+        </div>
       </div>
     </div>
   );
@@ -283,30 +450,60 @@ const PACSViewer = () => {
 
   // Series Panel Component
   const SeriesPanel = () => (
-    <div className="bg-gray-100 border-r border-gray-300 w-64 flex flex-col">
+    <div className="bg-gray-100 border-r border-gray-300 w-80 flex flex-col">
+      {/* Studies List */}
       <div className="p-3 bg-gray-200 border-b border-gray-300">
-        <h3 className="font-semibold text-gray-800">Series</h3>
+        <h3 className="font-semibold text-gray-800">Studies</h3>
       </div>
       
       <div className="flex-1 overflow-y-auto">
-        {currentStudy?.series.map((series, index) => (
+        {pacsStudies.map((studyItem) => (
           <div
-            key={series.id}
-            onClick={() => handleSeriesChange(index)}
+            key={studyItem.id}
+            onClick={() => handleStudySelect(studyItem.id)}
             className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-blue-50 ${
-              currentSeries === index ? 'bg-blue-100 border-l-4 border-l-blue-500' : ''
+              study?.id === studyItem.id ? 'bg-blue-100 border-l-4 border-l-blue-500' : ''
             }`}
           >
-            <div className="font-medium text-gray-900">
-              Series {series.seriesNumber}
+            <div className="font-medium text-gray-900 text-sm">
+              {studyItem.patientName}
             </div>
-            <div className="text-sm text-gray-600">{series.description}</div>
+            <div className="text-xs text-gray-600">{studyItem.studyDescription}</div>
             <div className="text-xs text-gray-500 mt-1">
-              {series.imageCount} images • {series.sliceThickness}
+              {studyItem.modality} • {studyItem.bodyPart} • {studyItem.accessionNumber}
             </div>
           </div>
         ))}
       </div>
+      
+      {/* Series List */}
+      {study && (
+        <>
+          <div className="p-3 bg-gray-200 border-b border-gray-300 border-t border-gray-300">
+            <h3 className="font-semibold text-gray-800">Series</h3>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto">
+            {study.series.map((series, index) => (
+              <div
+                key={series.id}
+                onClick={() => handleSeriesChange(index)}
+                className={`p-3 border-b border-gray-200 cursor-pointer hover:bg-blue-50 ${
+                  currentSeries === index ? 'bg-blue-100 border-l-4 border-l-blue-500' : ''
+                }`}
+              >
+                <div className="font-medium text-gray-900">
+                  Series {series.seriesNumber}
+                </div>
+                <div className="text-sm text-gray-600">{series.description}</div>
+                <div className="text-xs text-gray-500 mt-1">
+                  {series.imageCount} images • {series.sliceThickness}
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
       
       {/* Thumbnails */}
       <div className="border-t border-gray-300 p-2">
@@ -512,13 +709,13 @@ const PACSViewer = () => {
   );
 
   const ViewerCanvas = () => (
-  <div className="flex-1 bg-black relative overflow-hidden">
-    <iframe
-      src={`http://localhost:3001/viewer?StudyInstanceUID=1.2.840.113619.2.55.3.2831164352.781.1591788880.467`}
-      className="w-full h-full border-none"
-      title="OHIF DICOM Viewer"
-    />
-  </div>
+    <div className="flex-1 bg-black relative overflow-hidden">
+      <iframe
+        src={`http://localhost:3001/viewer?StudyInstanceUID=1.2.840.113619.2.55.3.2831164352.781.1591788880.467`}
+        className="w-full h-full border-none"
+        title="OHIF DICOM Viewer"
+      />
+    </div>
   );
 
   // Main Component Return
@@ -528,16 +725,42 @@ const PACSViewer = () => {
       <PACSHeader />
       <Toolbar />
       
-      <div className="flex-1 flex overflow-hidden">
-        <SeriesPanel />
-        
-        <div className="flex-1 flex flex-col">
-          <ViewerCanvas />
-          <ImageControls />
+      {/* Loading State */}
+      {loading && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading PACS data...</p>
+          </div>
         </div>
-        
-        <WindowLevelPanel />
-      </div>
+      )}
+
+      {/* Error State */}
+      {error && (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
+            <div className="flex items-center mb-4">
+              <X className="w-5 h-5 text-red-500 mr-2" />
+              <h3 className="text-sm font-medium text-red-800">Error loading PACS data</h3>
+            </div>
+            <p className="text-sm text-red-600">{error}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Main PACS Interface */}
+      {!loading && !error && (
+        <div className="flex-1 flex overflow-hidden">
+          <SeriesPanel />
+          
+          <div className="flex-1 flex flex-col">
+            <ViewerCanvas />
+            <ImageControls />
+          </div>
+          
+          <WindowLevelPanel />
+        </div>
+      )}
     </div>
   );
 };

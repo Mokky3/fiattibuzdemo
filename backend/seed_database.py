@@ -1,4 +1,4 @@
-from app.db.database import SessionLocal
+from app.db.session import SessionLocal
 from app.models import (
     User, Patient, Doctor, Appointment, MedicalHistory, 
     UserRole, Gender, BloodType, AppointmentStatus

@@ -63,6 +63,7 @@ class DiscountType(str, enum.Enum):
 class ChargeItem(Base):
     """Service charges - converted from FHIR ChargeItem with billing extensions."""
     __tablename__ = "charge_items"
+    __table_args__ = {"schema": "financial"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -71,9 +72,9 @@ class ChargeItem(Base):
     identifiers = Column(JSON, nullable=True)  # Array of identifiers
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=True)
-    appointment_id = Column(String(36), ForeignKey("appointments.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.encounters.id"), nullable=True)
+    appointment_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=True)
     
     # Service details
     service_code = Column(String(50), nullable=False)  # CPT, HCPCS, or internal code
@@ -82,7 +83,7 @@ class ChargeItem(Base):
     code = Column(JSON, nullable=False)  # CodeableConcept with coding system
     
     # Status
-    status = Column(Enum(ChargeItemStatus), default=ChargeItemStatus.PLANNED, nullable=False)
+    status = Column(Enum(ChargeItemStatus, native_enum=False), default=ChargeItemStatus.PLANNED, nullable=False)
     
     # Occurrence
     occurrence_date = Column(DateTime(timezone=True), nullable=False)
@@ -106,12 +107,12 @@ class ChargeItem(Base):
     net_amount = Column(Numeric(15, 2), nullable=False)
     
     # Performer
-    performer_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    performing_organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=True)
-    requesting_organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=True)
+    performer_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
+    performing_organization_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=True)
+    requesting_organization_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=True)
     
     # Cost center
-    cost_center_id = Column(String(36), ForeignKey("hospital_departments.id"), nullable=True)
+    cost_center_id = Column(String(36), ForeignKey("ref.hospital_departments.id"), nullable=True)
     
     # Body site (for procedures)
     body_site = Column(JSON, nullable=True)  # Array of CodeableConcept
@@ -124,7 +125,7 @@ class ChargeItem(Base):
     product_code = Column(JSON, nullable=True)  # CodeableConcept
     
     # Account
-    account_id = Column(String(36), ForeignKey("patient_accounts.id"), nullable=True)
+    account_id = Column(String(36), ForeignKey("ehr.patient_accounts.id"), nullable=True)
     
     # Supporting information
     supporting_info = Column(JSON, nullable=True)  # References to other resources
@@ -133,16 +134,16 @@ class ChargeItem(Base):
     notes = Column(JSON, nullable=True)  # Array of annotations
     
     # Entry information
-    entered_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    entered_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     entered_date = Column(DateTime(timezone=True), server_default=func.now())
     
     # Billing
     is_billed = Column(Boolean, default=False)
     billed_date = Column(DateTime(timezone=True), nullable=True)
-    bill_id = Column(String(36), ForeignKey("bills.id"), nullable=True)
+    bill_id = Column(String(36), ForeignKey("financial.bills.id"), nullable=True)
     
     # Part of another charge
-    part_of_id = Column(String(36), ForeignKey("charge_items.id"), nullable=True)
+    part_of_id = Column(String(36), ForeignKey("financial.charge_items.id"), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -168,12 +169,13 @@ class ChargeItem(Base):
 class ChargeItemModifier(Base):
     """Modifiers for charge items (e.g., discounts, adjustments)."""
     __tablename__ = "charge_item_modifiers"
+    __table_args__ = {"schema": "financial"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    charge_item_id = Column(String(36), ForeignKey("charge_items.id"), nullable=False)
+    charge_item_id = Column(String(36), ForeignKey("financial.charge_items.id"), nullable=False)
     
     # Modifier details
-    modifier_type = Column(Enum(DiscountType), nullable=False)
+    modifier_type = Column(Enum(DiscountType, native_enum=False), nullable=False)
     modifier_code = Column(String(50), nullable=True)
     description = Column(String(500), nullable=False)
     
@@ -182,7 +184,7 @@ class ChargeItemModifier(Base):
     amount = Column(Numeric(15, 2), nullable=True)  # For fixed amount discounts
     
     # Authorization
-    authorized_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    authorized_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     authorization_date = Column(DateTime(timezone=True), server_default=func.now())
     authorization_reference = Column(String(100), nullable=True)
     
@@ -200,9 +202,10 @@ class ChargeItemModifier(Base):
 class PatientAccount(Base):
     """Patient financial account for tracking balances."""
     __tablename__ = "patient_accounts"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # Account details
     account_number = Column(String(50), unique=True, nullable=False, index=True)
@@ -245,19 +248,20 @@ class PatientAccount(Base):
     
     # Relationships
     patient = relationship("Patient")
-    bills = relationship("Bill", back_populates="account")
-    transactions = relationship("FinancialTransaction", back_populates="account")
+    bills = relationship("Bill", back_populates="account", cascade="all, delete-orphan")
+    transactions = relationship("FinancialTransaction", back_populates="account", cascade="all, delete-orphan")
 
 
 class Bill(Base):
     """Patient bills/invoices."""
     __tablename__ = "bills"
+    __table_args__ = {"schema": "financial"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    account_id = Column(String(36), ForeignKey("patient_accounts.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    account_id = Column(String(36), ForeignKey("ehr.patient_accounts.id"), nullable=False)
     
     # Bill identification
     bill_number = Column(String(50), unique=True, nullable=False, index=True)
@@ -272,7 +276,7 @@ class Bill(Base):
     service_period_end = Column(Date, nullable=False)
     
     # Status
-    status = Column(Enum(BillStatus), default=BillStatus.DRAFT, nullable=False)
+    status = Column(Enum(BillStatus, native_enum=False), default=BillStatus.DRAFT, nullable=False)
     
     # Amounts
     total_charges = Column(Numeric(15, 2), nullable=False)
@@ -298,23 +302,23 @@ class Bill(Base):
     
     # Submission
     submitted_date = Column(Date, nullable=True)
-    submitted_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    submitted_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     
     # Cancellation
     cancelled_date = Column(DateTime(timezone=True), nullable=True)
-    cancelled_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    cancelled_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     cancellation_reason = Column(Text, nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Relationships
     patient = relationship("Patient")
     account = relationship("PatientAccount", back_populates="bills")
-    charge_items = relationship("ChargeItem", back_populates="bill")
-    payments = relationship("Payment", back_populates="bill")
+    charge_items = relationship("ChargeItem", back_populates="bill", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="bill", cascade="all, delete-orphan")
     creator = relationship("User", foreign_keys=[created_by])
     submitter = relationship("User", foreign_keys=[submitted_by])
     canceller = relationship("User", foreign_keys=[cancelled_by])
@@ -323,12 +327,13 @@ class Bill(Base):
 class Payment(Base):
     """Payment transactions."""
     __tablename__ = "payments"
+    __table_args__ = {"schema": "financial"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    bill_id = Column(String(36), ForeignKey("bills.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    bill_id = Column(String(36), ForeignKey("financial.bills.id"), nullable=True)
     
     # Payment details
     payment_number = Column(String(50), unique=True, nullable=False, index=True)
@@ -339,10 +344,10 @@ class Payment(Base):
     currency = Column(String(3), default="UZS")
     
     # Method
-    payment_method = Column(Enum(PaymentMethod), nullable=False)
+    payment_method = Column(Enum(PaymentMethod, native_enum=False), nullable=False)
     
     # Status
-    status = Column(Enum(PaymentStatus), default=PaymentStatus.PENDING, nullable=False)
+    status = Column(Enum(PaymentStatus, native_enum=False), default=PaymentStatus.PENDING, nullable=False)
     
     # Reference numbers
     reference_number = Column(String(100), nullable=True)  # Check number, transaction ID
@@ -378,7 +383,7 @@ class Payment(Base):
     notes = Column(Text, nullable=True)
     
     # Entry
-    received_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    received_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -388,25 +393,26 @@ class Payment(Base):
     patient = relationship("Patient")
     bill = relationship("Bill", back_populates="payments")
     receiver = relationship("User")
-    transactions = relationship("FinancialTransaction", back_populates="payment")
+    transactions = relationship("FinancialTransaction", back_populates="payment", cascade="all, delete-orphan")
 
 
 class FinancialTransaction(Base):
     """Detailed financial transaction ledger."""
     __tablename__ = "financial_transactions"
+    __table_args__ = {"schema": "financial"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
     # Account
-    account_id = Column(String(36), ForeignKey("patient_accounts.id"), nullable=False)
+    account_id = Column(String(36), ForeignKey("ehr.patient_accounts.id"), nullable=False)
     
     # Transaction details
     transaction_date = Column(DateTime(timezone=True), nullable=False)
     transaction_type = Column(String(50), nullable=False)  # charge, payment, adjustment, refund
     
     # References
-    charge_item_id = Column(String(36), ForeignKey("charge_items.id"), nullable=True)
-    payment_id = Column(String(36), ForeignKey("payments.id"), nullable=True)
+    charge_item_id = Column(String(36), ForeignKey("financial.charge_items.id"), nullable=True)
+    payment_id = Column(String(36), ForeignKey("financial.payments.id"), nullable=True)
     
     # Amounts
     debit_amount = Column(Numeric(15, 2), default=0.0)
@@ -418,12 +424,12 @@ class FinancialTransaction(Base):
     reference_number = Column(String(100), nullable=True)
     
     # Entry
-    posted_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    posted_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     posted_date = Column(DateTime(timezone=True), server_default=func.now())
     
     # Reversal
     is_reversed = Column(Boolean, default=False)
-    reversed_by_id = Column(String(36), ForeignKey("financial_transactions.id"), nullable=True)
+    reversed_by_id = Column(String(36), ForeignKey("financial.financial_transactions.id"), nullable=True)
     reversal_reason = Column(Text, nullable=True)
     
     # Timestamps

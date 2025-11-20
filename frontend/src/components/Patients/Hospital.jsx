@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import { 
   Search,
@@ -17,115 +18,120 @@ import {
   Baby,
   Scissors,
   Activity,
-  Shield
+  Shield,
+  X
 } from 'lucide-react';
 
+import { patientHospitalsAPI } from '../../services/apiService';
+
 const Hospital = () => {
+  const navigate = useNavigate();
   const [hospitalSearch, setHospitalSearch] = useState('');
   const [activeTab, setActiveTab] = useState('Hospital info');
-  const [selectedHospital, setSelectedHospital] = useState('AKFA MEDLINE');
+  const [selectedHospital, setSelectedHospital] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const tabs = ['Hospital info', 'Departments', 'Doctors'];
 
-  const hospitals = [
-    {
-      name: 'AKFA MEDLINE',
-      address: '78, Amir Temur Avenue, Tashkent, Uzbekistan',
-      phone: '+998 71 140 0808',
-      rating: 4.8,
-      type: 'Multi-specialty Hospital',
-      established: '2019',
-      beds: '250+',
-      departments: 15,
-      doctors: 120
-    },
-    {
-      name: 'Tashkent Medical City',
-      address: '2A, Farobiy Street, Tashkent, Uzbekistan',
-      phone: '+998 71 202 9999',
-      rating: 4.6,
-      type: 'General Hospital',
-      established: '2015',
-      beds: '180+',
-      departments: 12,
-      doctors: 85
-    },
-    {
-      name: 'Seoul National University Hospital',
-      address: 'Yunusobod District, Tashkent, Uzbekistan',
-      phone: '+998 71 230 7777',
-      rating: 4.9,
-      type: 'International Hospital',
-      established: '2020',
-      beds: '300+',
-      departments: 18,
-      doctors: 150
-    },
-    {
-      name: 'International Clinic Tashkent',
-      address: '31, Bunyodkor Avenue, Tashkent, Uzbekistan',
-      phone: '+998 71 120 8080',
-      rating: 4.7,
-      type: 'Private Clinic',
-      established: '2018',
-      beds: '100+',
-      departments: 10,
-      doctors: 60
-    }
-  ];
+  const [hospitals, setHospitals] = useState([]);
 
-  const departments = [
-    { name: 'Cardiology', icon: Heart, description: 'Comprehensive heart care and cardiovascular treatments', doctors: 8 },
-    { name: 'Neurology', icon: Brain, description: 'Advanced brain and nervous system treatments', doctors: 6 },
-    { name: 'Ophthalmology', icon: Eye, description: 'Complete eye care and vision correction services', doctors: 4 },
-    { name: 'Pediatrics', icon: Baby, description: 'Specialized medical care for children and infants', doctors: 10 },
-    { name: 'Surgery', icon: Scissors, description: 'Advanced surgical procedures and operations', doctors: 12 },
-    { name: 'Emergency Medicine', icon: Activity, description: '24/7 emergency care and critical treatment', doctors: 15 },
-    { name: 'Internal Medicine', icon: Stethoscope, description: 'General adult medical care and treatment', doctors: 8 },
-    { name: 'Oncology', icon: Shield, description: 'Cancer treatment and specialized oncology care', doctors: 5 }
-  ];
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const list = await patientHospitalsAPI.list();
+        setHospitals(list);
+        if (list.length && !selectedHospital) setSelectedHospital(list[0].name);
+      } catch (e) {
+        setError(e?.message || 'Failed to load hospitals');
+        setHospitals([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, []);
 
-  const doctors = [
-    {
-      name: 'Dr. Abdulla Karimov',
-      specialty: 'Cardiology',
-      experience: '15 years',
-      education: 'MD, Tashkent Medical Academy',
-      languages: ['Uzbek', 'Russian', 'English'],
-      rating: 4.9,
-      image: '/api/placeholder/100/100'
-    },
-    {
-      name: 'Dr. Gulnoza Rahimova',
-      specialty: 'Dermatology',
-      experience: '12 years',
-      education: 'MD, PhD, Moscow Medical University',
-      languages: ['Uzbek', 'Russian'],
-      rating: 4.8,
-      image: '/api/placeholder/100/100'
-    },
-    {
-      name: 'Dr. Jasur Nabiev',
-      specialty: 'Orthopedics',
-      experience: '18 years',
-      education: 'MD, Seoul National University',
-      languages: ['Uzbek', 'Korean', 'English'],
-      rating: 4.9,
-      image: '/api/placeholder/100/100'
-    },
-    {
-      name: 'Dr. Mavluda Sharipova',
-      specialty: 'Endocrinology',
-      experience: '10 years',
-      education: 'MD, Tashkent Medical Academy',
-      languages: ['Uzbek', 'Russian', 'English'],
-      rating: 4.7,
-      image: '/api/placeholder/100/100'
+  const [departments, setDepartments] = useState([]);
+
+  const [doctors, setDoctors] = useState([]);
+  
+  const [selectedDepartment, setSelectedDepartment] = useState(null);
+  const [departmentDoctors, setDepartmentDoctors] = useState([]);
+  const [loadingDepartmentDoctors, setLoadingDepartmentDoctors] = useState(false);
+
+  useEffect(() => {
+    const loadDetails = async () => {
+      const current = hospitals.find(h => h.name === selectedHospital);
+      if (!current || !current.id) return;
+      try {
+        const [deptList, doctorList] = await Promise.all([
+          patientHospitalsAPI.departments(current.id),
+          patientHospitalsAPI.doctors(current.id),
+        ]);
+        setDepartments(deptList.map(d => ({ id: d.id, name: d.name, icon: Stethoscope, description: d.description || '', doctors: d.doctors || 0 })));
+        setDoctors(doctorList.map(doc => ({ id: doc.id, name: doc.full_name, specialty: doc.specialty || 'General', rating: doc.rating || 4.7, experience: '', education: '', languages: [] })));
+      } catch (e) {
+        // keep silent to avoid breaking UI
+        setDepartments([]);
+        setDoctors([]);
+      }
+    };
+    if (selectedHospital && hospitals.length) {
+      loadDetails();
     }
-  ];
+  }, [selectedHospital, hospitals]);
 
   const getCurrentHospital = () => {
-    return hospitals.find(h => h.name === selectedHospital) || hospitals[0];
+    return hospitals.find(h => h.name === selectedHospital) || hospitals[0] || {};
+  };
+
+  const handleViewDepartment = async (department) => {
+    setSelectedDepartment(department);
+    setLoadingDepartmentDoctors(true);
+    setDepartmentDoctors([]);
+    
+    try {
+      const current = hospitals.find(h => h.name === selectedHospital);
+      if (current && current.id && department.id) {
+        const doctorsList = await patientHospitalsAPI.departmentDoctors(current.id, department.id);
+        setDepartmentDoctors(doctorsList.map(doc => ({ 
+          id: doc.id,
+          name: doc.full_name, 
+          specialty: doc.specialty || 'General', 
+          rating: doc.rating || 4.7, 
+          experience: '', 
+          education: '', 
+          languages: [] 
+        })));
+      }
+    } catch (e) {
+      console.error('Error loading department doctors:', e);
+      setDepartmentDoctors([]);
+    } finally {
+      setLoadingDepartmentDoctors(false);
+    }
+  };
+
+  const handleCloseDepartmentModal = () => {
+    setSelectedDepartment(null);
+    setDepartmentDoctors([]);
+  };
+
+  const handleBookAppointment = (doctor, hospital) => {
+    // Navigate to appointment page with doctor and hospital pre-filled
+    navigate('/patient/appointment', {
+      state: {
+        doctor: {
+          id: doctor.id || doctor.name,
+          name: doctor.name,
+          specialty: doctor.specialty
+        },
+        hospital: hospital.name || selectedHospital
+      }
+    });
   };
 
 
@@ -210,7 +216,10 @@ const Hospital = () => {
                   </div>
                 </div>
                 <p className="text-gray-600 mb-3 sm:mb-4 text-sm sm:text-base">{dept.description}</p>
-                <button className="w-full bg-emerald-400 text-white py-2 rounded-lg hover:bg-emerald-500 transition-colors font-medium text-xs sm:text-sm">
+                <button 
+                  onClick={() => handleViewDepartment(dept)}
+                  className="w-full bg-emerald-400 text-white py-2 rounded-lg hover:bg-emerald-500 transition-colors font-medium text-xs sm:text-sm"
+                >
                   View Department
                 </button>
               </div>
@@ -241,7 +250,10 @@ const Hospital = () => {
                   <div><span className="font-medium">Languages:</span> {doctor.languages.join(', ')}</div>
                 </div>
                 
-                <button className="w-full mt-3 sm:mt-4 bg-emerald-400 text-white py-2 rounded-lg hover:bg-emerald-500 transition-colors font-medium text-xs sm:text-sm">
+                <button 
+                  onClick={() => handleBookAppointment(doctor, getCurrentHospital())}
+                  className="w-full mt-3 sm:mt-4 bg-emerald-400 text-white py-2 rounded-lg hover:bg-emerald-500 transition-colors font-medium text-xs sm:text-sm"
+                >
                   Book Appointment
                 </button>
               </div>
@@ -296,7 +308,29 @@ const Hospital = () => {
               <Search className="absolute left-3 top-2.5 sm:top-3.5 h-4 w-4 text-gray-400" />
             </div>
           </div>
+          {error && (
+            <div className="mt-3 p-3 bg-red-100 border border-red-200 text-red-700 rounded">{error}</div>
+          )}
         </div>
+
+        {/* Hospital selector list */}
+        {hospitals.length > 0 && (
+          <div className="bg-white rounded-xl shadow p-3 sm:p-4 mb-6 overflow-x-auto">
+            <div className="flex gap-2">
+              {hospitals
+                .filter(h => !hospitalSearch || h.name.toLowerCase().includes(hospitalSearch.toLowerCase()))
+                .map(h => (
+                  <button
+                    key={h.name}
+                    onClick={() => setSelectedHospital(h.name)}
+                    className={`px-3 py-2 rounded-lg text-sm border ${selectedHospital === h.name ? 'bg-emerald-400 text-white border-emerald-400' : 'bg-gray-50 text-gray-700 border-gray-200'}`}
+                  >
+                    {h.name}
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
 
         {/* Tab Navigation */}
         <div className="bg-white rounded-xl shadow-lg mb-6 sm:mb-8">
@@ -322,6 +356,79 @@ const Hospital = () => {
           {renderTabContent()}
         </div>
       </div>
+
+      {/* Department Doctors Modal */}
+      {selectedDepartment && (
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Modal Header */}
+            <div className="bg-white rounded-t-xl flex items-center justify-between p-4 sm:p-6 border-b border-gray-200">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-bold text-gray-800">{selectedDepartment.name}</h2>
+                <p className="text-sm text-gray-600 mt-1">{selectedDepartment.description}</p>
+              </div>
+              <button
+                onClick={handleCloseDepartmentModal}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="h-5 w-5 text-gray-600" />
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-white">
+              {loadingDepartmentDoctors ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-600"></div>
+                  <p className="mt-4 text-gray-600">Loading doctors...</p>
+                </div>
+              ) : departmentDoctors.length === 0 ? (
+                <div className="text-center py-8">
+                  <User className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <p className="text-gray-600">No doctors available in this department</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                  {departmentDoctors.map((doctor, index) => (
+                    <div key={index} className="bg-white rounded-xl shadow-lg p-4 sm:p-6 hover:shadow-xl transition-shadow border border-gray-100">
+                      <div className="text-center mb-3 sm:mb-4">
+                        <div className="w-16 h-16 sm:w-20 sm:h-20 bg-gray-200 rounded-full mx-auto mb-3 flex items-center justify-center">
+                          <User className="h-8 w-8 sm:h-10 sm:w-10 text-gray-400" />
+                        </div>
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-800">{doctor.name}</h3>
+                        <p className="text-emerald-600 font-medium text-sm sm:text-base">{doctor.specialty}</p>
+                        <div className="flex items-center justify-center mt-2">
+                          <Star className="h-3 w-3 sm:h-4 sm:w-4 text-yellow-500 fill-current" />
+                          <span className="text-xs sm:text-sm text-gray-600 ml-1">{doctor.rating}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2 text-xs sm:text-sm text-gray-600">
+                        {doctor.experience && (
+                          <div><span className="font-medium">Experience:</span> {doctor.experience}</div>
+                        )}
+                        {doctor.education && (
+                          <div><span className="font-medium">Education:</span> {doctor.education}</div>
+                        )}
+                        {doctor.languages && doctor.languages.length > 0 && (
+                          <div><span className="font-medium">Languages:</span> {doctor.languages.join(', ')}</div>
+                        )}
+                      </div>
+                      
+                      <button 
+                        onClick={() => handleBookAppointment(doctor, getCurrentHospital())}
+                        className="w-full mt-3 sm:mt-4 bg-emerald-400 text-white py-2 rounded-lg hover:bg-emerald-500 transition-colors font-medium text-xs sm:text-sm"
+                      >
+                        Book Appointment
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

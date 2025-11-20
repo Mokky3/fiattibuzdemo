@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { ReceptionistHeader } from './ReceptionistHeader'
+import { ReceptionistHeader } from './ReceptionHeader'
 
 const ReceptionMessages = () => {
   const [selectedPatient, setSelectedPatient] = useState('Sarah Johnson')

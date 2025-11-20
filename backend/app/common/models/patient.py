@@ -4,6 +4,7 @@ from sqlalchemy import Column, String, Boolean, DateTime, Date, Integer, Text, F
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import enum
 
@@ -80,95 +81,62 @@ class Language(str, enum.Enum):
 class Patient(Base):
     """Patient model representing individuals receiving care."""
     __tablename__ = "patients"
+    __table_args__ = {"schema": "ehr"}
     
     # Primary identifiers
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    medical_record_number = Column(String(50), unique=True, index=True, nullable=False)
+    patient_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    
+    # Backward compatibility alias
+    @property
+    def id(self):
+        return self.patient_id
     
     # Link to user account (if patient has portal access)
-    user_id = Column(String(36), ForeignKey("users.id"), unique=True, nullable=True)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), unique=True, nullable=True)
     
-    # Personal information
-    first_name = Column(String(100), nullable=False)
-    last_name = Column(String(100), nullable=False)
-    middle_name = Column(String(100), nullable=True)
-    date_of_birth = Column(Date, nullable=False)
-    gender = Column(Enum(Gender), nullable=False)
-    
-    # National identifier (PINFL for Uzbekistan)
-    national_id = Column(String(14), unique=True, index=True, nullable=False)  # PINFL
+    # Personal information - only columns that exist in database
+    date_of_birth = Column(Date, nullable=True)
+    sex = Column(String(10), nullable=True)
     
     # Contact information
-    phone = Column(String(20), nullable=False)
-    phone_secondary = Column(String(20), nullable=True)
-    email = Column(String(255), nullable=True)
-    preferred_language = Column(String(5), default="uz")  # uz, ru, en
-    
-    # Address
-    address = Column(Text, nullable=True)
-    city = Column(String(100), nullable=True)
-    state = Column(String(100), nullable=True)
-    zip_code = Column(String(20), nullable=True)
-    country = Column(String(2), default="UZ")
-    
-    # Demographics
-    nationality = Column(String(100), nullable=True)
-    marital_status = Column(Enum(MaritalStatus), nullable=True)
-    occupation = Column(String(100), nullable=True)
-    
-    # Physical information
-    height = Column(Float, nullable=True)  # in cm
-    weight = Column(Float, nullable=True)  # in kg
-    bmi = Column(Float, nullable=True)  # calculated
-    blood_group = Column(Enum(BloodGroup), nullable=True)
-    
-    # Health metrics
-    blood_pressure_systolic = Column(Integer, nullable=True)
-    blood_pressure_diastolic = Column(Integer, nullable=True)
-    visual_acuity_left = Column(Float, nullable=True)
-    visual_acuity_right = Column(Float, nullable=True)
-    mental_health_status = Column(Enum(MentalHealthStatus), nullable=True)
-    
-    # Status
-    status = Column(Enum(PatientStatus), default=PatientStatus.ACTIVE)
-    is_vip = Column(Boolean, default=False)
-    
-    # Registration info
-    registered_at = Column(DateTime(timezone=True), server_default=func.now())
-    registered_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    
-    # FHIR reference
-    fhir_patient_id = Column(String(255), unique=True, nullable=True)
+    phone = Column(String(50), nullable=True)
+    address = Column(Text, nullable=True)  # Patient address stored in database
     
     # Timestamps
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     
     # Relationships
     user = relationship("User", foreign_keys=[user_id], back_populates="patient_profile")
     emergency_contacts = relationship("EmergencyContact", back_populates="patient", cascade="all, delete-orphan")
+    organizations = relationship("OrganizationPatient", back_populates="patient", cascade="all, delete-orphan")
     insurance_policies = relationship("InsurancePolicy", back_populates="patient", cascade="all, delete-orphan")
     insurances = relationship("Insurance", back_populates="patient", cascade="all, delete-orphan")
-    appointments = relationship("Appointment", back_populates="patient")
+    appointments = relationship("Appointment", back_populates="patient", cascade="all, delete-orphan")
     medical_history = relationship("MedicalHistory", back_populates="patient", cascade="all, delete-orphan")
     allergies = relationship("AllergyIntolerance", back_populates="patient", cascade="all, delete-orphan")
-    medications = relationship("PatientMedication", back_populates="patient")
-    medical_records = relationship("MedicalRecord", back_populates="patient")
-    prescriptions = relationship("Prescription", back_populates="patient")
-    lab_results = relationship("LabResult", back_populates="patient")
-    immunizations = relationship("Immunization", back_populates="patient")
-    vital_signs = relationship("VitalSign", back_populates="patient")
-    clinical_notes = relationship("ClinicalNote", back_populates="patient")
-    conditions = relationship("Condition", back_populates="patient")
-    observations = relationship("Observation", back_populates="patient")
+    medications = relationship("PatientMedication", back_populates="patient", cascade="all, delete-orphan")
+    medical_records = relationship("MedicalRecord", back_populates="patient", cascade="all, delete-orphan")
+    prescriptions = relationship("Prescription", back_populates="patient", cascade="all, delete-orphan")
+    lab_results = relationship("LabResult", back_populates="patient", cascade="all, delete-orphan")
+    lab_orders = relationship("LabOrder", back_populates="patient", cascade="all, delete-orphan")
+    immunizations = relationship("Immunization", back_populates="patient", cascade="all, delete-orphan")
+    vital_signs = relationship("VitalSign", back_populates="patient", cascade="all, delete-orphan")
+    clinical_notes = relationship("ClinicalNote", back_populates="patient", cascade="all, delete-orphan")
+    general_reports = relationship("GeneralReport", back_populates="patient", cascade="all, delete-orphan")
+    conditions = relationship("Condition", back_populates="patient", cascade="all, delete-orphan")
+    observations = relationship("Observation", back_populates="patient", cascade="all, delete-orphan")
+    messages = relationship("Message", back_populates="patient", cascade="all, delete-orphan")
+    message_threads = relationship("MessageThread", back_populates="patient", cascade="all, delete-orphan")
+    settings = relationship("PatientSettings", back_populates="patient", uselist=False, cascade="all, delete-orphan")
 
 
 class EmergencyContact(Base):
     """Emergency contact information for patients."""
     __tablename__ = "emergency_contacts"
+    __table_args__ = {"schema": "ehr"}
     
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # Contact details
     name = Column(String(200), nullable=False)
@@ -193,9 +161,10 @@ class EmergencyContact(Base):
 class InsurancePolicy(Base):
     """Patient insurance information."""
     __tablename__ = "insurance_policies"
+    __table_args__ = {"schema": "ehr"}
     
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # Policy details
     provider = Column(String(200), nullable=False)
@@ -218,7 +187,7 @@ class InsurancePolicy(Base):
     # Verification
     verified = Column(Boolean, default=False)
     verified_at = Column(DateTime(timezone=True), nullable=True)
-    verified_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    verified_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     
     # Additional info
     notes = Column(Text, nullable=True)
@@ -234,9 +203,10 @@ class InsurancePolicy(Base):
 class MedicalHistory(Base):
     """Patient medical history records."""
     __tablename__ = "medical_history"
+    __table_args__ = {"schema": "ehr"}
     
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # Condition details
     condition = Column(String(500), nullable=False)
@@ -250,7 +220,7 @@ class MedicalHistory(Base):
     
     # Additional info
     notes = Column(Text, nullable=True)
-    recorded_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    recorded_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -263,10 +233,11 @@ class MedicalHistory(Base):
 class PatientMedication(Base):
     """Current medications for patients."""
     __tablename__ = "patient_medications"
+    __table_args__ = {"schema": "ops"}
     
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    prescription_id = Column(String(36), ForeignKey("prescriptions.id"), nullable=True)
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    prescription_id = Column(String(36), ForeignKey("ehr.prescriptions.id"), nullable=True)
     
     # Medication details
     medication_name = Column(String(200), nullable=False)
@@ -285,7 +256,7 @@ class PatientMedication(Base):
     discontinued_reason = Column(String(500), nullable=True)
     
     # Prescriber
-    prescribed_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    prescribed_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     prescribed_date = Column(Date, nullable=False)
     
     # Additional info
@@ -304,9 +275,10 @@ class PatientMedication(Base):
 class PatientSettings(Base):
     """Patient preferences and settings."""
     __tablename__ = "patient_settings"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), unique=True, nullable=False)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("ehr.patients.patient_id"), unique=True, nullable=False)
     
     # Email notification settings
     email_appointments = Column(Boolean, default=True)
@@ -327,10 +299,10 @@ class PatientSettings(Base):
     push_updates = Column(Boolean, default=False)
     
     # Reminder timing
-    reminder_timing = Column(Enum(ReminderTiming), default=ReminderTiming.HOUR_24)
+    reminder_timing = Column(Enum(ReminderTiming, native_enum=False), default=ReminderTiming.HOUR_24)
     
     # Privacy settings
-    profile_visibility = Column(Enum(ProfileVisibility), default=ProfileVisibility.DOCTORS_ONLY)
+    profile_visibility = Column(Enum(ProfileVisibility, native_enum=False), default=ProfileVisibility.DOCTORS_ONLY)
     share_health_data = Column(Boolean, default=True)
     allow_research = Column(Boolean, default=False)
     data_retention_years = Column(Integer, default=5)
@@ -343,10 +315,10 @@ class PatientSettings(Base):
     device_management = Column(Boolean, default=True)
     
     # Display preferences
-    language = Column(Enum(Language), default=Language.UZ)
+    language = Column(Enum(Language, native_enum=False), default=Language.UZ)
     date_format = Column(String(20), default="DD/MM/YYYY")
     time_format = Column(String(10), default="24hour")
-    theme = Column(Enum(Theme), default=Theme.LIGHT)
+    theme = Column(Enum(Theme, native_enum=False), default=Theme.LIGHT)
     font_size = Column(String(20), default="medium")
     sound_enabled = Column(Boolean, default=True)
     auto_play_videos = Column(Boolean, default=False)
@@ -357,3 +329,33 @@ class PatientSettings(Base):
     
     # Relationships
     patient = relationship("Patient", back_populates="settings")
+
+
+class OrganizationPatient(Base):
+    """Many-to-many relationship between patients and organizations (hospitals/clinics).
+    
+    This allows a patient to be seen at multiple clinics, with clinic-specific
+    information like local MRN, status, and visit history.
+    """
+    __tablename__ = "organization_patients"
+    __table_args__ = {"schema": "ehr"}
+    
+    # Composite primary key
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("ref.hospitals.id", ondelete="CASCADE"), primary_key=True)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("ehr.patients.patient_id", ondelete="CASCADE"), primary_key=True)
+    
+    # Clinic-specific fields
+    local_mrn = Column(String(50), nullable=True, comment="This clinic's medical record number for the patient")
+    status = Column(String(20), default="active", nullable=False, comment="active, archived, banned, etc.")
+    first_seen_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    last_seen_at = Column(DateTime(timezone=True), nullable=True, onupdate=func.now())
+    consent_share = Column(Boolean, default=False, nullable=False, comment="Patient allowed data sharing between clinics")
+    notes = Column(Text, nullable=True, comment="Clinic-specific notes about this patient")
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
+    
+    # Relationships
+    organization = relationship("Hospital", back_populates="organization_patients")
+    patient = relationship("Patient", back_populates="organizations")

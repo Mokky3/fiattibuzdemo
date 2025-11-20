@@ -1,0 +1,121 @@
+"""Enhanced Reception portal schemas for surgical edits integration."""
+
+# Enhanced schemas for surgical edits
+from .register_enhanced import (
+    PatientRegisterRequest,
+    PatientResponse,
+    DuplicateCheckRequest,
+    DuplicateCheckResponse,
+    PatientSearchRequest,
+    PatientListResponse,
+    PatientUpdateRequest,
+    PatientStats,
+    EmergencyContact,
+    InsuranceInfo,
+    GenderEnum,
+    MaritalStatusEnum,
+    LanguageEnum,
+    InsuranceTypeEnum,
+)
+
+from .appointments_enhanced import (
+    AppointmentCreateRequest,
+    AppointmentSummary,
+    AppointmentResponse,
+    AppointmentUpdateRequest,
+    AppointmentSearchRequest,
+    AppointmentListResponse,
+    AvailabilityRequest,
+    AvailabilitySlot,
+    AvailabilityResponse,
+    AppointmentStats,
+    AppointmentReminderRequest,
+    AppointmentReminderResponse,
+    AppointmentTypeEnum,
+    AppointmentStatusEnum,
+    PriorityEnum,
+)
+
+from .messages_enhanced import (
+    SendMessageRequest,
+    MessageTemplateRequest,
+    ConversationSummary,
+    MessageThread,
+    MessageTemplate,
+    MessageResponse,
+    MessageStats,
+    AttachmentUpload,
+    AttachmentResponse,
+    MessageSearch,
+    ConversationCreate,
+    ConversationResponse,
+    MessageMarkReadRequest,
+    MessageDeleteRequest,
+    NotificationSettings,
+    BulkMessageRequest,
+    BulkMessageResponse,
+    MessageTypeEnum,
+    MessagePriorityEnum,
+    MessageStatusEnum,
+)
+
+# Note: Legacy/unused modules are not exported to avoid import errors
+
+__all__ = [
+    # Enhanced registration schemas
+    "PatientRegisterRequest",
+    "PatientResponse",
+    "DuplicateCheckRequest",
+    "DuplicateCheckResponse",
+    "PatientSearchRequest",
+    "PatientListResponse",
+    "PatientUpdateRequest",
+    "PatientStats",
+    "EmergencyContact",
+    "InsuranceInfo",
+    "GenderEnum",
+    "MaritalStatusEnum",
+    "LanguageEnum",
+    "InsuranceTypeEnum",
+    
+    # Enhanced appointment schemas
+    "AppointmentCreateRequest",
+    "AppointmentSummary",
+    "AppointmentResponse",
+    "AppointmentUpdateRequest",
+    "AppointmentSearchRequest",
+    "AppointmentListResponse",
+    "AvailabilityRequest",
+    "AvailabilitySlot",
+    "AvailabilityResponse",
+    "AppointmentStats",
+    "AppointmentReminderRequest",
+    "AppointmentReminderResponse",
+    "AppointmentTypeEnum",
+    "AppointmentStatusEnum",
+    "PriorityEnum",
+    
+    # Enhanced message schemas
+    "SendMessageRequest",
+    "MessageTemplateRequest",
+    "ConversationSummary",
+    "MessageThread",
+    "MessageTemplate",
+    "MessageResponse",
+    "MessageStats",
+    "AttachmentUpload",
+    "AttachmentResponse",
+    "MessageSearch",
+    "ConversationCreate",
+    "ConversationResponse",
+    "MessageMarkReadRequest",
+    "MessageDeleteRequest",
+    "NotificationSettings",
+    "BulkMessageRequest",
+    "BulkMessageResponse",
+    "MessageTypeEnum",
+    "MessagePriorityEnum",
+    "MessageStatusEnum",
+    
+    # Legacy items removed from exports
+]

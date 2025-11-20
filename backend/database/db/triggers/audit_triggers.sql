@@ -1,0 +1,1 @@
+-- CREATE TRIGGER examples go here

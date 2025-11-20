@@ -63,6 +63,7 @@ class ClinicalImpressionStatus(str, enum.Enum):
 class MedicalRecord(Base):
     """Comprehensive medical record model - merged with FHIR concepts."""
     __tablename__ = "medical_records"
+    __table_args__ = {"schema": "ehr"}
 
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -71,16 +72,16 @@ class MedicalRecord(Base):
     fhir_composition_id = Column(String(255), unique=True, nullable=True)
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    doctor_id = Column(String(36), ForeignKey("doctors.id"), nullable=False)
-    hospital_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
-    appointment_id = Column(String(36), ForeignKey("appointments.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    doctor_id = Column(String(36), ForeignKey("ehr.doctors.id"), nullable=False)
+    hospital_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=False)
+    appointment_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=True)
     
     # Record metadata
     record_number = Column(String(50), unique=True, nullable=False, index=True)
     record_date = Column(DateTime(timezone=True), nullable=False)
-    record_type = Column(Enum(RecordType), nullable=False)
-    status = Column(Enum(RecordStatus), default=RecordStatus.DRAFT)
+    record_type = Column(Enum(RecordType, native_enum=False), nullable=False)
+    status = Column(Enum(RecordStatus, native_enum=False), default=RecordStatus.DRAFT)
     
     # Clinical content - structured
     chief_complaint = Column(Text, nullable=True)
@@ -92,7 +93,7 @@ class MedicalRecord(Base):
     
     # Physical examination
     physical_examination = Column(JSON, nullable=True)  # Structured exam findings
-    vital_signs_id = Column(String(36), ForeignKey("vital_signs.id"), nullable=True)
+    vital_signs_id = Column(String(36), ForeignKey("ehr.vital_signs.id"), nullable=True)
     
     # Assessment and diagnosis
     clinical_impression = Column(Text, nullable=True)
@@ -119,10 +120,10 @@ class MedicalRecord(Base):
     sensitivity_reason = Column(String(200), nullable=True)
     
     # Workflow
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    signed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
+    signed_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     signed_at = Column(DateTime(timezone=True), nullable=True)
-    reviewed_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    reviewed_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
     
     # Timestamps
@@ -132,21 +133,27 @@ class MedicalRecord(Base):
     # Relationships
     patient = relationship("Patient", back_populates="medical_records")
     doctor = relationship("Doctor", back_populates="medical_records")
-    hospital = relationship("Hospital", back_populates="medical_records")
+    # hospital = relationship("Hospital", back_populates="medical_records")  # Commented out to avoid circular dependency
     appointment = relationship("Appointment", back_populates="medical_record", uselist=False)
-    vital_signs = relationship("VitalSign", back_populates="medical_record", uselist=False)
+    vital_signs = relationship(
+        "VitalSign",
+        back_populates="medical_record",
+        uselist=False,
+        foreign_keys="VitalSign.medical_record_id"
+    )
     creator = relationship("User", foreign_keys=[created_by])
     
     # Related records
     documents = relationship("DocumentReference", back_populates="medical_record", cascade="all, delete-orphan")
     clinical_impressions = relationship("ClinicalImpression", back_populates="medical_record", cascade="all, delete-orphan")
     care_plans = relationship("CarePlan", back_populates="medical_record", cascade="all, delete-orphan")
-    lab_results = relationship("LabResult", back_populates="medical_record")
+    lab_results = relationship("LabResult", back_populates="medical_record", cascade="all, delete-orphan")
 
 
 class DocumentReference(Base):
     """Clinical documents - converted from FHIR DocumentReference."""
     __tablename__ = "document_references"
+    __table_args__ = {"schema": "ehr"}
 
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -156,13 +163,13 @@ class DocumentReference(Base):
     identifiers = Column(JSON, nullable=True)  # Array of identifiers
     
     # Core relationships
-    medical_record_id = Column(String(36), ForeignKey("medical_records.id"), nullable=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    medical_record_id = Column(String(36), ForeignKey("ehr.medical_records.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # Document metadata
-    status = Column(Enum(DocumentStatus), default=DocumentStatus.CURRENT, nullable=False)
+    status = Column(Enum(DocumentStatus, native_enum=False), default=DocumentStatus.CURRENT, nullable=False)
     doc_status = Column(String(20), nullable=True)  # preliminary, final, amended, entered-in-error
-    type = Column(Enum(DocumentType), nullable=False)
+    type = Column(Enum(DocumentType, native_enum=False), nullable=False)
     category = Column(JSON, nullable=True)  # Array of CodeableConcept
     
     # Document info
@@ -172,14 +179,14 @@ class DocumentReference(Base):
     
     # Authors and authentication
     authors = Column(JSON, nullable=True)  # Array of practitioner references
-    authenticator_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    custodian_id = Column(String(36), ForeignKey("hospitals.id"), nullable=True)
+    authenticator_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
+    custodian_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=True)
     
     # Content
     content = Column(JSON, nullable=False)  # Array of {attachment, format}
     
     # Context
-    encounter_id = Column(String(36), ForeignKey("appointments.id"), nullable=True)
+    encounter_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=True)
     event = Column(JSON, nullable=True)  # Array of events
     period_start = Column(DateTime(timezone=True), nullable=True)
     period_end = Column(DateTime(timezone=True), nullable=True)
@@ -208,6 +215,7 @@ class DocumentReference(Base):
 class ClinicalImpression(Base):
     """Clinical assessment and summary - converted from FHIR."""
     __tablename__ = "clinical_impressions"
+    __table_args__ = {"schema": "ehr"}
 
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -216,13 +224,13 @@ class ClinicalImpression(Base):
     identifiers = Column(JSON, nullable=True)  # Array of identifiers
     
     # Core relationships
-    medical_record_id = Column(String(36), ForeignKey("medical_records.id"), nullable=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    encounter_id = Column(String(36), ForeignKey("appointments.id"), nullable=True)
-    assessor_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    medical_record_id = Column(String(36), ForeignKey("ehr.medical_records.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=True)
+    assessor_id = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Assessment metadata
-    status = Column(Enum(ClinicalImpressionStatus), nullable=False)
+    status = Column(Enum(ClinicalImpressionStatus, native_enum=False), nullable=False)
     status_reason = Column(JSON, nullable=True)  # CodeableConcept
     code = Column(JSON, nullable=True)  # CodeableConcept
     description = Column(Text, nullable=True)
@@ -234,7 +242,7 @@ class ClinicalImpression(Base):
     date = Column(DateTime(timezone=True), nullable=False)
     
     # Previous assessment
-    previous_id = Column(String(36), ForeignKey("clinical_impressions.id"), nullable=True)
+    previous_id = Column(String(36), ForeignKey("ehr.clinical_impressions.id"), nullable=True)
     
     # Problems/conditions
     problems = Column(JSON, nullable=True)  # Array of condition references
@@ -272,6 +280,7 @@ class ClinicalImpression(Base):
 class CarePlan(Base):
     """Treatment plans - converted from FHIR CarePlan."""
     __tablename__ = "care_plans"
+    __table_args__ = {"schema": "ehr"}
 
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -280,9 +289,9 @@ class CarePlan(Base):
     identifiers = Column(JSON, nullable=True)  # Array of identifiers
     
     # Core relationships
-    medical_record_id = Column(String(36), ForeignKey("medical_records.id"), nullable=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    encounter_id = Column(String(36), ForeignKey("appointments.id"), nullable=True)
+    medical_record_id = Column(String(36), ForeignKey("ehr.medical_records.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=True)
     
     # Plan metadata
     status = Column(String(20), nullable=False)  # draft, active, on-hold, revoked, completed, entered-in-error
@@ -299,7 +308,7 @@ class CarePlan(Base):
     created = Column(DateTime(timezone=True), nullable=False)
     
     # Authors and contributors
-    author_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    author_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     contributors = Column(JSON, nullable=True)  # Array of practitioner references
     care_team = Column(JSON, nullable=True)  # Array of care team references
     
@@ -333,11 +342,12 @@ class CarePlan(Base):
 class VitalSign(Base):
     """Patient vital signs measurements."""
     __tablename__ = "vital_signs"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    medical_record_id = Column(String(36), ForeignKey("medical_records.id"), nullable=True)
-    measured_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    medical_record_id = Column(String(36), ForeignKey("ehr.medical_records.id"), nullable=True)
+    measured_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Vital signs with units
     temperature = Column(Float, nullable=True)  # Celsius
@@ -381,5 +391,49 @@ class VitalSign(Base):
     
     # Relationships
     patient = relationship("Patient", back_populates="vital_signs")
-    medical_record = relationship("MedicalRecord", back_populates="vital_signs")
+    medical_record = relationship(
+        "MedicalRecord",
+        back_populates="vital_signs",
+        foreign_keys=[medical_record_id]
+    )
     measurer = relationship("User")
+
+
+class MedicationAdministration(Base):
+    """Medication administrations for patients (nurse workflow)."""
+    __tablename__ = "medication_administrations"
+    __table_args__ = {"schema": "ehr"}
+
+    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+
+    # Core relationships
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    administered_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
+
+    # Context
+    room = Column(String(50), nullable=True)
+    date = Column(Date, nullable=False)
+
+    # Medication details
+    medication = Column(String(200), nullable=False)
+    dosage = Column(String(100), nullable=False)
+    frequency = Column(String(100), nullable=True)
+    route = Column(String(50), nullable=True)
+    time_to_administer = Column(String(10), nullable=False)  # HH:MM
+
+    # Status tracking
+    status = Column(String(20), nullable=False)  # pending, due-soon, overdue, given, skipped
+    status_time = Column(String(10), nullable=True)
+    next_due = Column(String(10), nullable=True)
+    administered_at = Column(DateTime(timezone=True), nullable=True)
+
+    # Notes
+    notes = Column(Text, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+
+    # Relationships
+    patient = relationship("Patient")
+    nurse = relationship("User", foreign_keys=[administered_by])

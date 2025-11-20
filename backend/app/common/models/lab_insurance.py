@@ -4,10 +4,12 @@ from sqlalchemy import Column, String, Date, DateTime, Float, Text, ForeignKey, 
 from sqlalchemy.orm import relationship
 from sqlalchemy import String
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import enum
 
 from app.db.base_class import Base
+from app.common.enums import ServiceRequestStatus, ServiceRequestPriority, ServiceRequestIntent
 
 
 # Lab Result Enums
@@ -48,6 +50,13 @@ class ServiceRequestStatus(str, enum.Enum):
     REVOKED = "revoked"
     COMPLETED = "completed"
     ENTERED_IN_ERROR = "entered_in_error"
+
+
+class ServiceRequestPriority(str, enum.Enum):
+    ROUTINE = "routine"
+    URGENT = "urgent"
+    ASAP = "asap"
+    STAT = "stat"
 
 
 class ServiceRequestIntent(str, enum.Enum):
@@ -102,6 +111,7 @@ class ClaimStatus(str, enum.Enum):
 class LabOrder(Base):
     """Lab order/service request - converted from FHIR ServiceRequest."""
     __tablename__ = "lab_orders"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -111,15 +121,27 @@ class LabOrder(Base):
     requisition = Column(JSON, nullable=True)  # Group identifier
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    ordered_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    encounter_id = Column(String(36), ForeignKey("appointments.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    ordered_by = Column(String(36), ForeignKey("ehr.doctors.id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=True)
     
     # Order details
     order_number = Column(String(50), unique=True, nullable=False, index=True)
-    status = Column(Enum(ServiceRequestStatus), default=ServiceRequestStatus.ACTIVE, nullable=False)
-    intent = Column(Enum(ServiceRequestIntent), default=ServiceRequestIntent.ORDER, nullable=False)
-    priority = Column(Enum(ServiceRequestPriority), default=ServiceRequestPriority.ROUTINE, nullable=False)
+    status = Column(
+        Enum(ServiceRequestStatus, native_enum=False, values_callable=lambda e: [v.value for v in e]),
+        default=ServiceRequestStatus.ACTIVE,
+        nullable=False
+    )
+    intent = Column(
+        Enum(ServiceRequestIntent, native_enum=False, values_callable=lambda e: [v.value for v in e]),
+        default=ServiceRequestIntent.ORDER,
+        nullable=False
+    )
+    priority = Column(
+        Enum(ServiceRequestPriority, native_enum=False, values_callable=lambda e: [v.value for v in e]),
+        default=ServiceRequestPriority.ROUTINE,
+        nullable=False
+    )
     
     # Test information
     tests_ordered = Column(JSON, nullable=False)  # Array of {code, name, category}
@@ -143,7 +165,7 @@ class LabOrder(Base):
     
     # Specimen
     specimen_required = Column(Boolean, default=True)
-    specimen_type = Column(Enum(SpecimenType), nullable=True)
+    specimen_type = Column(Enum(SpecimenType, native_enum=False), nullable=True)
     specimen_instructions = Column(Text, nullable=True)
     fasting_required = Column(Boolean, default=False)
     
@@ -155,7 +177,7 @@ class LabOrder(Base):
     insurance_ids = Column(JSON, nullable=True)  # Array of insurance references
     
     # Status tracking
-    cancelled_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    cancelled_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
     cancellation_reason = Column(String(500), nullable=True)
     
@@ -165,7 +187,7 @@ class LabOrder(Base):
     
     # Relationships
     patient = relationship("Patient")
-    orderer = relationship("User", foreign_keys=[ordered_by])
+    orderer = relationship("Doctor", foreign_keys=[ordered_by], back_populates="lab_orders")
     encounter = relationship("Appointment")
     lab_results = relationship("LabResult", back_populates="lab_order", cascade="all, delete-orphan")
 
@@ -173,17 +195,18 @@ class LabOrder(Base):
 class LabResult(Base):
     """Laboratory test results with enhanced features."""
     __tablename__ = "lab_results"
+    __table_args__ = {"schema": "ehr"}
     
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     
     # FHIR references
     fhir_observation_id = Column(String(255), unique=True, nullable=True)
     fhir_diagnostic_report_id = Column(String(255), unique=True, nullable=True)
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    lab_order_id = Column(String(36), ForeignKey("lab_orders.id"), nullable=True)
-    medical_record_id = Column(String(36), ForeignKey("medical_records.id"), nullable=True)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    lab_order_id = Column(UUID(as_uuid=True), ForeignKey("ehr.lab_orders.id"), nullable=True)
+    medical_record_id = Column(UUID(as_uuid=True), ForeignKey("ehr.medical_records.id"), nullable=True)
     
     # Result identification
     result_number = Column(String(50), unique=True, nullable=False, index=True)
@@ -208,11 +231,11 @@ class LabResult(Base):
     
     # Abnormality
     is_abnormal = Column(Boolean, default=False)
-    abnormality_type = Column(Enum(AbnormalityType), default=AbnormalityType.NORMAL)
+    abnormality_type = Column(Enum(AbnormalityType, native_enum=False), default=AbnormalityType.NORMAL)
     is_critical = Column(Boolean, default=False)
     
     # Status
-    status = Column(Enum(LabResultStatus), default=LabResultStatus.FINAL, nullable=False)
+    status = Column(Enum(LabResultStatus, native_enum=False), default=LabResultStatus.FINAL, nullable=False)
     
     # Interpretation
     interpretation = Column(Text, nullable=True)
@@ -221,11 +244,11 @@ class LabResult(Base):
     
     # Lab information
     performing_lab_name = Column(String(200), nullable=True)
-    performing_lab_id = Column(String(36), nullable=True)
+    performing_lab_id = Column(UUID(as_uuid=True), nullable=True)
     lab_director = Column(String(200), nullable=True)
     
     # Specimen information
-    specimen_type = Column(Enum(SpecimenType), nullable=True)
+    specimen_type = Column(Enum(SpecimenType, native_enum=False), nullable=True)
     specimen_collected_date = Column(DateTime(timezone=True), nullable=True)
     specimen_received_date = Column(DateTime(timezone=True), nullable=True)
     specimen_condition = Column(String(100), nullable=True)
@@ -236,7 +259,7 @@ class LabResult(Base):
     verified_date = Column(DateTime(timezone=True), nullable=True)
     
     # Personnel
-    ordered_by = Column(String(36), ForeignKey("doctors.id"), nullable=True)
+    ordered_by = Column(UUID(as_uuid=True), ForeignKey("ehr.doctors.id"), nullable=True)
     performed_by = Column(String(200), nullable=True)
     verified_by = Column(String(200), nullable=True)
     resulted_by = Column(String(200), nullable=True)
@@ -268,15 +291,35 @@ class LabResult(Base):
     notifications = relationship("LabResultNotification", back_populates="lab_result", cascade="all, delete-orphan")
 
 
+class LabReport(Base):
+    """Lab report metadata associated with a lab order/patient."""
+    __tablename__ = "lab_reports"
+    __table_args__ = {"schema": "ehr"}
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    order_id = Column(UUID(as_uuid=True), ForeignKey("ehr.lab_orders.id"), nullable=True)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("ehr.patients.patient_id"), nullable=True)
+    report_date = Column(DateTime(timezone=True), server_default=func.now())
+    title = Column(String(200), nullable=False)
+    summary = Column(Text, nullable=True)
+    metrics = Column(JSON, nullable=True)  # e.g., turnaround, sampleCount, etc.
+    attachments = Column(JSON, nullable=True)  # [{name, url, type}]
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    lab_order = relationship("LabOrder")
+    patient = relationship("Patient")
+
 class LabResultNotification(Base):
     """Notifications for critical lab results."""
     __tablename__ = "lab_result_notifications"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    lab_result_id = Column(String(36), ForeignKey("lab_results.id"), nullable=False)
+    lab_result_id = Column(String(36), ForeignKey("ehr.lab_results.id"), nullable=False)
     
     # Notification details
-    notified_user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    notified_user_id = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     notification_type = Column(String(50), nullable=False)  # sms, email, phone, in_app
     notification_sent_at = Column(DateTime(timezone=True), nullable=False)
     notification_read_at = Column(DateTime(timezone=True), nullable=True)
@@ -297,9 +340,10 @@ class LabResultNotification(Base):
 class Insurance(Base):
     """Patient insurance coverage - enhanced model."""
     __tablename__ = "insurances"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # FHIR Coverage reference
     fhir_coverage_id = Column(String(255), unique=True, nullable=True)
@@ -315,7 +359,7 @@ class Insurance(Base):
     group_number = Column(String(50), nullable=True)
     plan_name = Column(String(200), nullable=True)
     plan_type = Column(String(50), nullable=True)  # HMO, PPO, EPO, POS
-    coverage_type = Column(Enum(CoverageType), nullable=False)
+    coverage_type = Column(Enum(CoverageType, native_enum=False), nullable=False)
     
     # Subscriber information (if different from patient)
     subscriber_id = Column(String(50), nullable=True)
@@ -324,7 +368,7 @@ class Insurance(Base):
     subscriber_dob = Column(Date, nullable=True)
     
     # Coverage period
-    status = Column(Enum(InsuranceStatus), default=InsuranceStatus.ACTIVE)
+    status = Column(Enum(InsuranceStatus, native_enum=False), default=InsuranceStatus.ACTIVE)
     start_date = Column(Date, nullable=False)
     end_date = Column(Date, nullable=False)
     
@@ -358,7 +402,7 @@ class Insurance(Base):
     
     # Verification
     last_verified_date = Column(Date, nullable=True)
-    verified_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    verified_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     verification_notes = Column(Text, nullable=True)
     
     # Card images
@@ -382,6 +426,7 @@ class Insurance(Base):
 class InsuranceClaim(Base):
     """Insurance claims with enhanced tracking."""
     __tablename__ = "insurance_claims"
+    __table_args__ = {"schema": "financial"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -389,9 +434,9 @@ class InsuranceClaim(Base):
     fhir_claim_id = Column(String(255), unique=True, nullable=True)
     
     # Core relationships
-    insurance_id = Column(String(36), ForeignKey("insurances.id"), nullable=False)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    appointment_id = Column(String(36), ForeignKey("appointments.id"), nullable=True)
+    insurance_id = Column(String(36), ForeignKey("ehr.insurances.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    appointment_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=True)
     
     # Claim identification
     claim_number = Column(String(50), unique=True, nullable=False, index=True)
@@ -408,14 +453,14 @@ class InsuranceClaim(Base):
     received_date = Column(Date, nullable=True)
     
     # Status
-    status = Column(Enum(ClaimStatus), default=ClaimStatus.DRAFT, nullable=False)
+    status = Column(Enum(ClaimStatus, native_enum=False), default=ClaimStatus.DRAFT, nullable=False)
     status_date = Column(DateTime(timezone=True), nullable=False)
     status_reason = Column(Text, nullable=True)
     
     # Provider information
-    billing_provider_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
-    rendering_provider_id = Column(String(36), ForeignKey("doctors.id"), nullable=True)
-    referring_provider_id = Column(String(36), ForeignKey("doctors.id"), nullable=True)
+    billing_provider_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=False)
+    rendering_provider_id = Column(String(36), ForeignKey("ehr.doctors.id"), nullable=True)
+    referring_provider_id = Column(String(36), ForeignKey("ehr.doctors.id"), nullable=True)
     
     # Services
     services = Column(JSON, nullable=False)  # Array of {code, description, quantity, charge}
@@ -466,7 +511,7 @@ class InsuranceClaim(Base):
     
     # Resubmission
     is_resubmission = Column(Boolean, default=False)
-    original_claim_id = Column(String(36), ForeignKey("insurance_claims.id"), nullable=True)
+    original_claim_id = Column(String(36), ForeignKey("financial.insurance_claims.id"), nullable=True)
     resubmission_code = Column(String(20), nullable=True)
     
     # Timestamps
@@ -487,9 +532,10 @@ class InsuranceClaim(Base):
 class ClaimLineItem(Base):
     """Individual line items on insurance claims."""
     __tablename__ = "claim_line_items"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    claim_id = Column(String(36), ForeignKey("insurance_claims.id"), nullable=False)
+    claim_id = Column(String(36), ForeignKey("financial.insurance_claims.id"), nullable=False)
     
     # Line item details
     line_number = Column(Integer, nullable=False)
@@ -527,10 +573,11 @@ class ClaimLineItem(Base):
 class InsuranceAuthorization(Base):
     """Prior authorization requests."""
     __tablename__ = "insurance_authorizations"
+    __table_args__ = {"schema": "financial"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    insurance_id = Column(String(36), ForeignKey("insurances.id"), nullable=False)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    insurance_id = Column(String(36), ForeignKey("ehr.insurances.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # Authorization details
     authorization_number = Column(String(50), unique=True, nullable=True)
@@ -542,8 +589,8 @@ class InsuranceAuthorization(Base):
     diagnosis_codes = Column(JSON, nullable=False)  # Array of ICD-10 codes
     
     # Provider
-    requesting_provider_id = Column(String(36), ForeignKey("doctors.id"), nullable=False)
-    servicing_provider_id = Column(String(36), ForeignKey("doctors.id"), nullable=True)
+    requesting_provider_id = Column(String(36), ForeignKey("ehr.doctors.id"), nullable=False)
+    servicing_provider_id = Column(String(36), ForeignKey("ehr.doctors.id"), nullable=True)
     
     # Status
     status = Column(String(20), nullable=False)  # pending, approved, denied, expired

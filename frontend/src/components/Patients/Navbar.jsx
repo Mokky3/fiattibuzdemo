@@ -43,8 +43,7 @@ const Navbar = () => {
     { path: '/patient/appointment', label: 'APPOINTMENT' },
     { path: '/patient/records', label: 'RECORDS' },
     { path: '/patient/prescription', label: 'PRESCRIPTION' },
-    { path: '/patient/hospital', label: 'HOSPITAL' },
-    { path: '/patient/dashboard', label: 'DASHBOARD' }
+    { path: '/patient/hospital', label: 'HOSPITAL' }
   ];
 
   return (
@@ -53,12 +52,19 @@ const Navbar = () => {
         <div className="flex items-center justify-between h-16">
           {/* Left section - Logo and Navigation */}
           <div className="flex items-center space-x-4 lg:space-x-6">
-            <div className="text-white text-xl sm:text-2xl font-bold cursor-pointer">
+            <button
+              onClick={() => handleNavigation('/patient/dashboard')}
+              className={`text-white text-xl sm:text-2xl font-bold transition-all duration-200 px-3 py-2 rounded-md ${
+                isActive('/patient/dashboard')
+                  ? 'bg-[#059669]'
+                  : 'hover:bg-[#10b981] hover:bg-opacity-80'
+              }`}
+            >
               FIATTIB
-            </div>
+            </button>
 
-            {/* Desktop navigation links */}
-            <div className="hidden md:flex items-center space-x-2 lg:space-x-4">
+            {/* Navigation links */}
+            <div className="flex items-center space-x-2 lg:space-x-4">
               {navigationItems.map((item) => (
                 <button 
                   key={item.path}
@@ -78,7 +84,7 @@ const Navbar = () => {
           {/* Right section - Search, Notifications, Profile */}
           <div className="flex items-center space-x-2 sm:space-x-4">
             {/* Search bar */}
-            <div className="hidden sm:flex relative">
+            <div className="flex relative">
               <input
                 type="text"
                 placeholder="SEARCH"
@@ -90,12 +96,12 @@ const Navbar = () => {
             </div>
 
             {/* Notification bell */}
-            <button className="hidden md:flex text-white p-2 rounded-full hover:bg-white hover:bg-opacity-20 transition-all duration-200">
+            <button className="flex text-white p-2 rounded-full hover:bg-white hover:bg-opacity-20 transition-all duration-200">
               <Bell className="h-5 w-5" />
             </button>
 
             {/* Profile dropdown */}
-            <div className="hidden md:block relative">
+            <div className="relative">
               <button
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                 className="flex items-center space-x-1 bg-[#059669] text-white px-3 py-2 rounded-full hover:bg-[#047857] transition-all duration-200"

@@ -1,11 +1,22 @@
 # ── portals/patient/routes/appointments.py ───────────────
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
+from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
+from app.portals.patient.schemas.profile_enhanced import (
+    AppointmentCreate as _SchemaAppointmentCreate,
+    AppointmentRow as _SchemaAppointmentRow,
+    AppointmentPatch as _SchemaAppointmentPatch,
+)
 
-from .auth import get_current_patient, PatientUser
+from app.common.auth.auth_service import AuthenticatedUser, require_patient_access
+# DB and CRUD access
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.crud.patient import patient as patient_crud
+from app.crud.patient_portal import patient_portal_crud
 # from ..fhir_client import (
 #     fhir_create,          # POST {resource}
 #     fhir_read,            # GET  {resource}/{id}
@@ -13,70 +24,90 @@ from .auth import get_current_patient, PatientUser
 #     fhir_search,          # GET  {resource}?…
 # )  # TODO: implement FHIR client
 
-router = APIRouter(prefix="/api/patient/appointments", tags=["Patient · Appointments"])
+# Note: Router prefix is applied in app.main include_router. Do not add an internal prefix here
+router = APIRouter(tags=["Patient · Appointments"])
 
 # ---------------------------------------------------------
 # DTOs-for-UI  (what the React page expects)
 # ---------------------------------------------------------
-class AppointmentCreate(BaseModel):
-    hospital: str
-    appointmentDate: str        # "YYYY-MM-DD"
-    appointmentTime: str        # "HH:MM"
-    appointmentType: str        # free-text label
-    additionalNote: Optional[str] = None
-    doctor_id: Optional[str] = None   # optional Practitioner.id selected in modal
+AppointmentCreate = _SchemaAppointmentCreate
 
 
-class AppointmentRow(BaseModel):
-    id: str
-    date: str                   # "DD.MM.YYYY"
-    time: str                   # "HH:MM"
-    daysUntil: Optional[int]    # present for upcoming records
-    description: str
-    hospital: str
-    room: Optional[str]
-    type: str                   # same label we stored
+AppointmentRow = _SchemaAppointmentRow
 
 
 # ---------------------------------------------------------
 #   POST  →  FHIR Appointment
 # ---------------------------------------------------------
+def _patient_id_for_user(db: Session, me: AuthenticatedUser) -> str:
+    row = patient_crud.get_by_user_id(db=db, user_id=me.user_id)
+    return str(row.id) if row else me.user_id
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def book_appointment(
     data: AppointmentCreate = Body(...),
-    me: PatientUser = Depends(get_current_patient),
+    me: AuthenticatedUser = Depends(require_patient_access()),
+    db: Session = Depends(get_db),
 ):
-    """Create a FHIR Appointment for the logged-in patient."""
-    # ── 1. compose ISO datetime for start / end
-    start_iso = datetime.fromisoformat(f"{data.appointmentDate}T{data.appointmentTime}:00").replace(
-        tzinfo=timezone.utc
-    )
-    # naive example – 30-min slot:
-    end_iso = start_iso + timedelta(minutes=30)
+    """Create an appointment: persist locally, then best-effort FHIR sync later."""
+    # Validate required fields
+    if not data.appointmentDate:
+        raise HTTPException(status_code=422, detail="appointmentDate is required")
+    if not data.appointmentTime:
+        raise HTTPException(status_code=422, detail="appointmentTime is required")
+    if not data.hospital:
+        raise HTTPException(status_code=422, detail="hospital is required")
+    if not data.appointmentType:
+        raise HTTPException(status_code=422, detail="appointmentType is required")
 
-    # ── 2. build FHIR resource
-    resource = {
-        "resourceType": "Appointment",
-        "status": "booked",
-        "serviceCategory": [{"text": data.hospital}],
-        "serviceType": [{"text": data.appointmentType}],
-        "description": data.additionalNote or data.appointmentType,
-        "start": start_iso.isoformat(),
-        "end": end_iso.isoformat(),
-        "participant": [
-            {
-                "actor": {"reference": f"Patient/{me.fhir_patient_id}"},
-                "status": "accepted",
-            }
-        ],
+    # Prepare appointment data - let CRUD function handle doctor selection
+    appointment_data = {
+        "hospital": data.hospital,
+        "appointmentDate": data.appointmentDate,
+        "appointmentTime": data.appointmentTime,
+        "appointmentType": data.appointmentType,
+        "additionalNote": data.additionalNote or "",
     }
-    if data.doctor_id:
-        resource["participant"].append(
-            {"actor": {"reference": f"Practitioner/{data.doctor_id}"}, "status": "needs-action"}
-        )
+    
+    # Only include doctor_id if it's provided and valid
+    if hasattr(data, 'doctor_id') and data.doctor_id:
+        appointment_data["doctor_id"] = str(data.doctor_id)
 
-    # created = fhir_create("Appointment", resource) # TODO: implement FHIR client
-    return {"id": "mock_id"}   # UI doesn’t need more right now
+    # Persist locally (source of truth) - CRUD will find a valid doctor if none provided
+    patient_id_str = _patient_id_for_user(db, me)
+    patient_id_uuid = UUID(patient_id_str)  # Convert string to UUID
+    created = patient_portal_crud.create_appointment(db, patient_id_uuid, appointment_data)
+
+    # TODO: best-effort FHIR sync can be added here
+    # ── 2. build FHIR resource (commented out until FHIR client is implemented)
+    # patient_id = _patient_id_for_user(db, me)
+    # start_iso = datetime.fromisoformat(f"{data.appointmentDate}T{data.appointmentTime}:00").replace(
+    #     tzinfo=timezone.utc
+    # )
+    # end_iso = start_iso + timedelta(minutes=30)
+    # resource = {
+    #     "resourceType": "Appointment",
+    #     "status": "booked",
+    #     "serviceCategory": [{"text": data.hospital}],
+    #     "serviceType": [{"text": data.appointmentType}],
+    #     "description": data.additionalNote or data.appointmentType,
+    #     "start": start_iso.isoformat(),
+    #     "end": end_iso.isoformat(),
+    #     "participant": [
+    #         {
+    #             "actor": {"reference": f"Patient/{patient_id}"},
+    #             "status": "accepted",
+    #         }
+    #     ],
+    # }
+    # if data.doctor_id:
+    #     resource["participant"].append(
+    #         {"actor": {"reference": f"Practitioner/{data.doctor_id}"}, "status": "needs-action"}
+    #     )
+    # fhir_create("Appointment", resource)
+
+    return {"id": str(created.id), "status": "booked"}
 
 
 # ---------------------------------------------------------
@@ -84,81 +115,93 @@ async def book_appointment(
 # ---------------------------------------------------------
 @router.get("", response_model=List[AppointmentRow])
 async def list_my_appointments(
-    scope: str = Query("upcoming", regex="^(upcoming|past)$"),
-    me: PatientUser = Depends(get_current_patient),
+    scope: str = Query("upcoming", pattern="^(upcoming|past)$"),
+    me: AuthenticatedUser = Depends(require_patient_access()),
+    db: Session = Depends(get_db),
 ):
     """
     – upcoming  → future appointments (status≠cancelled, start>=today)  
     – past      → start<today OR status in {fulfilled, noshow, …}
     """
-    today_iso = datetime.utcnow().date().isoformat()
+    # Read from local DB
+    patient_id = _patient_id_for_user(db, me)
+    items = patient_portal_crud.get_patient_appointments(db, patient_id=patient_id, scope=scope)
 
-    # basic search params (most servers support these search modifiers)
-    params = {
-        "patient": me.fhir_patient_id,
-        "_sort": "-date",
-        "_count": 50,   # low for demo; UI paginates client-side
-    }
-    # bundle = fhir_search("Appointment", params=params) # TODO: implement FHIR client
-
-    rows: list[AppointmentRow] = []
-    for e in [b["resource"] for b in {"entry": []}]: # Mock data for now
-        start_dt = datetime.fromisoformat(e["start"])
-        is_future = start_dt.date().isoformat() >= today_iso and e["status"] not in {"cancelled", "noshow"}
-
-        if (scope == "upcoming" and not is_future) or (scope == "past" and is_future):
-            continue
-
-        rows.append(
-            AppointmentRow(
-                id=e["id"],
-                date=start_dt.strftime("%d.%m.%Y"),
-                time=start_dt.strftime("%H:%M"),
-                daysUntil=(start_dt.date() - datetime.utcnow().date()).days if is_future else None,
-                description=e.get("description", ""),
-                hospital=e["serviceCategory"][0]["text"] if e.get("serviceCategory") else "",
-                room=e.get("slot", [{}])[0].get("display"),
-                type=e["serviceType"][0]["text"] if e.get("serviceType") else "",
-            )
-        )
-
+    # Map to AppointmentRow DTO
+    rows = []
+    for appt in items:
+        # Extract date and time from appointment_date (DateTime field)
+        appointment_datetime = appt.appointment_date if getattr(appt, 'appointment_date', None) else None
+        date_str = appointment_datetime.strftime("%d.%m.%Y") if appointment_datetime else ""
+        time_str = appointment_datetime.strftime("%H:%M") if appointment_datetime else ""
+        
+        # Get hospital name - check if relationship is loaded, otherwise query separately
+        hospital_name = ""
+        if hasattr(appt, 'hospital') and appt.hospital:
+            hospital_name = appt.hospital.name
+        elif hasattr(appt, 'hospital_id') and appt.hospital_id:
+            # Fallback: query hospital if relationship not loaded
+            from app.common.models.hospital import Hospital
+            hospital = db.query(Hospital).filter(Hospital.id == appt.hospital_id).first()
+            hospital_name = hospital.name if hospital else ""
+        
+        # Get description from reason or notes
+        description = appt.reason or appt.notes or ""
+        
+        # Calculate days until appointment
+        days_until = None
+        if appointment_datetime:
+            today = datetime.now(timezone.utc).date()
+            appt_date = appointment_datetime.date()
+            days_until = (appt_date - today).days
+        
+        rows.append({
+            "id": str(appt.id),
+            "date": date_str,
+            "time": time_str,
+            "daysUntil": days_until,
+            "description": description,
+            "hospital": hospital_name,
+            "room": getattr(appt, 'room_number', None) or "",
+            "type": appt.appointment_type if isinstance(appt.appointment_type, str) else (appt.appointment_type.value if hasattr(appt.appointment_type, 'value') else str(appt.appointment_type)),
+        })
     return rows
 
 
 # ---------------------------------------------------------
 #   PATCH (reschedule / cancel)
 # ---------------------------------------------------------
-class AppointmentPatch(BaseModel):
-    status: Optional[str] = Field(None, pattern="^(cancelled|noshow)$")
-    appointmentDate: Optional[str]
-    appointmentTime: Optional[str]
-    additionalNote: Optional[str]
+AppointmentPatch = _SchemaAppointmentPatch
 
 @router.patch("/{apt_id}", status_code=status.HTTP_200_OK)
 async def update_appointment(
     apt_id: str = Path(...),
     data: AppointmentPatch = Body(...),
-    me: PatientUser = Depends(get_current_patient),
+    me: AuthenticatedUser = Depends(require_patient_access()),
+    db: Session = Depends(get_db),
 ):
-    # appt = fhir_read("Appointment", apt_id) # TODO: implement FHIR client
-    appt = {"id": apt_id, "status": "booked", "start": "2023-10-27T10:00:00Z", "end": "2023-10-27T10:30:00Z", "participant": [{"actor": {"reference": f"Patient/{me.fhir_patient_id}"}, "status": "accepted"}]}
-    # rudimentary ownership check
-    if not any(
-        p.get("actor", {}).get("reference") == f"Patient/{me.fhir_patient_id}"
-        for p in appt.get("participant", [])
-    ):
-        raise HTTPException(403, "Not your appointment")
-
+    """Update an appointment (cancel, reschedule, or update notes)."""
+    patient_id_uuid = UUID(_patient_id_for_user(db, me))
+    
+    # Prepare update data
+    update_data = {}
     if data.status:
-        appt["status"] = data.status
+        update_data["status"] = data.status
     if data.appointmentDate and data.appointmentTime:
-        new_start = datetime.fromisoformat(f"{data.appointmentDate}T{data.appointmentTime}:00").replace(
-            tzinfo=timezone.utc
-        )
-        appt["start"] = new_start.isoformat()
-        appt["end"] = (new_start + timedelta(minutes=30)).isoformat()
+        update_data["appointmentDate"] = data.appointmentDate
+        update_data["appointmentTime"] = data.appointmentTime
     if data.additionalNote is not None:
-        appt["description"] = data.additionalNote
-
-    # fhir_update("Appointment", apt_id, appt) # TODO: implement FHIR client
-    return {"ok": True}
+        update_data["additionalNote"] = data.additionalNote
+    
+    # Update appointment using CRUD function
+    updated = patient_portal_crud.update_appointment(
+        db=db,
+        patient_id=patient_id_uuid,
+        appointment_id=apt_id,
+        update_data=update_data
+    )
+    
+    if not updated:
+        raise HTTPException(status_code=404, detail="Appointment not found or you don't have permission to update it")
+    
+    return {"ok": True, "id": str(updated.id), "status": updated.status}

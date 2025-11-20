@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Navbar from './Navbar';
 import { 
   Filter,
@@ -7,11 +8,18 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
+import { patientRecordsAPI } from '../../services/apiService';
+import { handlePatientAuthError } from '../../utils/patientAuth';
 
 const Records = () => {
+  const navigate = useNavigate();
   const [selectedFilter, setSelectedFilter] = useState('Medical card');
   const [currentPage, setCurrentPage] = useState(1);
-  const recordsPerPage = 10;
+  const [recordsPerPage, setRecordsPerPage] = useState(10);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [records, setRecords] = useState([]);
+  const [total, setTotal] = useState(0);
 
   const filterCategories = [
     { name: 'Medical card', color: 'bg-emerald-400', active: true },
@@ -27,77 +35,49 @@ const Records = () => {
     { name: 'Diagnosis', color: 'bg-gray-100', active: false }
   ];
 
-  const medicalRecords = [
-    {
-      id: 1,
-      date: '03.06.2025',
-      recordType: 'Consultation',
-      description: 'yearly check up',
-      doctor: 'Dr. Abdulla Karimov',
-      hospital: 'Akfa Medline'
-    },
-    {
-      id: 2,
-      date: '03.06.2025',
-      recordType: 'Psychologist',
-      description: 'Anxiety problems',
-      doctor: 'Dr. Parvina Sultanova',
-      hospital: 'Republican Research Center'
-    },
-    {
-      id: 3,
-      date: '15.05.2025',
-      recordType: 'Cardiologist',
-      description: 'Heart examination',
-      doctor: 'Dr. Abdulla Karimov',
-      hospital: 'Akfa Medline'
-    },
-    {
-      id: 4,
-      date: '10.05.2025',
-      recordType: 'Dermatologist',
-      description: 'Skin condition checkup',
-      doctor: 'Dr. Gulnoza Rahimova',
-      hospital: 'Tashkent Medical City'
-    },
-    {
-      id: 5,
-      date: '28.04.2025',
-      recordType: 'Surgery',
-      description: 'Minor surgical procedure',
-      doctor: 'Dr. Rustam Qodirov',
-      hospital: 'Seoul National University Hospital'
-    },
-    {
-      id: 6,
-      date: '20.04.2025',
-      recordType: 'Dentist',
-      description: 'Dental cleaning and checkup',
-      doctor: 'Dr. Nodir Azizov',
-      hospital: 'International Clinic Tashkent'
-    },
-    {
-      id: 7,
-      date: '15.04.2025',
-      recordType: 'Therapist',
-      description: 'Physical therapy session',
-      doctor: 'Dr. Mavluda Sharipova',
-      hospital: 'Akfa Medline'
-    },
-    {
-      id: 8,
-      date: '08.04.2025',
-      recordType: 'Allergist',
-      description: 'Allergy testing and consultation',
-      doctor: 'Dr. Jasur Nabiev',
-      hospital: 'Republican Research Center'
-    }
-  ];
+  const filterMap = {
+    'Medical card': 'all',
+    'Consultations': 'consultation',
+    'Dermatologist': 'imaging',
+    'Cardiologist': 'consultation',
+    'Psychologist': 'consultation',
+    'Allergist': 'lab',
+    'pregnancy': 'document',
+    'Therapist': 'consultation',
+    'Surgery': 'document',
+    'Dentist': 'consultation',
+    'Diagnosis': 'diagnostic'
+  };
 
-  const totalPages = Math.ceil(medicalRecords.length / recordsPerPage);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const recordType = filterMap[selectedFilter] || 'all';
+        const { items, total: t } = await patientRecordsAPI.list({ recordType, page: currentPage, size: recordsPerPage });
+        setRecords(items);
+        setTotal(t);
+      } catch (e) {
+        // Handle authentication errors and redirect if needed
+        if (handlePatientAuthError(e)) {
+          return; // Redirected, exit early
+        }
+        
+        setError(e?.message || 'Failed to load records');
+        setRecords([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [selectedFilter, currentPage, recordsPerPage]);
+
+  const totalPages = Math.max(1, Math.ceil(total / recordsPerPage));
   const startIndex = (currentPage - 1) * recordsPerPage;
-  const endIndex = startIndex + recordsPerPage;
-  const currentRecords = medicalRecords.slice(startIndex, endIndex);
+  const endIndex = Math.min(startIndex + recordsPerPage, total);
+  const currentRecords = records;
 
   const handleFilterChange = (filterName) => {
     setSelectedFilter(filterName);
@@ -134,15 +114,29 @@ const Records = () => {
     return pages;
   };
 
+  const handleSummaryClick = (record) => {
+    // Navigate to the record summary page with the record data
+    navigate(`/patient/records/${record.id}`, { state: { record } });
+  };
+
+  const handleDownload = async (record) => {
+    try {
+      await patientRecordsAPI.download(record.id);
+    } catch (err) {
+      console.error('Error downloading record:', err);
+      alert('Failed to download record. Please try again.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
       {/* Navigation Bar */}
       <Navbar />
 
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-8">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+        <div className="flex gap-6">
           {/* Left Sidebar - Filters */}
-          <div className="lg:col-span-1">
+          <div className="w-80 flex-shrink-0">
             <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
               <div className="flex items-center space-x-2 mb-4 sm:mb-6">
                 <Filter className="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400" />
@@ -169,16 +163,22 @@ const Records = () => {
             </div>
           </div>
 
-          {/* Right Content - Medical Records */}
-          <div className="lg:col-span-3">
+          {/* Main Content Area - Records */}
+          <div className="flex-1 min-w-0">
             <div className="bg-white rounded-xl shadow-lg overflow-hidden">
               {/* Header */}
               <div className="bg-emerald-400 px-4 sm:px-6 py-3 sm:py-4">
-                <h2 className="text-lg sm:text-xl font-semibold text-white">Medical card</h2>
+                <h2 className="text-lg sm:text-xl font-semibold text-white">{selectedFilter}</h2>
               </div>
 
               {/* Table */}
               <div className="overflow-x-auto">
+                {error && (
+                  <div className="px-4 py-3 text-sm text-red-700 bg-red-100 border-b border-red-200">{error}</div>
+                )}
+                {loading && !error && (
+                  <div className="px-4 py-3 text-sm text-gray-600 border-b">Loading records...</div>
+                )}
                 <table className="w-full">
                   <thead className="bg-emerald-100">
                     <tr>
@@ -189,6 +189,11 @@ const Records = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
+                    {(!loading && currentRecords.length === 0) && (
+                      <tr>
+                        <td colSpan={4} className="px-3 sm:px-6 py-6 text-center text-sm text-gray-500">No records found</td>
+                      </tr>
+                    )}
                     {currentRecords.map((record, index) => (
                       <tr key={record.id} className={`${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-emerald-50 transition-colors`}>
                         <td className="px-3 sm:px-6 py-3 sm:py-4 text-xs sm:text-sm text-gray-800 font-medium">
@@ -209,11 +214,17 @@ const Records = () => {
                         </td>
                         <td className="px-3 sm:px-6 py-3 sm:py-4">
                           <div className="flex flex-col sm:flex-row justify-center space-y-1 sm:space-y-0 sm:space-x-2">
-                            <button className="bg-emerald-400 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-emerald-500 transition-colors text-xs sm:text-sm font-medium flex items-center justify-center space-x-1">
+                            <button 
+                              onClick={() => handleSummaryClick(record)}
+                              className="bg-emerald-400 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-emerald-500 transition-colors text-xs sm:text-sm font-medium flex items-center justify-center space-x-1"
+                            >
                               <FileText className="h-2 w-2 sm:h-3 sm:w-3" />
                               <span>summary</span>
                             </button>
-                            <button className="bg-gray-400 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-gray-500 transition-colors text-xs sm:text-sm font-medium flex items-center justify-center space-x-1">
+                            <button 
+                              onClick={() => handleDownload(record)}
+                              className="bg-gray-400 text-white px-2 sm:px-3 py-1 sm:py-1.5 rounded-md hover:bg-gray-500 transition-colors text-xs sm:text-sm font-medium flex items-center justify-center space-x-1"
+                            >
                               <Download className="h-2 w-2 sm:h-3 sm:w-3" />
                               <span>download</span>
                             </button>
@@ -229,7 +240,7 @@ const Records = () => {
               <div className="bg-gray-50 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
                   <div className="text-xs sm:text-sm text-gray-500 text-center sm:text-left">
-                    Showing {startIndex + 1} to {Math.min(endIndex, medicalRecords.length)} of {medicalRecords.length} records
+                    Showing {total === 0 ? 0 : startIndex + 1} to {endIndex} of {total} records
                   </div>
                   
                   <div className="flex items-center justify-center space-x-1 sm:space-x-2">

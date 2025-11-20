@@ -1,8 +1,8 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.db.database import Base
+from app.db.base_class import Base
 from app.main import app
-from app.db.database import get_db
+from app.db.session import get_db
 
 # 🚫 Don't touch your production DB — use SQLite in-memory
 SQLALCHEMY_TEST_DB_URL = "sqlite:///./test.db"  # or use sqlite:///:memory:

@@ -4,9 +4,10 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { ReceptionistHeader } from './ReceptionHeader';
 import { User, Phone, Mail, MapPin, UserPlus, Search, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { receptionAPI } from '../../services/apiService';
 
-// Configure axios base URL
-const API_BASE_URL = 'http://localhost:8000/api/v1';
+// Configure axios base URL (fallback); centralized calls use receptionAPI
+const API_BASE_URL = import.meta.env.VITE_API_URL ? `${import.meta.env.VITE_API_URL}/api/v1` : 'http://localhost:8000/api/v1';
 
 const PatientRegister = () => {
   const [form, setForm] = useState({
@@ -30,29 +31,26 @@ const PatientRegister = () => {
   // REAL API CALL - Fetch patients
   useEffect(() => {
     fetchPatients();
-  }, []);
+  }, [searchTerm]); // Refetch when search term changes
 
   const fetchPatients = async () => {
     try {
-      const response = await axios.get(`${API_BASE_URL}/patients`, {
-        params: {
-          page: 1,
-          size: 50,
-          search: searchTerm
-        }
-      });
-      
-      // Transform backend response to match frontend expectation
-      const transformedPatients = response.data.map(patient => ({
-        id: patient.id,
-        full_name: `${patient.first_name} ${patient.last_name}`.trim(),
-        date_of_birth: patient.date_of_birth
-      }));
-      
-      setPatients(transformedPatients);
+      setIsLoading(true)
+      // Use the new comprehensive patients list endpoint
+      const patientsList = await receptionAPI.getPatientsList(searchTerm)
+      const transformedPatients = (patientsList || []).map(p => ({ 
+        id: p.id, 
+        full_name: p.full_name, 
+        date_of_birth: p.date_of_birth,
+        phone_number: p.phone_number,
+        email: p.email
+      }))
+      setPatients(transformedPatients)
     } catch (err) {
-      console.error('Failed to fetch patients:', err);
-      setPatients([]); // Set empty array on error
+      console.error('Failed to fetch patients:', err)
+      setPatients([])
+    } finally {
+      setIsLoading(false)
     }
   };
 
@@ -76,7 +74,9 @@ const PatientRegister = () => {
     setIsLoading(true);
     
     try {
-      const response = await axios.post(`${API_BASE_URL}/patients/register`, form);
+      const clinicId = localStorage.getItem('clinic_id') || 'default-clinic'
+      const payload = { ...form, clinic_id: clinicId }
+      await receptionAPI.registerPatient(payload)
       
       setSuccess(true);
       showMessage('Patient registered successfully!', 'success');
@@ -122,22 +122,13 @@ const PatientRegister = () => {
 
     setIsLoading(true);
     try {
-      // First, search for the patient
-      const searchResponse = await axios.get(`${API_BASE_URL}/patients/search`, {
-        params: {
-          full_name: form.full_name,
-          date_of_birth: form.date_of_birth,
-          pinfl: form.pinfl,
-        }
-      });
-      
-      if (searchResponse.data?.id) {
-        // Patient found, send invitation
-        const inviteResponse = await axios.post(`${API_BASE_URL}/patients/invite`, {
-          patient_id: searchResponse.data.id
-        });
-        
-        showMessage('Invitation sent to patient successfully!', 'success');
+      const clinicId = localStorage.getItem('clinic_id') || 'default-clinic'
+      const searchResp = await receptionAPI.searchPatients({ clinicId, q: form.full_name || '', pinfl: form.pinfl || '', phone: form.phone_number || '' })
+      const items = searchResp?.data || searchResp?.items || searchResp?.results || []
+      if (items.length) {
+        showMessage('Patient exists in the system.', 'success')
+      } else {
+        showMessage('No patient found with the provided information.', 'warning')
       }
       
     } catch (err) {
@@ -180,11 +171,14 @@ const PatientRegister = () => {
     <div className="min-h-screen bg-gray-50">
       <ReceptionistHeader />
 
-      <div className="flex flex-col lg:flex-row max-w-screen-xl mx-auto px-2 sm:px-4 py-6 sm:py-10 gap-4 sm:gap-8">
-        {/* Enhanced Sidebar */}
-        <div className="lg:w-1/4 bg-white rounded-xl shadow-sm border border-gray-100 h-fit">
-          <div className="p-3 sm:p-4 border-b border-gray-100">
-            <h3 className="text-base sm:text-lg font-semibold text-[#4DB6B0] mb-3">Registered Patients</h3>
+      <div className="flex flex-row max-w-screen-2xl mx-auto px-2 sm:px-4 py-6 sm:py-10 gap-4 sm:gap-6">
+        {/* Fixed Width Left Sidebar - Patient List */}
+        <div className="w-80 flex-shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 h-fit sticky top-6">
+          <div className="p-4 border-b border-gray-100">
+            <h3 className="text-lg font-semibold text-[#4DB6B0] mb-3 flex items-center gap-2">
+              <User className="w-5 h-5" />
+              Patient List
+            </h3>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
@@ -193,18 +187,21 @@ const PatientRegister = () => {
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-                  fetchPatients(); // Refresh search results
+                  // Debounce: fetchPatients will be called via useEffect when searchTerm changes
                 }}
                 className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
               />
             </div>
           </div>
           
-          <div className="p-3 sm:p-4 max-h-96 overflow-y-auto">
+          <div className="p-4 max-h-[calc(100vh-250px)] overflow-y-auto">
             {filteredPatients.length > 0 ? (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {filteredPatients.map((p) => (
-                  <div key={p.id} className="border border-gray-100 rounded-lg p-3 text-sm hover:bg-gray-50 transition-colors cursor-pointer">
+                  <div 
+                    key={p.id} 
+                    className="border border-gray-100 rounded-lg p-3 hover:bg-gray-50 hover:border-[#4DB6B0] transition-colors cursor-pointer"
+                  >
                     <div className="font-medium text-gray-800 text-sm">{p.full_name}</div>
                     <div className="text-gray-500 text-xs mt-1">{p.date_of_birth}</div>
                   </div>
@@ -219,8 +216,8 @@ const PatientRegister = () => {
           </div>
         </div>
 
-        {/* Enhanced Form Panel */}
-        <div className="lg:w-3/4">
+        {/* Main Content Area - Registration Form */}
+        <div className="flex-1 min-w-0 w-full">
           <div className="flex items-center gap-3 mb-4 sm:mb-6">
             <UserPlus className="w-5 h-5 sm:w-6 sm:h-6 text-[#4DB6B0]" />
             <h2 className="text-xl sm:text-2xl font-bold text-[#4DB6B0]">Register New Patient</h2>

@@ -1,0 +1,2720 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { medicationsAPI, icdCodesAPI } from '../../../services/apiService';
+
+// Shared UI primitives (reusing from other report forms)
+const Card = React.memo(({ children, className = "", collapsible = false, isOpen = true, onToggle, title, counter }) => (
+  <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm ${className}`}>
+    {title && (
+      <div 
+        className="p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50"
+        onClick={collapsible ? onToggle : undefined}
+      >
+        <div className="flex items-center justify-between">
+          <h3 className="text-slate-800 font-semibold text-lg">
+            {title}
+            {counter !== undefined && <span className="text-slate-400 ml-2">({counter})</span>}
+          </h3>
+          {collapsible && (
+            <span className="text-slate-400 text-sm">
+              {isOpen ? '▼' : '▶'}
+            </span>
+          )}
+        </div>
+      </div>
+    )}
+    {isOpen && (
+      <div className="p-4">
+        {children}
+      </div>
+    )}
+  </div>
+));
+
+const FieldLabel = React.memo(({ children, required = false }) => (
+  <label className="block text-sm font-medium text-slate-700 mb-2">
+    {children}
+    {required && <span className="text-red-500 ml-1">*</span>}
+  </label>
+));
+
+const Input = React.memo(({ name, placeholder, value, onChange, className = "", type = "text", required = false }) => (
+  <input
+    type={type}
+    name={name}
+    placeholder={placeholder}
+    value={value}
+    onChange={onChange}
+    required={required}
+    className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${className}`}
+  />
+));
+
+const Select = React.memo(({ name, value, onChange, options, className = "", required = false }) => (
+  <select
+    name={name}
+    value={value}
+    onChange={onChange}
+    required={required}
+    className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${className}`}
+  >
+    <option value="">Select...</option>
+    {options.map(option => (
+      <option key={option.value} value={option.value}>
+        {option.label}
+      </option>
+    ))}
+  </select>
+));
+
+const TextArea = React.memo(({ name, placeholder, value, onChange, className = "", rows = 3, required = false }) => (
+  <textarea
+    name={name}
+    placeholder={placeholder}
+    value={value}
+    onChange={onChange}
+    rows={rows}
+    required={required}
+    className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-vertical ${className}`}
+  />
+));
+
+const Chip = React.memo(({ children, onRemove, onEdit, className = "" }) => (
+  <div className={`inline-flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm ${className}`}>
+    <span>{children}</span>
+    {onEdit && (
+      <button
+        type="button"
+        onClick={onEdit}
+        className="text-slate-500 hover:text-slate-700"
+        aria-label="Edit"
+      >
+        ✎
+      </button>
+    )}
+    {onRemove && (
+      <button
+        type="button"
+        onClick={onRemove}
+        className="text-slate-500 hover:text-red-600"
+        aria-label="Remove"
+      >
+        ×
+      </button>
+    )}
+  </div>
+));
+
+// ICD Code Search Component
+const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search ICD code or description..." }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const searchRef = useRef(null);
+  const resultsRef = useRef(null);
+  const debounceTimer = useRef(null);
+
+  // Debounced search
+  useEffect(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    debounceTimer.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await icdCodesAPI.search(searchQuery, 'ICD-11', 20);
+        setSearchResults(response?.results || []);
+        setShowResults(true);
+        setSelectedIndex(-1);
+      } catch (error) {
+        console.error('ICD code search error:', error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [searchQuery]);
+
+  // Close results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (resultsRef.current && !resultsRef.current.contains(event.target) &&
+          searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (icdCode) => {
+    setSearchQuery('');
+    setShowResults(false);
+    if (onSelect) {
+      onSelect({
+        code: icdCode.code,
+        term: icdCode.description_en || icdCode.description_ru || icdCode.description_uz || icdCode.description || icdCode.name || ''
+      });
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (!showResults || searchResults.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > 0 ? prev - 1 : -1));
+    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      e.preventDefault();
+      handleSelect(searchResults[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      setShowResults(false);
+    }
+  };
+
+  return (
+    <div className="relative flex-1" ref={resultsRef}>
+      <div className="relative" ref={searchRef}>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onFocus={() => searchQuery.trim().length >= 2 && setShowResults(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className="w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+        />
+        {isSearching && (
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-emerald-500"></div>
+          </div>
+        )}
+      </div>
+      
+      {showResults && searchResults.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {searchResults.map((result, index) => (
+            <button
+              key={result.id || result.code}
+              type="button"
+              onClick={() => handleSelect(result)}
+              className={`w-full text-left px-4 py-2 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none ${
+                index === selectedIndex ? 'bg-emerald-50' : ''
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <span className="font-mono text-sm text-emerald-600 font-medium min-w-[100px]">
+                  {result.code}
+                </span>
+                <span className="text-sm text-slate-700 flex-1">
+                  {result.description_en || result.description_ru || result.description_uz || result.description || result.name || 'No description'}
+                </span>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Medication Search Component
+const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Search medication..." }) => {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const searchRef = useRef(null);
+  const resultsRef = useRef(null);
+  const debounceTimer = useRef(null);
+
+  // Debounced search
+  useEffect(() => {
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
+    }
+
+    if (searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    debounceTimer.current = setTimeout(async () => {
+      setIsSearching(true);
+      try {
+        const response = await medicationsAPI.search(searchQuery, 20);
+        const results = response.products || response.data?.products || [];
+        setSearchResults(results);
+        setShowResults(true);
+        setSelectedIndex(-1);
+      } catch (error) {
+        console.error('Medication search error:', error);
+        setSearchResults([]);
+      } finally {
+        setIsSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
+  }, [searchQuery]);
+
+  // Close results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (resultsRef.current && !resultsRef.current.contains(event.target) &&
+          searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (medication) => {
+    setSearchQuery('');
+    setShowResults(false);
+    if (onSelect) {
+      onSelect({
+        med: medication.brand_name || medication.name || '',
+        strength: medication.strength || '',
+        mnn: medication.mnn?.name || '',
+        form: medication.dosage_form?.name || ''
+      });
+    }
+    if (onChange) {
+      onChange({
+        target: { value: medication.brand_name || medication.name || '' }
+      });
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (!showResults || searchResults.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev < searchResults.length - 1 ? prev + 1 : prev));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSelectedIndex(prev => (prev > 0 ? prev - 1 : -1));
+    } else if (e.key === 'Enter' && selectedIndex >= 0) {
+      e.preventDefault();
+      handleSelect(searchResults[selectedIndex]);
+    } else if (e.key === 'Escape') {
+      setShowResults(false);
+    }
+  };
+
+  return (
+    <div className="relative flex-1" ref={resultsRef}>
+      <div className="relative" ref={searchRef}>
+        <input
+          type="text"
+          value={value || searchQuery}
+          onChange={(e) => {
+            setSearchQuery(e.target.value);
+            if (onChange) {
+              onChange(e);
+            }
+          }}
+          onFocus={() => searchQuery.trim().length >= 2 && setShowResults(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className="w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+        />
+        {isSearching && (
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-emerald-500"></div>
+          </div>
+        )}
+      </div>
+      
+      {showResults && searchResults.length > 0 && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          {searchResults.map((result, index) => (
+            <button
+              key={result.id || index}
+              type="button"
+              onClick={() => handleSelect(result)}
+              className={`w-full text-left px-4 py-2 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none ${
+                index === selectedIndex ? 'bg-emerald-50' : ''
+              }`}
+            >
+              <div className="flex items-start gap-2">
+                <span className="font-medium text-sm text-emerald-700 flex-1">
+                  {result.brand_name || result.name || 'Unknown'}
+                </span>
+                {result.strength && (
+                  <span className="text-xs text-slate-500">
+                    {result.strength} {result.strength_unit?.name || ''}
+                  </span>
+                )}
+              </div>
+              {result.mnn?.name && (
+                <div className="text-xs text-slate-500 mt-1">
+                  MNN: {result.mnn.name}
+                </div>
+              )}
+              {result.dosage_form?.name && (
+                <div className="text-xs text-slate-500">
+                  Form: {result.dosage_form.name}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Utility function for deep cloning
+const clone = (obj) => {
+  try {
+    return structuredClone(obj);
+  } catch {
+    return JSON.parse(JSON.stringify(obj));
+  }
+};
+
+// OHIF URL helper
+const getOhifUrl = (studyUid) => {
+  if (!studyUid) return '';
+  return `https://ohif-viewer.example.com/viewer?studyUID=${studyUid}`;
+};
+
+// Module-scope presets
+const CHIEF_COMPLAINT_PRESETS = [
+  "nasal congestion", "sneezing", "itchy eyes", "skin rash", "urticaria",
+  "angioedema", "wheezing", "food reaction", "drug reaction", "insect sting",
+  "latex allergy", "anaphylaxis"
+];
+
+const FOOD_TRIGGERS = [
+  "milk", "egg", "peanut", "tree nuts", "fish", "shellfish", "soy", "wheat",
+  "sesame", "kiwi", "buckwheat"
+];
+
+const AEROALLERGENS = [
+  "dust mite", "cat", "dog", "birch", "ragweed", "mugwort", "grass mix",
+  "alder", "Alternaria", "Cladosporium"
+];
+
+const DRUG_TRIGGERS = [
+  "penicillin", "cephalosporin", "NSAID", "contrast media", "chemotherapy"
+];
+
+const INSECT_VENOM = [
+  "wasp", "bee", "hornet", "bumblebee"
+];
+
+const AVOIDANCE_ADVICE = [
+  "dust mite control", "saline nasal rinses", "HEPA filter", "no pets in bedroom",
+  "encase bedding", "mold remediation", "food/symptom diary"
+];
+
+const EDUCATION_TOPICS = [
+  "intranasal spray technique", "skin care (emollients)", "anaphylaxis action plan",
+  "auto-injector training", "asthma control steps"
+];
+
+const REFERRAL_PRESETS = [
+  "pulmonology", "dermatology", "ent", "gastro", "immunology_lab"
+];
+
+const BIOLOGICS_PRESETS = [
+  "omalizumab", "dupilumab", "mepolizumab", "benralizumab", "reslizumab", "tezepelumab"
+];
+
+const FOLLOW_UP_OPTIONS = ['48h', '1w', '1m', '3m', '6m', 'PRN', 'date'];
+
+const DIAGNOSIS_CODE_PRESETS = [
+  { system: 'ICD10', code: 'J30.9', term: 'Allergic rhinitis, unspecified' },
+  { system: 'ICD10', code: 'L50.9', term: 'Urticaria, unspecified' },
+  { system: 'ICD10', code: 'T78.4', term: 'Allergy, unspecified' },
+  { system: 'ICD10', code: 'J45.9', term: 'Asthma, unspecified' }
+];
+
+const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
+  // Mode state
+  const [mode, setMode] = useState('initial');
+
+  // Collapsed sections state
+  const [collapsedSections, setCollapsedSections] = useState({
+    scores: false,
+    hpi: false,
+    vitals: false,
+    exam: false,
+    tests: false,
+    diagnosis: false,
+    plan: false,
+    procedures: false,
+    outcome: false,
+    attachments: false
+  });
+
+  // Form data state
+  const [formData, setFormData] = useState({
+    doc_type: 'allergy.initial',
+    meta: {
+      clinic_id: '',
+      department_id: 'allergy_immunology',
+      physician_id: '',
+      patient_id: '',
+      encounter_id: '',
+      datetime: ''
+    },
+    chief_complaint: '',
+    scores: {
+      rcat: { total: '' },
+      act: { total: '' },
+      uas7: { total: '' }
+    },
+    hpi: {
+      onset: '',
+      duration: '',
+      course: '',
+      index_exposure_time: '',
+      last_reaction_time: '',
+      latency_to_symptoms: '',
+      triggers: {
+        food: [],
+        drug: [],
+        insect: [],
+        latex: false,
+        aeroallergens: [],
+        contact: [],
+        cold: false,
+        exercise: false,
+        nsaid: false,
+        alcohol: false
+      },
+      reaction_pattern: {
+        ige_mediated: false,
+        non_ige: false,
+        mixed: false
+      },
+      systems_involved: {
+        skin: false,
+        gi: false,
+        respiratory_upper: false,
+        respiratory_lower: false,
+        cv: false,
+        neuro: false
+      },
+      symptom_details: '',
+      anaphylaxis: {
+        occurred: false,
+        grade: '',
+        epinephrine_given: false,
+        ed_visit: false,
+        tryptase_acute: '',
+        tryptase_baseline: ''
+      },
+      atopic_history: {
+        asthma: false,
+        allergic_rhinitis: false,
+        atopic_dermatitis: false,
+        food_allergy: false,
+        chronic_urticaria: false,
+        nasal_polyps: false,
+        eoe: false
+      },
+      occupational_exposure: '',
+      home_env: {
+        pets: false,
+        smoke_exposure: false,
+        dust_mites_mattress: false,
+        visible_mold: false,
+        seasonality: 'none'
+      },
+      meds_current: '',
+      meds_contra: '',
+      allergies_noted: '',
+      pmh: '',
+      psh: '',
+      family: '',
+      social: ''
+    },
+    vitals: {
+      bp: '',
+      hr: '',
+      temp: '',
+      spo2: '',
+      height_cm: '',
+      weight_kg: '',
+      bmi: ''
+    },
+    exam: {
+      skin: '',
+      eyes: '',
+      nose: '',
+      throat: '',
+      lungs: '',
+      heart: '',
+      abdomen: '',
+      skin_urticaria: '',
+      angioedema: '',
+      ad_severity: '',
+      nasal_findings: '',
+      wheeze: ''
+    },
+    tests: {
+      spt: [],
+      idt: [],
+      specific_ige: [],
+      total_ige: '',
+      eos_abs: '',
+      tryptase_baseline: '',
+      feNO_ppb: '',
+      spirometry: {
+        fev1_pct: '',
+        fev1_fvc: '',
+        bronchodilator_response: '',
+        date: ''
+      },
+      peak_flow: {
+        best_l_min: '',
+        variability_pct: ''
+      },
+      labs_other: '',
+      challenge: [],
+      desensitization: [],
+      imaging: [],
+      imaging_links: [],
+      referenced_docs: []
+    },
+    diagnosis: {
+      main: '',
+      secondary: [],
+      codes: []
+    },
+    plan: {
+      meds: [],
+      avoidance: [],
+      emergency_action_plan: {
+        epinephrine_auto_injector_prescribed: false,
+        dose_mg: '',
+        devices: '0',
+        training_provided: false,
+        written_plan_given: false
+      },
+      immunotherapy: {
+        candidate: false,
+        modality: 'None',
+        allergens: [],
+        start_date: '',
+        build_up_scheme: '',
+        maintenance_interval_w: '',
+        expected_duration_y: ''
+      },
+      biologics: [],
+      education: [],
+      vaccinations: [],
+      referrals: [],
+      follow_up: '',
+      follow_up_date: ''
+    },
+    procedures_done: [],
+    outcome: {
+      condition: '',
+      course: ''
+    },
+    recommendations: [],
+    attachments: []
+  });
+
+  // Error state
+  const [errors, setErrors] = useState({});
+
+  // Autosave state
+  const [lastSaved, setLastSaved] = useState(null);
+  const [showSaveToast, setShowSaveToast] = useState(false);
+  const payloadRef = useRef(null);
+
+  // Smart editor states
+  const [editingMed, setEditingMed] = useState(null);
+  const [editingMedIdx, setEditingMedIdx] = useState(null);
+  const [editingSPT, setEditingSPT] = useState(null);
+  const [editingSPTIdx, setEditingSPTIdx] = useState(null);
+  const [editingIDT, setEditingIDT] = useState(null);
+  const [editingIDTIdx, setEditingIDTIdx] = useState(null);
+  const [editingIgE, setEditingIgE] = useState(null);
+  const [editingIgEIdx, setEditingIgEIdx] = useState(null);
+  const [editingChallenge, setEditingChallenge] = useState(null);
+  const [editingChallengeIdx, setEditingChallengeIdx] = useState(null);
+  const [editingDesensitization, setEditingDesensitization] = useState(null);
+  const [editingDesensitizationIdx, setEditingDesensitizationIdx] = useState(null);
+  const [editingProcedure, setEditingProcedure] = useState(null);
+  const [editingProcedureIdx, setEditingProcedureIdx] = useState(null);
+  const [newCode, setNewCode] = useState({ system: '', code: '', term: '' });
+
+  // Mock available imaging
+  const [availableImaging] = useState([
+    { study_uid: '1.2.3.4.5', description: 'Chest X-ray', date: '2024-01-15' },
+    { study_uid: '1.2.3.4.6', description: 'Sinus CT', date: '2024-01-15' }
+  ]);
+
+  // Helper function to update form data
+  const updateFormData = useCallback((path, value) => {
+    setFormData(prev => {
+      const newData = clone(prev);
+      const keys = path.split('.');
+      let current = newData;
+      
+      for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i];
+        if (!(key in current) || typeof current[key] !== 'object') {
+          current[key] = {};
+        }
+        current = current[key];
+      }
+      
+      current[keys[keys.length - 1]] = value;
+      return newData;
+    });
+  }, []);
+
+  // Helper functions for array operations
+  const addToArray = useCallback((path, item) => {
+    setFormData(prev => {
+      const newData = clone(prev);
+      const keys = path.split('.');
+      let current = newData;
+      
+      for (const key of keys) {
+        if (!(key in current) || !Array.isArray(current[key])) {
+          current[key] = [];
+        }
+        current = current[key];
+      }
+      
+      current.push(item);
+      return newData;
+    });
+  }, []);
+
+  const removeFromArray = useCallback((path, index) => {
+    setFormData(prev => {
+      const newData = clone(prev);
+      const keys = path.split('.');
+      let current = newData;
+      
+      for (const key of keys) {
+        current = current[key];
+      }
+      
+      current.splice(index, 1);
+      return newData;
+    });
+  }, []);
+
+  const toggleSection = useCallback((section) => {
+    setCollapsedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  }, []);
+
+  // Initialize meta from props
+  useEffect(() => {
+    if (patient || encounter) {
+      setFormData(prev => ({
+        ...prev,
+        meta: {
+          ...prev.meta,
+          patient_id: patient?.patient_id || prev.meta.patient_id,
+          encounter_id: encounter?.id || prev.meta.encounter_id,
+          clinic_id: encounter?.clinic_id || prev.meta.clinic_id || 'clinic-001',
+          physician_id: encounter?.doctor_id || prev.meta.physician_id || 'doctor-001',
+          datetime: encounter?.datetime || prev.meta.datetime || new Date().toISOString()
+        },
+        vitals: {
+          ...prev.vitals,
+          height_cm: patient?.height_cm ? String(patient.height_cm) : prev.vitals.height_cm,
+          weight_kg: patient?.weight_kg ? String(patient.weight_kg) : prev.vitals.weight_kg
+        }
+      }));
+    }
+  }, [patient, encounter]);
+
+  // Auto-calculate BMI
+  useEffect(() => {
+    const height = parseFloat(formData.vitals.height_cm);
+    const weight = parseFloat(formData.vitals.weight_kg);
+    if (height > 0 && weight > 0) {
+      const bmi = (weight / ((height / 100) ** 2)).toFixed(1);
+      updateFormData('vitals.bmi', bmi);
+    }
+  }, [formData.vitals.height_cm, formData.vitals.weight_kg, updateFormData]);
+
+  // Update doc_type when mode changes
+  useEffect(() => {
+    setFormData(prev => ({
+      ...prev,
+      doc_type: mode === 'initial' ? 'allergy.initial' : 'allergy.discharge'
+    }));
+  }, [mode]);
+
+  // Smart editor helpers for medications
+  const openMedEditor = useCallback((med = null, idx = null) => {
+    if (med) {
+      setEditingMed(clone(med));
+      setEditingMedIdx(idx);
+    } else {
+      setEditingMed({
+        med: '',
+        conc_strength: '',
+        route: '',
+        freq: '',
+        duration: '',
+        instructions: '',
+        sendToPharmacy: false,
+        pharmacyId: ''
+      });
+      setEditingMedIdx(null);
+    }
+  }, []);
+
+  const saveMed = useCallback(() => {
+    if (!editingMed?.med) return;
+    
+    const newMeds = clone(formData.plan.meds);
+    if (editingMedIdx !== null) {
+      newMeds[editingMedIdx] = editingMed;
+    } else {
+      newMeds.push(editingMed);
+    }
+    updateFormData('plan.meds', newMeds);
+    setEditingMed(null);
+    setEditingMedIdx(null);
+  }, [editingMed, editingMedIdx, formData.plan.meds, updateFormData]);
+
+  const removeMed = useCallback((idx) => {
+    removeFromArray('plan.meds', idx);
+  }, [removeFromArray]);
+
+  // Smart editor helpers for test procedures
+  const openSPTEditor = useCallback((spt = null, idx = null) => {
+    if (spt) {
+      setEditingSPT(clone(spt));
+      setEditingSPTIdx(idx);
+    } else {
+      setEditingSPT({
+        allergen_group: '',
+        allergen: '',
+        wheal_mm: '',
+        flare_mm: '',
+        control_histamine_mm: '',
+        date: ''
+      });
+      setEditingSPTIdx(null);
+    }
+  }, []);
+
+  const saveSPT = useCallback(() => {
+    if (!editingSPT?.allergen) return;
+    const newSPT = clone(formData.tests.spt);
+    if (editingSPTIdx !== null) {
+      newSPT[editingSPTIdx] = editingSPT;
+    } else {
+      newSPT.push(editingSPT);
+    }
+    updateFormData('tests.spt', newSPT);
+    setEditingSPT(null);
+    setEditingSPTIdx(null);
+  }, [editingSPT, editingSPTIdx, formData.tests.spt, updateFormData]);
+
+  const openIDTEditor = useCallback((idt = null, idx = null) => {
+    if (idt) {
+      setEditingIDT(clone(idt));
+      setEditingIDTIdx(idx);
+    } else {
+      setEditingIDT({
+        allergen: '',
+        dilution: '',
+        wheal_mm: '',
+        date: ''
+      });
+      setEditingIDTIdx(null);
+    }
+  }, []);
+
+  const saveIDT = useCallback(() => {
+    if (!editingIDT?.allergen) return;
+    const newIDT = clone(formData.tests.idt);
+    if (editingIDTIdx !== null) {
+      newIDT[editingIDTIdx] = editingIDT;
+    } else {
+      newIDT.push(editingIDT);
+    }
+    updateFormData('tests.idt', newIDT);
+    setEditingIDT(null);
+    setEditingIDTIdx(null);
+  }, [editingIDT, editingIDTIdx, formData.tests.idt, updateFormData]);
+
+  const openIgEEditor = useCallback((ige = null, idx = null) => {
+    if (ige) {
+      setEditingIgE(clone(ige));
+      setEditingIgEIdx(idx);
+    } else {
+      setEditingIgE({
+        allergen: '',
+        value_kua_l: '',
+        class_0_6: '',
+        date: ''
+      });
+      setEditingIgEIdx(null);
+    }
+  }, []);
+
+  const saveIgE = useCallback(() => {
+    if (!editingIgE?.allergen) return;
+    const newIgE = clone(formData.tests.specific_ige);
+    if (editingIgEIdx !== null) {
+      newIgE[editingIgEIdx] = editingIgE;
+    } else {
+      newIgE.push(editingIgE);
+    }
+    updateFormData('tests.specific_ige', newIgE);
+    setEditingIgE(null);
+    setEditingIgEIdx(null);
+  }, [editingIgE, editingIgEIdx, formData.tests.specific_ige, updateFormData]);
+
+  const openChallengeEditor = useCallback((challenge = null, idx = null) => {
+    if (challenge) {
+      setEditingChallenge(clone(challenge));
+      setEditingChallengeIdx(idx);
+    } else {
+      setEditingChallenge({
+        type: '',
+        protocol: '',
+        outcome: '',
+        reactions: '',
+        stopped_due_to: '',
+        date: ''
+      });
+      setEditingChallengeIdx(null);
+    }
+  }, []);
+
+  const saveChallenge = useCallback(() => {
+    if (!editingChallenge?.type || !editingChallenge?.date) return;
+    const newChallenge = clone(formData.tests.challenge);
+    if (editingChallengeIdx !== null) {
+      newChallenge[editingChallengeIdx] = editingChallenge;
+    } else {
+      newChallenge.push(editingChallenge);
+    }
+    updateFormData('tests.challenge', newChallenge);
+    setEditingChallenge(null);
+    setEditingChallengeIdx(null);
+  }, [editingChallenge, editingChallengeIdx, formData.tests.challenge, updateFormData]);
+
+  const openDesensitizationEditor = useCallback((desens = null, idx = null) => {
+    if (desens) {
+      setEditingDesensitization(clone(desens));
+      setEditingDesensitizationIdx(idx);
+    } else {
+      setEditingDesensitization({
+        agent: '',
+        protocol: '',
+        premeds: '',
+        outcome: '',
+        reactions: '',
+        date: ''
+      });
+      setEditingDesensitizationIdx(null);
+    }
+  }, []);
+
+  const saveDesensitization = useCallback(() => {
+    if (!editingDesensitization?.agent || !editingDesensitization?.date) return;
+    const newDesens = clone(formData.tests.desensitization);
+    if (editingDesensitizationIdx !== null) {
+      newDesens[editingDesensitizationIdx] = editingDesensitization;
+    } else {
+      newDesens.push(editingDesensitization);
+    }
+    updateFormData('tests.desensitization', newDesens);
+    setEditingDesensitization(null);
+    setEditingDesensitizationIdx(null);
+  }, [editingDesensitization, editingDesensitizationIdx, formData.tests.desensitization, updateFormData]);
+
+  const openProcedureEditor = useCallback((proc = null, idx = null) => {
+    if (proc) {
+      setEditingProcedure(clone(proc));
+      setEditingProcedureIdx(idx);
+    } else {
+      setEditingProcedure({
+        name: '',
+        date: '',
+        setting: '',
+        premeds: '',
+        technique: '',
+        findings: '',
+        result: '',
+        adverse_events: ''
+      });
+      setEditingProcedureIdx(null);
+    }
+  }, []);
+
+  const saveProcedure = useCallback(() => {
+    if (!editingProcedure?.name || !editingProcedure?.date) return;
+    const newProcs = clone(formData.procedures_done);
+    if (editingProcedureIdx !== null) {
+      newProcs[editingProcedureIdx] = editingProcedure;
+    } else {
+      newProcs.push(editingProcedure);
+    }
+    updateFormData('procedures_done', newProcs);
+    setEditingProcedure(null);
+    setEditingProcedureIdx(null);
+  }, [editingProcedure, editingProcedureIdx, formData.procedures_done, updateFormData]);
+
+  const removeProcedure = useCallback((idx) => {
+    removeFromArray('procedures_done', idx);
+  }, [removeFromArray]);
+
+  // OHIF imaging helpers
+  const addImagingToReport = useCallback((study) => {
+    const link = {
+      modality: study.modality || '',
+      date: study.date || '',
+      description: study.description || '',
+      study_uid: study.study_uid || '',
+      ohif_url: getOhifUrl(study.study_uid),
+      attach: 'reference_only',
+      note: ''
+    };
+    addToArray('tests.imaging_links', link);
+  }, [addToArray]);
+
+  const removeImagingFromReport = useCallback((idx) => {
+    removeFromArray('tests.imaging_links', idx);
+  }, [removeFromArray]);
+
+  const openImagingViewer = useCallback((url) => {
+    if (typeof window !== 'undefined' && url) {
+      window.open(url, '_blank');
+    }
+  }, []);
+
+  // Validation function
+  const validateForm = useCallback(() => {
+    const newErrors = {};
+
+    if (!formData.chief_complaint.trim()) {
+      newErrors.chief_complaint = 'Chief complaint is required';
+    }
+
+    if (!formData.diagnosis.main.trim()) {
+      newErrors['diagnosis.main'] = 'Main diagnosis is required';
+    }
+
+    // Score validations
+    if (formData.scores.rcat.total && (parseFloat(formData.scores.rcat.total) < 0 || parseFloat(formData.scores.rcat.total) > 30)) {
+      newErrors['scores.rcat.total'] = 'RCAT score must be 0-30';
+    }
+    if (formData.scores.act.total && (parseFloat(formData.scores.act.total) < 5 || parseFloat(formData.scores.act.total) > 25)) {
+      newErrors['scores.act.total'] = 'ACT score must be 5-25';
+    }
+    if (formData.scores.uas7.total && (parseFloat(formData.scores.uas7.total) < 0 || parseFloat(formData.scores.uas7.total) > 42)) {
+      newErrors['scores.uas7.total'] = 'UAS7 score must be 0-42';
+    }
+
+    // SPT/IDT validations
+    formData.tests.spt.forEach((spt, idx) => {
+      if (spt.allergen && !spt.wheal_mm) {
+        newErrors[`tests.spt.${idx}.wheal_mm`] = 'Wheal size required';
+      }
+      if (spt.allergen && !spt.date) {
+        newErrors[`tests.spt.${idx}.date`] = 'Date required';
+      }
+    });
+
+    formData.tests.idt.forEach((idt, idx) => {
+      if (idt.allergen && !idt.wheal_mm) {
+        newErrors[`tests.idt.${idx}.wheal_mm`] = 'Wheal size required';
+      }
+      if (idt.allergen && !idt.date) {
+        newErrors[`tests.idt.${idx}.date`] = 'Date required';
+      }
+    });
+
+    // Specific IgE validations
+    formData.tests.specific_ige.forEach((ige, idx) => {
+      if (ige.allergen && ige.value_kua_l && parseFloat(ige.value_kua_l) < 0) {
+        newErrors[`tests.specific_ige.${idx}.value_kua_l`] = 'Value must be ≥ 0';
+      }
+      if (ige.allergen && ige.value_kua_l && !ige.date) {
+        newErrors[`tests.specific_ige.${idx}.date`] = 'Date required';
+      }
+    });
+
+    // Challenge/Desensitization validations
+    formData.tests.challenge.forEach((ch, idx) => {
+      if (ch.type && !ch.date) {
+        newErrors[`tests.challenge.${idx}.date`] = 'Date required';
+      }
+      if (ch.type && !ch.outcome) {
+        newErrors[`tests.challenge.${idx}.outcome`] = 'Outcome required';
+      }
+    });
+
+    formData.tests.desensitization.forEach((des, idx) => {
+      if (des.agent && !des.date) {
+        newErrors[`tests.desensitization.${idx}.date`] = 'Date required';
+      }
+      if (des.agent && !des.outcome) {
+        newErrors[`tests.desensitization.${idx}.outcome`] = 'Outcome required';
+      }
+    });
+
+    // Procedures validations
+    formData.procedures_done.forEach((proc, idx) => {
+      if (proc.name && !proc.date) {
+        newErrors[`procedures_done.${idx}.date`] = 'Date required';
+      }
+    });
+
+    // Follow-up date validation
+    if (formData.plan.follow_up === 'date' && !formData.plan.follow_up_date) {
+      newErrors.follow_up_date = 'Follow-up date is required';
+    }
+
+    // Discharge mode: recommendations required
+    if (mode === 'discharge' && formData.recommendations.length === 0) {
+      newErrors.recommendations = 'At least one recommendation is required for discharge';
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  }, [formData, mode]);
+
+  // Build payload function
+  const buildPayload = useCallback(() => {
+    const payload = clone(formData);
+    
+    // Shallow prune empty strings, arrays, and objects
+    const pruneEmpty = (obj) => {
+      if (typeof obj !== 'object' || obj === null) return obj;
+      if (Array.isArray(obj)) {
+        return obj.length > 0 ? obj : undefined;
+      }
+      const pruned = {};
+      for (const [key, value] of Object.entries(obj)) {
+        if (value === '' || value === null || value === undefined) continue;
+        if (Array.isArray(value) && value.length === 0) continue;
+        if (typeof value === 'object' && Object.keys(value).length === 0) continue;
+        pruned[key] = typeof value === 'object' ? pruneEmpty(value) : value;
+      }
+      return Object.keys(pruned).length > 0 ? pruned : undefined;
+    };
+
+    return pruneEmpty(payload) || {};
+  }, [formData]);
+
+  // Autosave setup
+  useEffect(() => {
+    payloadRef.current = buildPayload();
+  }, [buildPayload]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (payloadRef.current) {
+        const payload = buildPayload();
+        console.log('DRAFT', payload);
+        setLastSaved(new Date());
+        setShowSaveToast(true);
+        setTimeout(() => setShowSaveToast(false), 2500);
+        payloadRef.current = payload;
+      }
+    }, 30000);
+
+    return () => clearInterval(interval);
+  }, [buildPayload]);
+
+  // Handler functions
+  const handleSaveDraft = useCallback(() => {
+    const payload = buildPayload();
+    console.log('SAVE DRAFT', payload);
+  }, [buildPayload]);
+
+  const handlePreview = useCallback(() => {
+    const payload = buildPayload();
+    console.log('PREVIEW', payload);
+  }, [buildPayload]);
+
+  const handleFinalize = useCallback(() => {
+    if (validateForm()) {
+      const payload = buildPayload();
+      console.log('SUBMIT - Payload keys:', Object.keys(payload || {}));
+      console.log('SUBMIT - Payload has doc_type:', !!payload?.doc_type);
+      
+      // CRITICAL: Verify payload is not an event object before passing to onSave
+      if (payload && (payload._reactName || payload.nativeEvent || (payload.type === 'click' && payload.screenX !== undefined))) {
+        console.error('ERROR: buildPayload() returned an event object! This should never happen.', payload);
+        alert('Error: Form data structure is invalid. Please try saving again.');
+        return;
+      }
+      
+      if (onSave && typeof onSave === 'function') {
+        try {
+          onSave(payload);
+        } catch (error) {
+          console.error('Error calling onSave:', error);
+          alert('Error saving report: ' + (error.message || 'Unknown error'));
+        }
+      } else {
+        console.error('ERROR: onSave is not a function:', typeof onSave, onSave);
+      }
+    }
+  }, [validateForm, buildPayload, onSave]);
+
+  const handleModeChange = useCallback((newMode) => {
+    setMode(newMode);
+  }, []);
+
+  return (
+    <div className="space-y-4 pb-24">
+      {/* Header */}
+      <Card>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => handleModeChange('initial')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                  mode === 'initial'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Initial
+              </button>
+              <button
+                type="button"
+                onClick={() => handleModeChange('discharge')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                  mode === 'discharge'
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Discharge
+              </button>
+            </div>
+            <div className="text-sm text-slate-500">
+              {lastSaved && `Last saved: ${lastSaved.toLocaleTimeString()}`}
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+            <div>
+              <p className="text-slate-500">Patient</p>
+              <p className="font-medium">
+                {patient?.first_name && patient?.last_name
+                  ? `${patient.first_name} ${patient.last_name}`
+                  : patient?.patient_id || 'N/A'}
+                {patient?.age && ` (${patient.age}${patient.gender ? `, ${patient.gender}` : ''})`}
+              </p>
+            </div>
+            <div>
+              <p className="text-slate-500">Clinic</p>
+              <p className="font-medium">{formData.meta.clinic_id || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">Physician</p>
+              <p className="font-medium">{formData.meta.physician_id || 'N/A'}</p>
+            </div>
+          </div>
+          
+          <div className="text-xs text-slate-400">
+            Encounter: {formData.meta.encounter_id || 'N/A'} • {formData.meta.datetime ? new Date(formData.meta.datetime).toLocaleString() : 'N/A'}
+          </div>
+        </div>
+      </Card>
+
+      {/* Autosave Toast */}
+      {showSaveToast && (
+        <div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
+          Saved at {lastSaved?.toLocaleTimeString()}
+        </div>
+      )}
+
+      {/* Chief Complaint */}
+      <Card>
+        <div>
+          <FieldLabel required>Chief Complaint</FieldLabel>
+          <div className="flex flex-wrap gap-2 mb-2">
+            {CHIEF_COMPLAINT_PRESETS.map(preset => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => {
+                  const current = formData.chief_complaint;
+                  updateFormData('chief_complaint', current ? `${current}, ${preset}` : preset);
+                }}
+                className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+              >
+                + {preset}
+              </button>
+            ))}
+          </div>
+          <Input
+            name="chief_complaint"
+            placeholder="Describe the patient's main complaint..."
+            value={formData.chief_complaint}
+            onChange={(e) => updateFormData('chief_complaint', e.target.value)}
+          />
+          {errors.chief_complaint && (
+            <p className="text-red-500 text-sm mt-1">{errors.chief_complaint}</p>
+          )}
+        </div>
+      </Card>
+
+      {/* Scores */}
+      <Card title="Scores" collapsible isOpen={!collapsedSections.scores} onToggle={() => toggleSection('scores')}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <FieldLabel>RCAT (0-30)</FieldLabel>
+            <Input
+              type="number"
+              name="rcat_total"
+              placeholder="0-30"
+              value={formData.scores.rcat.total}
+              onChange={(e) => updateFormData('scores.rcat.total', e.target.value)}
+            />
+            {errors['scores.rcat.total'] && (
+              <p className="text-red-500 text-sm mt-1">{errors['scores.rcat.total']}</p>
+            )}
+          </div>
+          <div>
+            <FieldLabel>ACT (5-25)</FieldLabel>
+            <Input
+              type="number"
+              name="act_total"
+              placeholder="5-25"
+              value={formData.scores.act.total}
+              onChange={(e) => updateFormData('scores.act.total', e.target.value)}
+            />
+            {errors['scores.act.total'] && (
+              <p className="text-red-500 text-sm mt-1">{errors['scores.act.total']}</p>
+            )}
+          </div>
+          <div>
+            <FieldLabel>UAS7 (0-42)</FieldLabel>
+            <Input
+              type="number"
+              name="uas7_total"
+              placeholder="0-42"
+              value={formData.scores.uas7.total}
+              onChange={(e) => updateFormData('scores.uas7.total', e.target.value)}
+            />
+            {errors['scores.uas7.total'] && (
+              <p className="text-red-500 text-sm mt-1">{errors['scores.uas7.total']}</p>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* HPI */}
+      <Card title="History of Present Illness" collapsible isOpen={!collapsedSections.hpi} onToggle={() => toggleSection('hpi')}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <FieldLabel>Onset</FieldLabel>
+              <Select
+                name="onset"
+                value={formData.hpi.onset}
+                onChange={(e) => updateFormData('hpi.onset', e.target.value)}
+                options={[
+                  { value: 'acute', label: 'Acute' },
+                  { value: 'subacute', label: 'Subacute' },
+                  { value: 'chronic', label: 'Chronic' }
+                ]}
+              />
+            </div>
+            <div>
+              <FieldLabel>Duration</FieldLabel>
+              <Input
+                name="duration"
+                placeholder="e.g., 2 weeks"
+                value={formData.hpi.duration}
+                onChange={(e) => updateFormData('hpi.duration', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Course</FieldLabel>
+              <Select
+                name="course"
+                value={formData.hpi.course}
+                onChange={(e) => updateFormData('hpi.course', e.target.value)}
+                options={[
+                  { value: 'intermittent', label: 'Intermittent' },
+                  { value: 'persistent', label: 'Persistent' },
+                  { value: 'progressive', label: 'Progressive' }
+                ]}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <FieldLabel>Index Exposure Time</FieldLabel>
+              <Input
+                type="datetime-local"
+                name="index_exposure_time"
+                value={formData.hpi.index_exposure_time}
+                onChange={(e) => updateFormData('hpi.index_exposure_time', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Last Reaction Time</FieldLabel>
+              <Input
+                type="datetime-local"
+                name="last_reaction_time"
+                value={formData.hpi.last_reaction_time}
+                onChange={(e) => updateFormData('hpi.last_reaction_time', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Latency to Symptoms</FieldLabel>
+              <Input
+                name="latency_to_symptoms"
+                placeholder="e.g., 30 minutes"
+                value={formData.hpi.latency_to_symptoms}
+                onChange={(e) => updateFormData('hpi.latency_to_symptoms', e.target.value)}
+              />
+            </div>
+          </div>
+
+          {/* Triggers */}
+          <div>
+            <FieldLabel>Triggers</FieldLabel>
+            <div className="space-y-2">
+              <div>
+                <p className="text-xs text-slate-600 mb-1">Food</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {FOOD_TRIGGERS.map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        const current = formData.hpi.triggers.food;
+                        if (current.includes(preset)) {
+                          removeFromArray('hpi.triggers.food', current.indexOf(preset));
+                        } else {
+                          addToArray('hpi.triggers.food', preset);
+                        }
+                      }}
+                      className={`px-3 py-1 rounded-lg text-sm ${
+                        formData.hpi.triggers.food.includes(preset)
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-xs text-slate-600 mb-1">Aeroallergens</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {AEROALLERGENS.map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        const current = formData.hpi.triggers.aeroallergens;
+                        if (current.includes(preset)) {
+                          removeFromArray('hpi.triggers.aeroallergens', current.indexOf(preset));
+                        } else {
+                          addToArray('hpi.triggers.aeroallergens', preset);
+                        }
+                      }}
+                      className={`px-3 py-1 rounded-lg text-sm ${
+                        formData.hpi.triggers.aeroallergens.includes(preset)
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-xs text-slate-600 mb-1">Drugs</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {DRUG_TRIGGERS.map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        const current = formData.hpi.triggers.drug;
+                        if (current.includes(preset)) {
+                          removeFromArray('hpi.triggers.drug', current.indexOf(preset));
+                        } else {
+                          addToArray('hpi.triggers.drug', preset);
+                        }
+                      }}
+                      className={`px-3 py-1 rounded-lg text-sm ${
+                        formData.hpi.triggers.drug.includes(preset)
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div>
+                <p className="text-xs text-slate-600 mb-1">Insect Venom</p>
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {INSECT_VENOM.map(preset => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => {
+                        const current = formData.hpi.triggers.insect;
+                        if (current.includes(preset)) {
+                          removeFromArray('hpi.triggers.insect', current.indexOf(preset));
+                        } else {
+                          addToArray('hpi.triggers.insect', preset);
+                        }
+                      }}
+                      className={`px-3 py-1 rounded-lg text-sm ${
+                        formData.hpi.triggers.insect.includes(preset)
+                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                      }`}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="flex flex-wrap gap-4">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.hpi.triggers.latex}
+                    onChange={(e) => updateFormData('hpi.triggers.latex', e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Latex</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.hpi.triggers.cold}
+                    onChange={(e) => updateFormData('hpi.triggers.cold', e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Cold</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.hpi.triggers.exercise}
+                    onChange={(e) => updateFormData('hpi.triggers.exercise', e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Exercise</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.hpi.triggers.nsaid}
+                    onChange={(e) => updateFormData('hpi.triggers.nsaid', e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">NSAID</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={formData.hpi.triggers.alcohol}
+                    onChange={(e) => updateFormData('hpi.triggers.alcohol', e.target.checked)}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm">Alcohol</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          {/* Reaction Pattern */}
+          <div>
+            <FieldLabel>Reaction Pattern</FieldLabel>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.reaction_pattern.ige_mediated}
+                  onChange={(e) => updateFormData('hpi.reaction_pattern.ige_mediated', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">IgE-mediated</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.reaction_pattern.non_ige}
+                  onChange={(e) => updateFormData('hpi.reaction_pattern.non_ige', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Non-IgE</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.reaction_pattern.mixed}
+                  onChange={(e) => updateFormData('hpi.reaction_pattern.mixed', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Mixed</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Systems Involved */}
+          <div>
+            <FieldLabel>Systems Involved</FieldLabel>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.systems_involved.skin}
+                  onChange={(e) => updateFormData('hpi.systems_involved.skin', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Skin</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.systems_involved.gi}
+                  onChange={(e) => updateFormData('hpi.systems_involved.gi', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">GI</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.systems_involved.respiratory_upper}
+                  onChange={(e) => updateFormData('hpi.systems_involved.respiratory_upper', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Respiratory (Upper)</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.systems_involved.respiratory_lower}
+                  onChange={(e) => updateFormData('hpi.systems_involved.respiratory_lower', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Respiratory (Lower)</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.systems_involved.cv}
+                  onChange={(e) => updateFormData('hpi.systems_involved.cv', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Cardiovascular</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.systems_involved.neuro}
+                  onChange={(e) => updateFormData('hpi.systems_involved.neuro', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Neurological</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Symptom Details */}
+          <div>
+            <FieldLabel>Symptom Details</FieldLabel>
+            <TextArea
+              name="symptom_details"
+              placeholder="Detailed description of symptoms..."
+              value={formData.hpi.symptom_details}
+              onChange={(e) => updateFormData('hpi.symptom_details', e.target.value)}
+              rows={3}
+            />
+          </div>
+
+          {/* Anaphylaxis */}
+          <div className="border-t pt-4">
+            <FieldLabel>Anaphylaxis</FieldLabel>
+            <div className="space-y-3">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.anaphylaxis.occurred}
+                  onChange={(e) => updateFormData('hpi.anaphylaxis.occurred', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm font-medium">Anaphylaxis occurred</span>
+              </label>
+              
+              {formData.hpi.anaphylaxis.occurred && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
+                    <div>
+                      <FieldLabel>Grade</FieldLabel>
+                      <Select
+                        name="anaphylaxis_grade"
+                        value={formData.hpi.anaphylaxis.grade}
+                        onChange={(e) => updateFormData('hpi.anaphylaxis.grade', e.target.value)}
+                        options={[
+                          { value: 'I', label: 'Grade I' },
+                          { value: 'II', label: 'Grade II' },
+                          { value: 'III', label: 'Grade III' },
+                          { value: 'IV', label: 'Grade IV' }
+                        ]}
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel>Tryptase (Acute)</FieldLabel>
+                      <Input
+                        name="tryptase_acute"
+                        placeholder="μg/L"
+                        value={formData.hpi.anaphylaxis.tryptase_acute}
+                        onChange={(e) => updateFormData('hpi.anaphylaxis.tryptase_acute', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <FieldLabel>Tryptase (Baseline)</FieldLabel>
+                      <Input
+                        name="tryptase_baseline"
+                        placeholder="μg/L"
+                        value={formData.hpi.anaphylaxis.tryptase_baseline}
+                        onChange={(e) => updateFormData('hpi.anaphylaxis.tryptase_baseline', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  {formData.hpi.anaphylaxis.tryptase_acute && !formData.hpi.anaphylaxis.tryptase_baseline && (
+                    <div className="ml-6 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                      ⚠️ Baseline tryptase recommended after 24–48h
+                    </div>
+                  )}
+                  <div className="flex flex-wrap gap-4 ml-6">
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.hpi.anaphylaxis.epinephrine_given}
+                        onChange={(e) => updateFormData('hpi.anaphylaxis.epinephrine_given', e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">Epinephrine given</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={formData.hpi.anaphylaxis.ed_visit}
+                        onChange={(e) => updateFormData('hpi.anaphylaxis.ed_visit', e.target.checked)}
+                        className="w-4 h-4"
+                      />
+                      <span className="text-sm">ED visit</span>
+                    </label>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Atopic History */}
+          <div className="border-t pt-4">
+            <FieldLabel>Atopic History</FieldLabel>
+            <div className="flex flex-wrap gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.atopic_history.asthma}
+                  onChange={(e) => updateFormData('hpi.atopic_history.asthma', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Asthma</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.atopic_history.allergic_rhinitis}
+                  onChange={(e) => updateFormData('hpi.atopic_history.allergic_rhinitis', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Allergic Rhinitis</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.atopic_history.atopic_dermatitis}
+                  onChange={(e) => updateFormData('hpi.atopic_history.atopic_dermatitis', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Atopic Dermatitis</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.atopic_history.food_allergy}
+                  onChange={(e) => updateFormData('hpi.atopic_history.food_allergy', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Food Allergy</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.atopic_history.chronic_urticaria}
+                  onChange={(e) => updateFormData('hpi.atopic_history.chronic_urticaria', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Chronic Urticaria</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.atopic_history.nasal_polyps}
+                  onChange={(e) => updateFormData('hpi.atopic_history.nasal_polyps', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">Nasal Polyps</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData.hpi.atopic_history.eoe}
+                  onChange={(e) => updateFormData('hpi.atopic_history.eoe', e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <span className="text-sm">EoE</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Occupational & Home Environment */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <FieldLabel>Occupational Exposure</FieldLabel>
+              <TextArea
+                name="occupational_exposure"
+                placeholder="Workplace allergens..."
+                value={formData.hpi.occupational_exposure}
+                onChange={(e) => updateFormData('hpi.occupational_exposure', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Home Environment</FieldLabel>
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.hpi.home_env.pets}
+                      onChange={(e) => updateFormData('hpi.home_env.pets', e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Pets</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.hpi.home_env.smoke_exposure}
+                      onChange={(e) => updateFormData('hpi.home_env.smoke_exposure', e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Smoke Exposure</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.hpi.home_env.dust_mites_mattress}
+                      onChange={(e) => updateFormData('hpi.home_env.dust_mites_mattress', e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Dust Mites (Mattress)</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.hpi.home_env.visible_mold}
+                      onChange={(e) => updateFormData('hpi.home_env.visible_mold', e.target.checked)}
+                      className="w-4 h-4"
+                    />
+                    <span className="text-sm">Visible Mold</span>
+                  </label>
+                </div>
+                <Select
+                  name="seasonality"
+                  value={formData.hpi.home_env.seasonality}
+                  onChange={(e) => updateFormData('hpi.home_env.seasonality', e.target.value)}
+                  options={[
+                    { value: 'none', label: 'None' },
+                    { value: 'spring', label: 'Spring' },
+                    { value: 'summer', label: 'Summer' },
+                    { value: 'autumn', label: 'Autumn' },
+                    { value: 'winter', label: 'Winter' },
+                    { value: 'perennial', label: 'Perennial' }
+                  ]}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Medications & History */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <FieldLabel>Current Medications</FieldLabel>
+              <TextArea
+                name="meds_current"
+                placeholder="Current medications..."
+                value={formData.hpi.meds_current}
+                onChange={(e) => updateFormData('hpi.meds_current', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Contraindicated Medications</FieldLabel>
+              <TextArea
+                name="meds_contra"
+                placeholder="Medications to avoid..."
+                value={formData.hpi.meds_contra}
+                onChange={(e) => updateFormData('hpi.meds_contra', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Allergies Noted</FieldLabel>
+              <Input
+                name="allergies_noted"
+                placeholder="Known allergies..."
+                value={formData.hpi.allergies_noted}
+                onChange={(e) => updateFormData('hpi.allergies_noted', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Past Medical History</FieldLabel>
+              <TextArea
+                name="pmh"
+                placeholder="PMH..."
+                value={formData.hpi.pmh}
+                onChange={(e) => updateFormData('hpi.pmh', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Past Surgical History</FieldLabel>
+              <TextArea
+                name="psh"
+                placeholder="PSH..."
+                value={formData.hpi.psh}
+                onChange={(e) => updateFormData('hpi.psh', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Family History</FieldLabel>
+              <TextArea
+                name="family"
+                placeholder="Family history..."
+                value={formData.hpi.family}
+                onChange={(e) => updateFormData('hpi.family', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <FieldLabel>Social History</FieldLabel>
+              <TextArea
+                name="social"
+                placeholder="Social history..."
+                value={formData.hpi.social}
+                onChange={(e) => updateFormData('hpi.social', e.target.value)}
+                rows={2}
+              />
+            </div>
+          </div>
+
+          {/* AI Suggest Button */}
+          <div className="flex justify-end">
+            <button
+              type="button"
+              disabled={!formData.chief_complaint.trim()}
+              onClick={() => console.log('AI Suggest')}
+              className={`px-4 py-2 rounded-lg text-sm font-medium ${
+                formData.chief_complaint.trim()
+                  ? 'bg-emerald-600 text-white hover:bg-emerald-700'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              🧠 AI Suggest
+            </button>
+          </div>
+        </div>
+      </Card>
+
+      {/* Vitals & Physical Exam */}
+      <Card title="Vitals & Physical Exam" collapsible isOpen={!collapsedSections.vitals} onToggle={() => toggleSection('vitals')}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <FieldLabel>BP</FieldLabel>
+              <Input
+                name="bp"
+                placeholder="mmHg"
+                value={formData.vitals.bp}
+                onChange={(e) => updateFormData('vitals.bp', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>HR</FieldLabel>
+              <Input
+                name="hr"
+                placeholder="bpm"
+                value={formData.vitals.hr}
+                onChange={(e) => updateFormData('vitals.hr', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Temp</FieldLabel>
+              <Input
+                name="temp"
+                placeholder="°C"
+                value={formData.vitals.temp}
+                onChange={(e) => updateFormData('vitals.temp', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>SpO2</FieldLabel>
+              <Input
+                name="spo2"
+                placeholder="%"
+                value={formData.vitals.spo2}
+                onChange={(e) => updateFormData('vitals.spo2', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Height (cm)</FieldLabel>
+              <Input
+                type="number"
+                name="height_cm"
+                value={formData.vitals.height_cm}
+                onChange={(e) => updateFormData('vitals.height_cm', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Weight (kg)</FieldLabel>
+              <Input
+                type="number"
+                name="weight_kg"
+                value={formData.vitals.weight_kg}
+                onChange={(e) => updateFormData('vitals.weight_kg', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>BMI</FieldLabel>
+              <Input
+                name="bmi"
+                value={formData.vitals.bmi}
+                readOnly
+                className="bg-slate-50"
+              />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      <Card title="Physical Examination" collapsible isOpen={!collapsedSections.exam} onToggle={() => toggleSection('exam')}>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <FieldLabel>Skin</FieldLabel>
+              <TextArea
+                name="skin"
+                placeholder="Dermatological findings..."
+                value={formData.exam.skin}
+                onChange={(e) => updateFormData('exam.skin', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Eyes</FieldLabel>
+              <TextArea
+                name="eyes"
+                placeholder="Ocular findings..."
+                value={formData.exam.eyes}
+                onChange={(e) => updateFormData('exam.eyes', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Nose</FieldLabel>
+              <TextArea
+                name="nose"
+                placeholder="Nasal findings..."
+                value={formData.exam.nose}
+                onChange={(e) => updateFormData('exam.nose', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Throat</FieldLabel>
+              <TextArea
+                name="throat"
+                placeholder="Throat findings..."
+                value={formData.exam.throat}
+                onChange={(e) => updateFormData('exam.throat', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Lungs</FieldLabel>
+              <TextArea
+                name="lungs"
+                placeholder="Respiratory findings..."
+                value={formData.exam.lungs}
+                onChange={(e) => updateFormData('exam.lungs', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Heart</FieldLabel>
+              <TextArea
+                name="heart"
+                placeholder="Cardiac findings..."
+                value={formData.exam.heart}
+                onChange={(e) => updateFormData('exam.heart', e.target.value)}
+                rows={2}
+              />
+            </div>
+            <div>
+              <FieldLabel>Abdomen</FieldLabel>
+              <TextArea
+                name="abdomen"
+                placeholder="Abdominal findings..."
+                value={formData.exam.abdomen}
+                onChange={(e) => updateFormData('exam.abdomen', e.target.value)}
+                rows={2}
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <FieldLabel>Urticaria</FieldLabel>
+              <Select
+                name="skin_urticaria"
+                value={formData.exam.skin_urticaria}
+                onChange={(e) => updateFormData('exam.skin_urticaria', e.target.value)}
+                options={[
+                  { value: 'present', label: 'Present' },
+                  { value: 'absent', label: 'Absent' }
+                ]}
+              />
+            </div>
+            <div>
+              <FieldLabel>Angioedema</FieldLabel>
+              <Select
+                name="angioedema"
+                value={formData.exam.angioedema}
+                onChange={(e) => updateFormData('exam.angioedema', e.target.value)}
+                options={[
+                  { value: 'present', label: 'Present' },
+                  { value: 'absent', label: 'Absent' }
+                ]}
+              />
+            </div>
+            <div>
+              <FieldLabel>Wheeze</FieldLabel>
+              <Select
+                name="wheeze"
+                value={formData.exam.wheeze}
+                onChange={(e) => updateFormData('exam.wheeze', e.target.value)}
+                options={[
+                  { value: 'present', label: 'Present' },
+                  { value: 'absent', label: 'Absent' }
+                ]}
+              />
+            </div>
+            <div>
+              <FieldLabel>AD Severity</FieldLabel>
+              <Input
+                name="ad_severity"
+                placeholder="EASI score or description"
+                value={formData.exam.ad_severity}
+                onChange={(e) => updateFormData('exam.ad_severity', e.target.value)}
+              />
+            </div>
+            <div>
+              <FieldLabel>Nasal Findings</FieldLabel>
+              <Input
+                name="nasal_findings"
+                placeholder="Turbinates, polyps, edema, discharge"
+                value={formData.exam.nasal_findings}
+                onChange={(e) => updateFormData('exam.nasal_findings', e.target.value)}
+              />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Tests Section - will be added next due to complexity */}
+      <Card title="Tests" collapsible isOpen={!collapsedSections.tests} onToggle={() => toggleSection('tests')}>
+        <div className="space-y-6">
+          <p className="text-slate-500 text-sm">Test sections will be implemented here (SPT, IDT, Specific IgE, Challenge, Desensitization, etc.)</p>
+        </div>
+      </Card>
+
+      {/* Diagnosis */}
+      <Card title="Diagnosis" collapsible isOpen={!collapsedSections.diagnosis} onToggle={() => toggleSection('diagnosis')}>
+        <div className="space-y-4">
+          <div>
+            <FieldLabel required>Main Diagnosis</FieldLabel>
+            <div className="space-y-2">
+              {formData.diagnosis.main && typeof formData.diagnosis.main === 'object' && (formData.diagnosis.main.code || formData.diagnosis.main.term) ? (
+                <div className="flex gap-2 items-start">
+                  <div className="flex gap-2 items-start flex-1">
+                    <Input
+                      placeholder="ICD-11 code"
+                      value={formData.diagnosis.main.code || ''}
+                      onChange={(e) => {
+                        const current = typeof formData.diagnosis.main === 'object' ? formData.diagnosis.main : { code: '', term: '' };
+                        updateFormData('diagnosis.main', { ...current, code: e.target.value });
+                      }}
+                      className="w-40"
+                    />
+                    <Input
+                      placeholder="Diagnosis term"
+                      value={formData.diagnosis.main.term || ''}
+                      onChange={(e) => {
+                        const current = typeof formData.diagnosis.main === 'object' ? formData.diagnosis.main : { code: '', term: '' };
+                        updateFormData('diagnosis.main', { ...current, term: e.target.value });
+                      }}
+                      className="flex-1"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => updateFormData('diagnosis.main', '')}
+                    className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                  >
+                    Clear
+                  </button>
+                </div>
+              ) : null}
+              <IcdCodeSearchInput
+                placeholder="Search ICD-11 code or diagnosis..."
+                onSelect={(selected) => {
+                  updateFormData('diagnosis.main', selected);
+                }}
+              />
+            </div>
+            {errors['diagnosis.main'] && (
+              <p className="text-red-500 text-sm mt-1">{errors['diagnosis.main']}</p>
+            )}
+          </div>
+          <div>
+            <FieldLabel>Secondary Diagnoses</FieldLabel>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {formData.diagnosis.secondary.map((diag, idx) => (
+                <Chip key={idx} onRemove={() => removeFromArray('diagnosis.secondary', idx)}>
+                  {diag}
+                </Chip>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <Input
+                placeholder="Add secondary diagnosis..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const value = e.target.value.trim();
+                    if (value) {
+                      addToArray('diagnosis.secondary', value);
+                      e.target.value = '';
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+          <div>
+            <FieldLabel>Diagnosis Codes</FieldLabel>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {formData.diagnosis.codes.map((code, idx) => (
+                <Chip key={idx} onRemove={() => removeFromArray('diagnosis.codes', idx)}>
+                  {code.system} {code.code}: {code.term}
+                </Chip>
+              ))}
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <Select
+                name="code_system"
+                value={newCode.system}
+                onChange={(e) => setNewCode(prev => ({ ...prev, system: e.target.value }))}
+                options={[
+                  { value: 'ICD10', label: 'ICD10' },
+                  { value: 'ICD11', label: 'ICD11' },
+                  { value: 'SNOMED', label: 'SNOMED' }
+                ]}
+              />
+              <Input
+                name="code_code"
+                placeholder="Code"
+                value={newCode.code}
+                onChange={(e) => setNewCode(prev => ({ ...prev, code: e.target.value }))}
+              />
+              <Input
+                name="code_term"
+                placeholder="Term"
+                value={newCode.term}
+                onChange={(e) => setNewCode(prev => ({ ...prev, term: e.target.value }))}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (newCode.system && newCode.code && newCode.term) {
+                    addToArray('diagnosis.codes', { ...newCode });
+                    setNewCode({ system: '', code: '', term: '' });
+                  }
+                }}
+                className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
+              >
+                Add Code
+              </button>
+            </div>
+            <div className="mt-2">
+              <IcdCodeSearchInput
+                placeholder="Search ICD-11 code to add..."
+                onSelect={(selected) => {
+                  addToArray('diagnosis.codes', {
+                    system: 'ICD11',
+                    code: selected.code,
+                    term: selected.term
+                  });
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {/* Plan & Treatment - Initial Mode Only */}
+      {mode === 'initial' && (
+        <Card title="Plan & Treatment" collapsible isOpen={!collapsedSections.plan} onToggle={() => toggleSection('plan')}>
+          <div className="space-y-4">
+            <div>
+              <FieldLabel>Medications ({formData.plan.meds.length})</FieldLabel>
+              {formData.plan.meds.length > 0 && (
+                <div className="flex flex-wrap gap-2 mt-2">
+                  {formData.plan.meds.map((med, idx) => {
+                    const label = `${med.med} ${med.dose} ${med.route} ${med.freq}`;
+                    return (
+                      <Chip key={idx} onEdit={() => openMedEditor(med, idx)} onRemove={() => removeMed(idx)}>
+                        {label}
+                      </Chip>
+                    );
+                  })}
+                </div>
+              )}
+              {editingMed && (
+                <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
+                  <div className="col-span-12">
+                    <MedicationSearchInput
+                      placeholder="Search medication..."
+                      value={editingMed.med}
+                      onChange={(e) => setEditingMed(s => ({ ...s, med: e.target.value }))}
+                      onSelect={(selected) => {
+                        setEditingMed(s => ({
+                          ...s,
+                          med: selected.med,
+                          conc_strength: selected.strength || s.conc_strength
+                        }));
+                      }}
+                    />
+                  </div>
+                  <div className="col-span-12">
+                    <Input placeholder="Concentration/Strength" value={editingMed.conc_strength} onChange={(e) => setEditingMed(s => ({...s, conc_strength: e.target.value}))} />
+                  </div>
+                  <div className="col-span-12">
+                    <Select name="route" value={editingMed.route} onChange={(e) => setEditingMed(s => ({...s, route: e.target.value}))} options={[
+                      {value:'inhaled',label:'Inhaled'},
+                      {value:'intranasal',label:'Intranasal'},
+                      {value:'oral',label:'Oral'},
+                      {value:'topical',label:'Topical'},
+                      {value:'injectable',label:'Injectable'},
+                      {value:'other',label:'Other'}
+                    ]} />
+                  </div>
+                  <div className="col-span-12">
+                    <Input placeholder="Frequency" value={editingMed.freq} onChange={(e) => setEditingMed(s => ({...s, freq: e.target.value}))} />
+                  </div>
+                  <div className="col-span-12">
+                    <Input placeholder="Duration" value={editingMed.duration} onChange={(e) => setEditingMed(s => ({...s, duration: e.target.value}))} />
+                  </div>
+                  <div className="col-span-12">
+                    <TextArea placeholder="Instructions" value={editingMed.instructions} onChange={(e) => setEditingMed(s => ({...s, instructions: e.target.value}))} rows={2} />
+                  </div>
+                  <div className="col-span-12 flex gap-2">
+                    <button type="button" onClick={saveMed} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">Save</button>
+                    <button type="button" onClick={() => { setEditingMed(null); setEditingMedIdx(null); }} className="px-4 py-2 border border-slate-300 rounded-lg">Cancel</button>
+                  </div>
+                </div>
+              )}
+              {!editingMed && (
+                <button type="button" onClick={() => openMedEditor()} className="mt-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
+                  + Add Medication
+                </button>
+              )}
+            </div>
+
+            <div>
+              <FieldLabel>Avoidance</FieldLabel>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {AVOIDANCE_ADVICE.map(preset => (
+                  <button key={preset} type="button" onClick={() => addToArray('plan.avoidance', preset)} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
+                    + {preset}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.plan.avoidance.map((adv, idx) => (
+                  <Chip key={idx} onRemove={() => removeFromArray('plan.avoidance', idx)}>{adv}</Chip>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <FieldLabel>Emergency Action Plan</FieldLabel>
+              {formData.hpi.anaphylaxis.occurred && !formData.plan.emergency_action_plan.epinephrine_auto_injector_prescribed && (
+                <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
+                  ⚠️ Epinephrine auto-injector recommended for anaphylaxis history
+                </div>
+              )}
+              <div className="space-y-2">
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={formData.plan.emergency_action_plan.epinephrine_auto_injector_prescribed} onChange={(e) => updateFormData('plan.emergency_action_plan.epinephrine_auto_injector_prescribed', e.target.checked)} className="w-4 h-4" />
+                  <span className="text-sm">Epinephrine auto-injector prescribed</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={formData.plan.emergency_action_plan.training_provided} onChange={(e) => updateFormData('plan.emergency_action_plan.training_provided', e.target.checked)} className="w-4 h-4" />
+                  <span className="text-sm">Training provided</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="checkbox" checked={formData.plan.emergency_action_plan.written_plan_given} onChange={(e) => updateFormData('plan.emergency_action_plan.written_plan_given', e.target.checked)} className="w-4 h-4" />
+                  <span className="text-sm">Written plan given</span>
+                </label>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <FieldLabel>Dose (mg)</FieldLabel>
+                    <Input name="dose_mg" value={formData.plan.emergency_action_plan.dose_mg} onChange={(e) => updateFormData('plan.emergency_action_plan.dose_mg', e.target.value)} />
+                  </div>
+                  <div>
+                    <FieldLabel>Devices</FieldLabel>
+                    <Select name="devices" value={formData.plan.emergency_action_plan.devices} onChange={(e) => updateFormData('plan.emergency_action_plan.devices', e.target.value)} options={[
+                      {value:'0',label:'0'},
+                      {value:'1',label:'1'},
+                      {value:'2',label:'2'}
+                    ]} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <FieldLabel>Immunotherapy</FieldLabel>
+              <label className="flex items-center gap-2 mb-2">
+                <input type="checkbox" checked={formData.plan.immunotherapy.candidate} onChange={(e) => updateFormData('plan.immunotherapy.candidate', e.target.checked)} className="w-4 h-4" />
+                <span className="text-sm">Candidate for immunotherapy</span>
+              </label>
+              {formData.plan.immunotherapy.candidate && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
+                  <div>
+                    <FieldLabel>Modality</FieldLabel>
+                    <Select name="modality" value={formData.plan.immunotherapy.modality} onChange={(e) => updateFormData('plan.immunotherapy.modality', e.target.value)} options={[
+                      {value:'SCIT',label:'SCIT'},
+                      {value:'SLIT',label:'SLIT'},
+                      {value:'VIT',label:'VIT'},
+                      {value:'Biologic',label:'Biologic'},
+                      {value:'None',label:'None'}
+                    ]} />
+                  </div>
+                  <div>
+                    <FieldLabel>Start Date</FieldLabel>
+                    <Input type="date" name="start_date" value={formData.plan.immunotherapy.start_date} onChange={(e) => updateFormData('plan.immunotherapy.start_date', e.target.value)} />
+                  </div>
+                  <div>
+                    <FieldLabel>Build-up Scheme</FieldLabel>
+                    <Select name="build_up_scheme" value={formData.plan.immunotherapy.build_up_scheme} onChange={(e) => updateFormData('plan.immunotherapy.build_up_scheme', e.target.value)} options={[
+                      {value:'conventional',label:'Conventional'},
+                      {value:'rush',label:'Rush'},
+                      {value:'cluster',label:'Cluster'}
+                    ]} />
+                  </div>
+                  <div>
+                    <FieldLabel>Maintenance Interval (weeks)</FieldLabel>
+                    <Input name="maintenance_interval_w" value={formData.plan.immunotherapy.maintenance_interval_w} onChange={(e) => updateFormData('plan.immunotherapy.maintenance_interval_w', e.target.value)} />
+                  </div>
+                  <div>
+                    <FieldLabel>Expected Duration (years)</FieldLabel>
+                    <Input name="expected_duration_y" value={formData.plan.immunotherapy.expected_duration_y} onChange={(e) => updateFormData('plan.immunotherapy.expected_duration_y', e.target.value)} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <FieldLabel>Biologics</FieldLabel>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {BIOLOGICS_PRESETS.map(preset => (
+                  <button key={preset} type="button" onClick={() => {
+                    if (formData.plan.biologics.includes(preset)) {
+                      removeFromArray('plan.biologics', formData.plan.biologics.indexOf(preset));
+                    } else {
+                      addToArray('plan.biologics', preset);
+                    }
+                  }} className={`px-3 py-1 rounded-lg text-sm ${formData.plan.biologics.includes(preset) ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'}`}>
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.plan.biologics.map((bio, idx) => (
+                  <Chip key={idx} onRemove={() => removeFromArray('plan.biologics', idx)}>{bio}</Chip>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <FieldLabel>Education</FieldLabel>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {EDUCATION_TOPICS.map(preset => (
+                  <button key={preset} type="button" onClick={() => addToArray('plan.education', preset)} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
+                    + {preset}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.plan.education.map((edu, idx) => (
+                  <Chip key={idx} onRemove={() => removeFromArray('plan.education', idx)}>{edu}</Chip>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <FieldLabel>Referrals</FieldLabel>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {REFERRAL_PRESETS.map(preset => (
+                  <button key={preset} type="button" onClick={() => {
+                    if (formData.plan.referrals.includes(preset)) {
+                      removeFromArray('plan.referrals', formData.plan.referrals.indexOf(preset));
+                    } else {
+                      addToArray('plan.referrals', preset);
+                    }
+                  }} className={`px-3 py-1 rounded-lg text-sm ${formData.plan.referrals.includes(preset) ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'}`}>
+                    {preset}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {formData.plan.referrals.map((ref, idx) => (
+                  <Chip key={idx} onRemove={() => removeFromArray('plan.referrals', idx)}>{ref}</Chip>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <FieldLabel>Follow-up</FieldLabel>
+              <Select name="follow_up" value={formData.plan.follow_up} onChange={(e) => updateFormData('plan.follow_up', e.target.value)} options={FOLLOW_UP_OPTIONS.map(f => ({ value: f, label: f === '48h' ? '48 hours' : f === '1w' ? '1 week' : f === '1m' ? '1 month' : f === '3m' ? '3 months' : f === '6m' ? '6 months' : f === 'PRN' ? 'PRN' : 'Specific date' }))} />
+              {formData.plan.follow_up === 'date' && (
+                <div className="mt-2">
+                  <Input type="date" name="follow_up_date" value={formData.plan.follow_up_date} onChange={(e) => updateFormData('plan.follow_up_date', e.target.value)} />
+                  {errors.follow_up_date && <p className="text-red-500 text-sm mt-1">{errors.follow_up_date}</p>}
+                </div>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Procedures Done */}
+      <Card title="Procedures Done" collapsible isOpen={!collapsedSections.procedures} onToggle={() => toggleSection('procedures')} counter={formData.procedures_done.length}>
+        <div className="space-y-4">
+          {formData.procedures_done.length > 0 && (
+            <div className="space-y-2">
+              {formData.procedures_done.map((proc, idx) => (
+                <div key={idx} className="p-3 bg-slate-50 rounded-lg">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-medium">{proc.name} - {proc.date}</p>
+                      {proc.setting && <p className="text-sm text-slate-600">Setting: {proc.setting}</p>}
+                      {proc.result && <p className="text-sm text-slate-600">Result: {proc.result}</p>}
+                      {proc.adverse_events && <p className="text-sm text-red-600">Adverse Events: {proc.adverse_events}</p>}
+                    </div>
+                    <div className="flex gap-2">
+                      <button type="button" onClick={() => openProcedureEditor(proc, idx)} className="text-slate-600 hover:text-slate-800">✎</button>
+                      <button type="button" onClick={() => removeProcedure(idx)} className="text-red-500 hover:text-red-700">×</button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {editingProcedure && (
+            <div className="grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
+              <div className="col-span-12"><Input placeholder="Procedure name" value={editingProcedure.name} onChange={(e) => setEditingProcedure(s => ({...s, name: e.target.value}))} /></div>
+              <div className="col-span-12"><Input type="date" placeholder="Date" value={editingProcedure.date} onChange={(e) => setEditingProcedure(s => ({...s, date: e.target.value}))} /></div>
+              <div className="col-span-12"><Select name="setting" value={editingProcedure.setting} onChange={(e) => setEditingProcedure(s => ({...s, setting: e.target.value}))} options={[{value:'clinic',label:'Clinic'},{value:'ED',label:'ED'},{value:'inpatient',label:'Inpatient'}]} /></div>
+              <div className="col-span-12"><TextArea placeholder="Premeds" value={editingProcedure.premeds} onChange={(e) => setEditingProcedure(s => ({...s, premeds: e.target.value}))} rows={2} /></div>
+              <div className="col-span-12"><TextArea placeholder="Technique" value={editingProcedure.technique} onChange={(e) => setEditingProcedure(s => ({...s, technique: e.target.value}))} rows={2} /></div>
+              <div className="col-span-12"><TextArea placeholder="Findings" value={editingProcedure.findings} onChange={(e) => setEditingProcedure(s => ({...s, findings: e.target.value}))} rows={2} /></div>
+              <div className="col-span-12"><Select name="result" value={editingProcedure.result} onChange={(e) => setEditingProcedure(s => ({...s, result: e.target.value}))} options={[{value:'successful',label:'Successful'},{value:'partial',label:'Partial'},{value:'failed',label:'Failed'}]} /></div>
+              <div className="col-span-12"><TextArea placeholder="Adverse Events" value={editingProcedure.adverse_events} onChange={(e) => setEditingProcedure(s => ({...s, adverse_events: e.target.value}))} rows={2} /></div>
+              <div className="col-span-12 flex gap-2">
+                <button type="button" onClick={saveProcedure} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">Save</button>
+                <button type="button" onClick={() => { setEditingProcedure(null); setEditingProcedureIdx(null); }} className="px-4 py-2 border border-slate-300 rounded-lg">Cancel</button>
+              </div>
+            </div>
+          )}
+          {!editingProcedure && (
+            <button type="button" onClick={() => openProcedureEditor()} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
+              + Add Procedure
+            </button>
+          )}
+        </div>
+      </Card>
+
+      {/* Outcome & Recommendations - Discharge Mode Only */}
+      {mode === 'discharge' && (
+        <Card title="Outcome & Recommendations" collapsible isOpen={!collapsedSections.outcome} onToggle={() => toggleSection('outcome')}>
+          <div className="space-y-4">
+            <div>
+              <FieldLabel>Condition at Discharge</FieldLabel>
+              <Input name="condition" placeholder="Stable, improved, unchanged..." value={formData.outcome.condition} onChange={(e) => updateFormData('outcome.condition', e.target.value)} />
+            </div>
+            <div>
+              <FieldLabel>Hospital Course</FieldLabel>
+              <TextArea name="course" placeholder="Summarize hospital stay, treatments, response..." value={formData.outcome.course} onChange={(e) => updateFormData('outcome.course', e.target.value)} rows={4} />
+            </div>
+            <div>
+              <FieldLabel required>Recommendations</FieldLabel>
+              <div className="space-y-2">
+                {formData.recommendations.map((rec, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input value={rec} onChange={(e) => { const newRecs = [...formData.recommendations]; newRecs[index] = e.target.value; updateFormData('recommendations', newRecs); }} />
+                    <button type="button" onClick={() => removeFromArray('recommendations', index)} className="text-red-500 hover:text-red-700">×</button>
+                  </div>
+                ))}
+                <button type="button" className="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50" onClick={() => addToArray('recommendations', '')}>
+                  + Add Recommendation
+                </button>
+              </div>
+              {errors.recommendations && <p className="text-red-500 text-sm mt-1">{errors.recommendations}</p>}
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Attachments */}
+      <Card title="Attachments" collapsible isOpen={!collapsedSections.attachments} onToggle={() => toggleSection('attachments')} counter={formData.attachments.length}>
+        <div className="space-y-4">
+          <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
+            <p className="text-slate-500 mb-2">Drop files here or click to upload</p>
+            <p className="text-xs text-slate-400 mb-2">Include imaging reports, procedure notes, etc.</p>
+            <button type="button" className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200">Choose Files</button>
+          </div>
+          <div className="space-y-2">
+            {formData.attachments.map((attachment, index) => (
+              <div key={index} className="flex items-center justify-between p-2 bg-slate-50 rounded">
+                <span className="text-sm">{attachment.label || attachment.id}</span>
+                <span className="text-xs text-slate-500">{attachment.type}</span>
+                <button type="button" onClick={() => removeFromArray('attachments', index)} className="text-red-500 hover:text-red-700">×</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+
+      {/* Sticky Footer */}
+      <div className="sticky bottom-0 bg-white border-t border-slate-200 p-4 shadow-lg">
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-slate-500">
+            {lastSaved && `Last saved: ${lastSaved.toLocaleTimeString()}`}
+          </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleSaveDraft}
+              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+            >
+              Save Draft
+            </button>
+            <button
+              type="button"
+              onClick={handlePreview}
+              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+            >
+              Preview
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleFinalize();
+              }}
+              className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+            >
+              Finalize & Save
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default AllergyImmunologyReportForm;

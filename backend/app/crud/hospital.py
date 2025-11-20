@@ -7,17 +7,18 @@ from datetime import datetime, date
 import uuid
 
 from app.crud.base import CRUDBase
+from pydantic import BaseModel
 from app.common.models.hospital import (
     Hospital, HospitalDepartment, Location,
     HospitalType, HospitalStatus, DepartmentType
 )
-from app.common.schemas.clinic import (
-    ClinicCreate, ClinicUpdate, ClinicResponse,
-    DepartmentCreate, DepartmentUpdate, DepartmentResponse
-)
+# from app.common.schemas.clinic import (
+#     ClinicCreate, ClinicUpdate, ClinicResponse,
+#     DepartmentCreate, DepartmentUpdate, DepartmentResponse
+# )
 
 
-class CRUDHospital(CRUDBase[Hospital, ClinicCreate, ClinicUpdate]):
+class CRUDHospital(CRUDBase[Hospital, BaseModel, BaseModel]):
     """CRUD operations for Hospital model."""
     
     def get_by_code(self, db: Session, *, code: str) -> Optional[Hospital]:
@@ -118,13 +119,13 @@ class CRUDHospital(CRUDBase[Hospital, ClinicCreate, ClinicUpdate]):
         ).count()
         
         # Count staff (from User model)
-        from app.common.models.admin import User
+        from app.common.models.user import User
         total_staff = db.query(User).filter(
             User.organization_id == hospital_id
         ).count()
         
         # Count doctors
-        from app.common.models.admin import UserRole
+        from app.common.models.user import UserRole
         total_doctors = db.query(User).filter(
             and_(
                 User.organization_id == hospital_id,
@@ -154,12 +155,12 @@ class CRUDHospital(CRUDBase[Hospital, ClinicCreate, ClinicUpdate]):
             "active_departments": active_departments,
             "total_staff": total_staff,
             "total_doctors": total_doctors,
-            "total_beds": hospital.total_beds or total_bed_capacity,
+            "total_beds": total_bed_capacity,
             "bed_capacity": total_bed_capacity,
             "current_occupancy": current_occupancy,
             "occupancy_rate": round(occupancy_rate, 2),
-            "emergency_services": hospital.emergency_services,
-            "is_24_hours": hospital.is_24_hours
+            "emergency_services": True,  # Default value since attribute doesn't exist
+            "is_24_hours": False  # Default value since attribute doesn't exist
         }
     
     def update_hospital_status(
@@ -196,9 +197,22 @@ class CRUDHospital(CRUDBase[Hospital, ClinicCreate, ClinicUpdate]):
         """Get unique cities with hospitals."""
         cities = db.query(Hospital.city).distinct().all()
         return [city[0] for city in cities if city[0]]
+    
+    def get_hospital_departments(
+        self,
+        db: Session,
+        *,
+        hospital_id: uuid.UUID,
+        skip: int = 0,
+        limit: int = 100
+    ) -> List[HospitalDepartment]:
+        """Get departments for a hospital."""
+        return db.query(HospitalDepartment).filter(
+            HospitalDepartment.hospital_id == hospital_id
+        ).offset(skip).limit(limit).all()
 
 
-class CRUDHospitalDepartment(CRUDBase[HospitalDepartment, DepartmentCreate, DepartmentUpdate]):
+class CRUDHospitalDepartment(CRUDBase[HospitalDepartment, BaseModel, BaseModel]):
     """CRUD operations for HospitalDepartment model."""
     
     def get_by_code(
@@ -267,13 +281,13 @@ class CRUDHospitalDepartment(CRUDBase[HospitalDepartment, DepartmentCreate, Depa
             return {}
         
         # Count staff
-        from app.common.models.admin import User
+        from app.common.models.user import User
         staff_count = db.query(User).filter(
             User.department_id == department_id
         ).count()
         
         # Count doctors
-        from app.common.models.admin import UserRole
+        from app.common.models.user import UserRole
         doctor_count = db.query(User).filter(
             and_(
                 User.department_id == department_id,

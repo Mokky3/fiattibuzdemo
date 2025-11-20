@@ -10,14 +10,16 @@ import {
 const userStatsService = {
   async fetchUserStats(userId) {
     try {
-      const response = await fetch(`/api/admin/users/${userId}/stats`, {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}/stats`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         }
       });
       if (!response.ok) throw new Error('Failed to fetch user stats');
-      return await response.json();
+      const json = await response.json();
+      return json?.data ?? json;
     } catch (error) {
       console.error('Error fetching user stats:', error);
       throw error;
@@ -26,14 +28,26 @@ const userStatsService = {
 
   async fetchUserInfo(userId) {
     try {
-      const response = await fetch(`/api/admin/users/${userId}`, {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         }
       });
       if (!response.ok) throw new Error('Failed to fetch user info');
-      return await response.json();
+      const json = await response.json();
+      const u = json?.data ?? json;
+      return {
+        id: u.id,
+        name: [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email,
+        email: u.email,
+        role: u.role,
+        clinic: u.organization_id || '',
+        status: u.status,
+        joinDate: u.created_at,
+        lastLogin: u.last_login,
+      };
     } catch (error) {
       console.error('Error fetching user info:', error);
       throw error;
@@ -42,14 +56,16 @@ const userStatsService = {
 
   async fetchUserActivityHistory(userId, page = 1, limit = 20, filter = 'all') {
     try {
-      const response = await fetch(`/api/admin/users/${userId}/activity?page=${page}&limit=${limit}&filter=${filter}`, {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/users/${userId}/activity?page=${page}&limit=${limit}&filter=${filter}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         }
       });
       if (!response.ok) throw new Error('Failed to fetch activity history');
-      return await response.json();
+      const json = await response.json();
+      return json?.data ?? json;
     } catch (error) {
       console.error('Error fetching activity history:', error);
       throw error;

@@ -1,113 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Filter, Clock, CheckCircle, AlertTriangle, Eye, Plus, Calendar, User, Clipboard, Flag, MoreVertical } from 'lucide-react';
 import NurseHeader from './header';
+import { getTasks, updateTaskStatus } from '../../services/nurseService';
 
 const NurseTasksModule = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
-  const [selectedDate, setSelectedDate] = useState('2025-06-28');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [viewMode, setViewMode] = useState('table');
 
-  // Sample tasks data
-  const tasksData = [
-    {
-      id: 1,
-      patient: 'John Doe',
-      room: '101A',
-      task: 'Wound dressing change',
-      description: 'Change surgical wound dressing on abdomen',
-      priority: 'high',
-      status: 'pending',
-      scheduledTime: '08:00',
-      estimatedDuration: '15 min',
-      assignedBy: 'Dr. Smith',
-      category: 'wound-care',
-      notes: 'Patient reports mild pain at incision site',
-      completedTime: null,
-      completedBy: null
-    },
-    {
-      id: 2,
-      patient: 'Sarah Lee',
-      room: '102B',
-      task: 'IV line check',
-      description: 'Check IV patency and insertion site',
-      priority: 'medium',
-      status: 'completed',
-      scheduledTime: '07:30',
-      estimatedDuration: '5 min',
-      assignedBy: 'Dr. Williams',
-      category: 'iv-care',
-      notes: 'IV site clean, no signs of infiltration',
-      completedTime: '07:35',
-      completedBy: 'Sarah Johnson'
-    },
-    {
-      id: 3,
-      patient: 'Amir Rahimov',
-      room: '103A',
-      task: 'Patient ambulation',
-      description: 'Assist patient with walking exercise',
-      priority: 'medium',
-      status: 'in-progress',
-      scheduledTime: '09:00',
-      estimatedDuration: '20 min',
-      assignedBy: 'Physical Therapist',
-      category: 'mobility',
-      notes: 'Patient requires walker assistance',
-      completedTime: null,
-      completedBy: null
-    },
-    {
-      id: 4,
-      patient: 'Lucy Zhang',
-      room: '104B',
-      task: 'Blood glucose check',
-      description: 'Monitor blood glucose levels before lunch',
-      priority: 'high',
-      status: 'overdue',
-      scheduledTime: '11:30',
-      estimatedDuration: '5 min',
-      assignedBy: 'Dr. Brown',
-      category: 'monitoring',
-      notes: 'Patient is diabetic, check before meals',
-      completedTime: null,
-      completedBy: null
-    },
-    {
-      id: 5,
-      patient: 'Maria Lopez',
-      room: '105A',
-      task: 'Discharge preparation',
-      description: 'Prepare discharge paperwork and education',
-      priority: 'low',
-      status: 'pending',
-      scheduledTime: '14:00',
-      estimatedDuration: '30 min',
-      assignedBy: 'Discharge Coordinator',
-      category: 'discharge',
-      notes: 'Patient discharge planned for tomorrow',
-      completedTime: null,
-      completedBy: null
-    },
-    {
-      id: 6,
-      patient: 'Ahmed Hassan',
-      room: '106B',
-      task: 'Pre-op preparation',
-      description: 'Prepare patient for surgery - NPO status check',
-      priority: 'high',
-      status: 'completed',
-      scheduledTime: '06:00',
-      estimatedDuration: '25 min',
-      assignedBy: 'Dr. Johnson',
-      category: 'pre-op',
-      notes: 'Patient NPO since midnight, IV started',
-      completedTime: '06:20',
-      completedBy: 'Night Nurse'
-    }
-  ];
+  const [tasksData, setTasksData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        setLoading(true)
+        const response = await getTasks({ 
+          search: searchTerm,
+          status: statusFilter,
+          priority: priorityFilter,
+          date_filter: selectedDate
+        })
+        if (active) {
+          // Handle both array response and object with items
+          if (Array.isArray(response)) {
+            setTasksData(response)
+            setTotal(response.length)
+          } else if (response && response.items) {
+            setTasksData(response.items)
+            setTotal(response.total || response.items.length)
+          } else {
+            setTasksData([])
+            setTotal(0)
+          }
+        }
+      } catch (e) {
+        console.error('Error loading tasks:', e)
+        if (active) {
+          setTasksData([])
+          setTotal(0)
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+    return () => { active = false }
+  }, [searchTerm, statusFilter, priorityFilter, selectedDate])
+
+  const onStart = async (task) => {
+    try {
+      await updateTaskStatus(task.id, 'in-progress')
+      setTasksData(prev => prev.map(t => t.id === task.id ? { ...t, status: 'in-progress' } : t))
+    } catch (e) {}
+  }
+  const onComplete = async (task) => {
+    try {
+      await updateTaskStatus(task.id, 'completed')
+      setTasksData(prev => prev.map(t => t.id === task.id ? { ...t, status: 'completed' } : t))
+    } catch (e) {}
+  }
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -182,7 +137,7 @@ const NurseTasksModule = () => {
         );
       case 'in-progress':
         return (
-          <button className="bg-[#5ACCC3] text-white px-3 py-1 rounded text-sm hover:bg-teal-600 flex items-center">
+          <button onClick={() => onComplete(task)} className="bg-[#5ACCC3] text-white px-3 py-1 rounded text-sm hover:bg-teal-600 flex items-center">
             <CheckCircle className="w-3 h-3 mr-1" />
             Complete
           </button>
@@ -190,7 +145,7 @@ const NurseTasksModule = () => {
       case 'pending':
       case 'overdue':
         return (
-          <button className="bg-[#5ACCC3] text-white px-3 py-1 rounded text-sm hover:bg-teal-600 flex items-center">
+          <button onClick={() => onStart(task)} className="bg-[#5ACCC3] text-white px-3 py-1 rounded text-sm hover:bg-teal-600 flex items-center">
             <Clock className="w-3 h-3 mr-1" />
             Start
           </button>
@@ -267,7 +222,7 @@ const NurseTasksModule = () => {
               <div className="text-sm text-gray-600">Overdue</div>
             </div>
             <div className="bg-white p-4 rounded-lg shadow border-l-4 border-[#5ACCC3]">
-              <div className="text-2xl font-bold text-[#5ACCC3]">{tasksData.length}</div>
+              <div className="text-2xl font-bold text-[#5ACCC3]">{total}</div>
               <div className="text-sm text-gray-600">Total Tasks</div>
             </div>
           </div>
@@ -358,7 +313,23 @@ const NurseTasksModule = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredTasks.map((task) => (
+                  {loading ? (
+                    <tr>
+                      <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#5ACCC3] mr-2"></div>
+                          Loading tasks...
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredTasks.length === 0 ? (
+                    <tr>
+                      <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                        No tasks found
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredTasks.map((task) => (
                     <tr key={task.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -408,14 +379,27 @@ const NurseTasksModule = () => {
                         {getActionButton(task.status, task)}
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredTasks.map((task) => (
+            {loading ? (
+              <div className="col-span-full flex items-center justify-center py-12">
+                <div className="flex items-center text-gray-500">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#5ACCC3] mr-2"></div>
+                  Loading tasks...
+                </div>
+              </div>
+            ) : filteredTasks.length === 0 ? (
+              <div className="col-span-full text-center py-12 text-gray-500">
+                No tasks found
+              </div>
+            ) : (
+              filteredTasks.map((task) => (
               <div key={task.id} className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
                 <div className="flex items-center justify-between mb-4">
                   <div className="flex items-center space-x-2">
@@ -473,13 +457,14 @@ const NurseTasksModule = () => {
                   {getActionButton(task.status, task)}
                 </div>
               </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 
         {/* Summary Footer */}
         <div className="mt-6 text-sm text-gray-600 text-center">
-          Showing {filteredTasks.length} of {tasksData.length} tasks for {selectedDate}
+          Showing {filteredTasks.length} of {total} tasks for {selectedDate}
         </div>
       </div>
     </div>

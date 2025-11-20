@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { patientAuthAPI } from '../../services/apiService'
 
 export const SignUp = () => {
   const navigate = useNavigate();
@@ -47,35 +48,25 @@ export const SignUp = () => {
     }
 
     const payload = {
-      first_name: formData.firstName,
-      last_name: formData.surname,
-      pinfl: formData.pinfl,
-      phone_number: formData.phoneNumber,
       email: formData.email,
       password: formData.password,
+      confirm_password: formData.confirmPassword,
+      first_name: formData.firstName,
+      last_name: formData.surname,
+      phone: formData.phoneNumber,
+      date_of_birth: '1990-01-01', // minimal required, can add DOB field later
+      gender: 'other',
+      national_id: formData.pinfl,
+      clinic_id: null,
     };
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/patients/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.detail || 'Ro‘yxatdan o‘tishda xatolik yuz berdi');
-      }
-
-      const data = await response.json();
-      console.log('Registration success:', data);
-      alert("Ro'yxatdan o'tish muvaffaqiyatli!");
-      navigate('/patient/dashboard');
+      const data = await patientAuthAPI.register(payload)
+      alert("Ro'yxatdan o'tish muvaffaqiyatli! Iltimos, kirish uchun parolingiz bilan tizimga kiring.");
+      navigate('/signin');
     } catch (error) {
-      console.error('Registration failed:', error.message);
-      alert("Xatolik: " + error.message);
+      console.error('Registration failed:', error?.message);
+      alert("Xatolik: " + (error?.message || 'Ro‘yxatdan o‘tishda xatolik yuz berdi'));
     }
   };
 

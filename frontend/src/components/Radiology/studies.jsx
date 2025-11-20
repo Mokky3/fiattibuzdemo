@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Filter, Calendar, Clock, Plus, Edit, Monitor, Camera, Eye, FileText, Phone, Mail, MapPin, X, CheckCircle, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
 import { format, parseISO, isSameDay } from 'date-fns';
 import RadiologyHeader from './header';
+import { getStudies, getStudyStats, createStudy, updateStudy, deleteStudy } from '../../services/radiologyService';
 
 const RadiologyStudies = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -17,8 +18,57 @@ const RadiologyStudies = () => {
     priority: 'all'
   });
 
-  // Mock studies data
-  const [studies] = useState([
+  // Real studies data from API
+  const [studies, setStudies] = useState([]);
+  const [studyStats, setStudyStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    size: 50,
+    total: 0
+  });
+
+  // Fetch studies data from API
+  useEffect(() => {
+    const fetchStudiesData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const [studiesData, statsData] = await Promise.all([
+          getStudies({
+            status: activeTab === 'all' ? undefined : activeTab,
+            modality: filters.modality === 'all' ? undefined : filters.modality,
+            priority: filters.priority === 'all' ? undefined : filters.priority,
+            search: searchTerm || undefined,
+            page: pagination.page,
+            size: pagination.size
+          }),
+          getStudyStats()
+        ]);
+        
+        setStudies(studiesData.items || []);
+        setStudyStats(statsData);
+        setPagination(prev => ({
+          ...prev,
+          total: studiesData.total || 0
+        }));
+      } catch (err) {
+        console.error('Error fetching studies data:', err);
+        setError(err.message);
+        setStudies([]);
+        setStudyStats({});
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStudiesData();
+  }, [activeTab, filters, searchTerm, pagination.page, pagination.size]);
+
+  // Mock studies data for fallback
+  const mockStudies = [
     {
       id: 'RAD-001',
       accessionNumber: 'ACC2025001',
@@ -112,7 +162,7 @@ const RadiologyStudies = () => {
       authorization: 'AUTH345678',
       cptCode: '71020'
     }
-  ]);
+  ];
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -142,14 +192,8 @@ const RadiologyStudies = () => {
     }
   };
 
-  const filteredStudies = studies.filter(study => {
-    const matchesTab = activeTab === 'all' || study.status === activeTab;
-    const matchesSearch = study.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         study.accessionNumber.includes(searchTerm) ||
-                         study.mrn.includes(searchTerm);
-    const matchesFilters = filters.modality === 'all' || study.modality === filters.modality;
-    return matchesTab && matchesSearch && matchesFilters;
-  });
+  // Since filtering is now done on the backend, we use the studies directly
+  const filteredStudies = studies;
 
   const StudyCard = ({ study }) => (
     <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all">
@@ -396,10 +440,10 @@ const RadiologyStudies = () => {
             <div className="flex items-center space-x-4">
               <div className="flex bg-gray-100 rounded-lg p-1">
                 {[
-                  { key: 'all', label: 'All', count: studies.length },
-                  { key: 'scheduled', label: 'Scheduled', count: studies.filter(s => s.status === 'scheduled').length },
-                  { key: 'in_progress', label: 'In Progress', count: studies.filter(s => s.status === 'in_progress').length },
-                  { key: 'completed', label: 'Completed', count: studies.filter(s => s.status === 'completed').length }
+                  { key: 'all', label: 'All', count: studyStats.total || studies.length },
+                  { key: 'scheduled', label: 'Scheduled', count: studyStats.statusCounts?.scheduled || studies.filter(s => s.status === 'scheduled').length },
+                  { key: 'in_progress', label: 'In Progress', count: studyStats.statusCounts?.in_progress || studies.filter(s => s.status === 'in_progress').length },
+                  { key: 'completed', label: 'Completed', count: studyStats.statusCounts?.completed || studies.filter(s => s.status === 'completed').length }
                 ].map(tab => (
                   <button
                     key={tab.key}
@@ -486,82 +530,137 @@ const RadiologyStudies = () => {
           )}
         </div>
 
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+            <span className="ml-3 text-gray-600">Loading studies...</span>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Error loading studies</h3>
+                <p className="text-sm text-red-600 mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm">Today's Studies</p>
-                <p className="text-3xl font-bold text-blue-600">
-                  {studies.filter(s => isSameDay(parseISO(s.scheduledDate), new Date())).length}
-                </p>
+        {!loading && !error && (
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm">Today's Studies</p>
+                  <p className="text-3xl font-bold text-blue-600">
+                    {studyStats.scheduledToday || studies.filter(s => isSameDay(parseISO(s.scheduledDate), new Date())).length}
+                  </p>
+                </div>
+                <Calendar className="w-8 h-8 text-blue-600" />
               </div>
-              <Calendar className="w-8 h-8 text-blue-600" />
             </div>
-          </div>
+            
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm">STAT Studies</p>
+                  <p className="text-3xl font-bold text-red-600">
+                    {studyStats.statPriority || studyStats.priorityCounts?.STAT || studies.filter(s => s.priority === 'STAT').length}
+                  </p>
+                </div>
+                <AlertCircle className="w-8 h-8 text-red-600" />
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm">In Progress</p>
+                  <p className="text-3xl font-bold text-yellow-600">
+                    {studyStats.statusCounts?.in_progress || studies.filter(s => s.status === 'in_progress').length}
+                  </p>
+                </div>
+                <Clock className="w-8 h-8 text-yellow-600" />
+              </div>
+            </div>
           
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm">STAT Studies</p>
-                <p className="text-3xl font-bold text-red-600">
-                  {studies.filter(s => s.priority === 'STAT').length}
-                </p>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-gray-600 text-sm">Completed</p>
+                  <p className="text-3xl font-bold text-green-600">
+                    {studyStats.statusCounts?.completed || studies.filter(s => s.status === 'completed').length}
+                  </p>
+                </div>
+                <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
-              <AlertCircle className="w-8 h-8 text-red-600" />
             </div>
           </div>
-          
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm">In Progress</p>
-                <p className="text-3xl font-bold text-yellow-600">
-                  {studies.filter(s => s.status === 'in_progress').length}
-                </p>
-              </div>
-              <Clock className="w-8 h-8 text-yellow-600" />
-            </div>
-          </div>
-          
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm">Completed</p>
-                <p className="text-3xl font-bold text-green-600">
-                  {studies.filter(s => s.status === 'completed').length}
-                </p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </div>
-        </div>
+        )}
 
         {/* Studies List */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">
-              {activeTab === 'all' ? 'All Studies' : `${activeTab.replace('_', ' ')} Studies`}
-            </h2>
-            <span className="text-gray-500 text-sm">
-              {filteredStudies.length} of {studies.length} studies
-            </span>
-          </div>
+        {!loading && !error && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">
+                {activeTab === 'all' ? 'All Studies' : `${activeTab.replace('_', ' ')} Studies`}
+              </h2>
+              <span className="text-gray-500 text-sm">
+                {filteredStudies.length} of {pagination.total} studies
+              </span>
+            </div>
 
-          {filteredStudies.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 font-medium">No studies found</p>
-              <p className="text-gray-400 text-sm">Try adjusting your filters or search terms</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredStudies.map(study => (
-                <StudyCard key={study.id} study={study} />
-              ))}
-            </div>
-          )}
-        </div>
+            {filteredStudies.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500 font-medium">No studies found</p>
+                <p className="text-gray-400 text-sm">Try adjusting your filters or search terms</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {filteredStudies.map(study => (
+                    <StudyCard key={study.id} study={study} />
+                  ))}
+                </div>
+                
+                {/* Pagination */}
+                {pagination.total > pagination.size && (
+                  <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
+                    <div className="text-sm text-gray-500">
+                      Showing {((pagination.page - 1) * pagination.size) + 1} to {Math.min(pagination.page * pagination.size, pagination.total)} of {pagination.total} studies
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                        disabled={pagination.page === 1}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Previous
+                      </button>
+                      <span className="px-3 py-2 text-sm text-gray-700">
+                        Page {pagination.page} of {Math.ceil(pagination.total / pagination.size)}
+                      </span>
+                      <button
+                        onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                        disabled={pagination.page >= Math.ceil(pagination.total / pagination.size)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {selectedStudy && <StudyModal study={selectedStudy} />}

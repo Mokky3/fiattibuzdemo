@@ -2,12 +2,26 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, Settings, Bell, Shield, Database, Users, Monitor, Printer, Wifi, Server, Clock, Mail, Phone, Globe, Save, X, Check, AlertTriangle, Info, Plus, Trash2, Edit } from 'lucide-react';
 // Import the header component
 import LabHeader from './header';
+import { 
+  getGeneralSettings, 
+  patchGeneralSettings,
+  getSystemSettings,
+  patchSystemSettings,
+  getNotificationSettings,
+  patchNotificationSettings,
+  getEquipmentSettings,
+  patchEquipmentDefaults
+} from '../../services/labService';
 
 
 const LabSettingsModule = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   // General Settings
   const [generalSettings, setGeneralSettings] = useState({
@@ -199,14 +213,114 @@ const LabSettingsModule = () => {
     }
   });
 
-  const handleSaveSettings = (section) => {
-    setShowSaveDialog(true);
-    // Here you would typically make API calls to save the settings
-    setTimeout(() => {
-      setShowSaveDialog(false);
+  // Fetch settings from backend on component mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        setLoading(true);
+        const [general, system, notification, equipment] = await Promise.all([
+          getGeneralSettings().catch(() => null),
+          getSystemSettings().catch(() => null),
+          getNotificationSettings().catch(() => null),
+          getEquipmentSettings().catch(() => null),
+        ]);
+        
+        if (general) setGeneralSettings(general);
+        if (system) setSystemSettings(system);
+        if (notification) setNotificationSettings(notification);
+        if (equipment) setEquipmentSettings(equipment);
+      } catch (err) {
+        console.error('Error loading settings:', err);
+        setError('Failed to load settings');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchSettings();
+  }, []);
+
+  // Function to refresh specific settings section
+  const refreshSettingsSection = async (section) => {
+    try {
+      switch (section) {
+        case 'General':
+          const general = await getGeneralSettings();
+          if (general) setGeneralSettings(general);
+          break;
+        case 'System':
+          const system = await getSystemSettings();
+          if (system) setSystemSettings(system);
+          break;
+        case 'Notifications':
+          const notification = await getNotificationSettings();
+          if (notification) setNotificationSettings(notification);
+          break;
+        case 'Equipment':
+          const equipment = await getEquipmentSettings();
+          if (equipment) setEquipmentSettings(equipment);
+          break;
+        case 'Display':
+          // Display settings don't exist in backend, skip refresh
+          console.log('Display settings refresh skipped - no backend endpoint');
+          break;
+      }
+    } catch (err) {
+      console.error(`Error refreshing ${section} settings:`, err);
+    }
+  };
+
+  const handleSaveSettings = async (section) => {
+    try {
+      setShowSaveDialog(true);
+      
+      // Make API calls to save the settings based on section
+      switch (section) {
+        case 'General':
+          await patchGeneralSettings(generalSettings);
+          break;
+        case 'System':
+          await patchSystemSettings(systemSettings);
+          break;
+        case 'Notifications':
+          await patchNotificationSettings(notificationSettings);
+          break;
+        case 'Equipment':
+          // Save equipment default settings
+          await patchEquipmentDefaults(equipmentSettings.defaultSettings);
+          break;
+        case 'Display':
+          // Display settings don't exist in backend, skip save
+          console.log('Display settings save skipped - no backend endpoint');
+          break;
+        default:
+          console.log(`Saving ${section} settings...`);
+      }
+      
+      // Refresh the saved section from backend to get the latest data
+      await refreshSettingsSection(section);
+      
       setHasChanges(false);
-      alert(`${section} settings saved successfully!`);
-    }, 1000);
+      setSuccessMessage(`${section} settings saved successfully!`);
+      setShowSuccessMessage(true);
+      
+      // Hide success message after 3 seconds
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+      }, 3000);
+      
+    } catch (err) {
+      console.error(`Error saving ${section} settings:`, err);
+      setSuccessMessage(`Failed to save ${section} settings. Please try again.`);
+      setShowSuccessMessage(true);
+      
+      // Hide error message after 5 seconds
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+      }, 5000);
+    } finally {
+      setShowSaveDialog(false);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -455,7 +569,10 @@ const LabSettingsModule = () => {
               <input
                 type="checkbox"
                 checked={systemSettings.autoBackup}
-                onChange={(e) => setSystemSettings({...systemSettings, autoBackup: e.target.checked})}
+                onChange={(e) => {
+                  setSystemSettings({...systemSettings, autoBackup: e.target.checked});
+                  setHasChanges(true);
+                }}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
@@ -468,7 +585,10 @@ const LabSettingsModule = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Backup Frequency</label>
                 <select
                   value={systemSettings.backupFrequency}
-                  onChange={(e) => setSystemSettings({...systemSettings, backupFrequency: e.target.value})}
+                  onChange={(e) => {
+                    setSystemSettings({...systemSettings, backupFrequency: e.target.value});
+                    setHasChanges(true);
+                  }}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="hourly">Hourly</option>
@@ -481,7 +601,10 @@ const LabSettingsModule = () => {
                 <input
                   type="number"
                   value={systemSettings.backupRetention}
-                  onChange={(e) => setSystemSettings({...systemSettings, backupRetention: parseInt(e.target.value)})}
+                  onChange={(e) => {
+                    setSystemSettings({...systemSettings, backupRetention: parseInt(e.target.value)});
+                    setHasChanges(true);
+                  }}
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                 />
               </div>
@@ -501,7 +624,10 @@ const LabSettingsModule = () => {
             <input
               type="number"
               value={systemSettings.sessionTimeout}
-              onChange={(e) => setSystemSettings({...systemSettings, sessionTimeout: parseInt(e.target.value)})}
+              onChange={(e) => {
+                setSystemSettings({...systemSettings, sessionTimeout: parseInt(e.target.value)});
+                setHasChanges(true);
+              }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
@@ -510,7 +636,10 @@ const LabSettingsModule = () => {
             <input
               type="number"
               value={systemSettings.maxLoginAttempts}
-              onChange={(e) => setSystemSettings({...systemSettings, maxLoginAttempts: parseInt(e.target.value)})}
+              onChange={(e) => {
+                setSystemSettings({...systemSettings, maxLoginAttempts: parseInt(e.target.value)});
+                setHasChanges(true);
+              }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
@@ -524,10 +653,13 @@ const LabSettingsModule = () => {
               <input
                 type="number"
                 value={systemSettings.passwordPolicy.minLength}
-                onChange={(e) => setSystemSettings({
-                  ...systemSettings,
-                  passwordPolicy: {...systemSettings.passwordPolicy, minLength: parseInt(e.target.value)}
-                })}
+                onChange={(e) => {
+                  setSystemSettings({
+                    ...systemSettings,
+                    passwordPolicy: {...systemSettings.passwordPolicy, minLength: parseInt(e.target.value)}
+                  });
+                  setHasChanges(true);
+                }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
@@ -536,10 +668,13 @@ const LabSettingsModule = () => {
               <input
                 type="number"
                 value={systemSettings.passwordPolicy.expiryDays}
-                onChange={(e) => setSystemSettings({
-                  ...systemSettings,
-                  passwordPolicy: {...systemSettings.passwordPolicy, expiryDays: parseInt(e.target.value)}
-                })}
+                onChange={(e) => {
+                  setSystemSettings({
+                    ...systemSettings,
+                    passwordPolicy: {...systemSettings.passwordPolicy, expiryDays: parseInt(e.target.value)}
+                  });
+                  setHasChanges(true);
+                }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
@@ -554,10 +689,13 @@ const LabSettingsModule = () => {
                 <input
                   type="checkbox"
                   checked={systemSettings.passwordPolicy[policy.key]}
-                  onChange={(e) => setSystemSettings({
-                    ...systemSettings,
-                    passwordPolicy: {...systemSettings.passwordPolicy, [policy.key]: e.target.checked}
-                  })}
+                  onChange={(e) => {
+                    setSystemSettings({
+                      ...systemSettings,
+                      passwordPolicy: {...systemSettings.passwordPolicy, [policy.key]: e.target.checked}
+                    });
+                    setHasChanges(true);
+                  }}
                   className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                 />
                 <span className="text-sm text-gray-700">{policy.label}</span>
@@ -603,7 +741,10 @@ const LabSettingsModule = () => {
                   <input
                     type="checkbox"
                     checked={notificationSettings[method.key]}
-                    onChange={(e) => setNotificationSettings({...notificationSettings, [method.key]: e.target.checked})}
+                    onChange={(e) => {
+                      setNotificationSettings({...notificationSettings, [method.key]: e.target.checked});
+                      setHasChanges(true);
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
@@ -629,10 +770,13 @@ const LabSettingsModule = () => {
               <input
                 type="checkbox"
                 checked={notificationSettings.criticalAlerts.enabled}
-                onChange={(e) => setNotificationSettings({
-                  ...notificationSettings,
-                  criticalAlerts: {...notificationSettings.criticalAlerts, enabled: e.target.checked}
-                })}
+                onChange={(e) => {
+                  setNotificationSettings({
+                    ...notificationSettings,
+                    criticalAlerts: {...notificationSettings.criticalAlerts, enabled: e.target.checked}
+                  });
+                  setHasChanges(true);
+                }}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
@@ -714,10 +858,13 @@ const LabSettingsModule = () => {
                 <input
                   type="checkbox"
                   checked={notificationSettings.systemAlerts[alert.key]}
-                  onChange={(e) => setNotificationSettings({
-                    ...notificationSettings,
-                    systemAlerts: {...notificationSettings.systemAlerts, [alert.key]: e.target.checked}
-                  })}
+                  onChange={(e) => {
+                    setNotificationSettings({
+                      ...notificationSettings,
+                      systemAlerts: {...notificationSettings.systemAlerts, [alert.key]: e.target.checked}
+                    });
+                    setHasChanges(true);
+                  }}
                   className="sr-only peer"
                 />
                 <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
@@ -805,6 +952,7 @@ const LabSettingsModule = () => {
                           : inst
                       );
                       setEquipmentSettings({...equipmentSettings, instruments: updatedInstruments});
+                      setHasChanges(true);
                     }}
                     className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                   />
@@ -821,6 +969,7 @@ const LabSettingsModule = () => {
                           : inst
                       );
                       setEquipmentSettings({...equipmentSettings, instruments: updatedInstruments});
+                      setHasChanges(true);
                     }}
                     className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
                   />
@@ -843,10 +992,13 @@ const LabSettingsModule = () => {
             <input
               type="number"
               value={equipmentSettings.defaultSettings.calibrationInterval}
-              onChange={(e) => setEquipmentSettings({
-                ...equipmentSettings,
-                defaultSettings: {...equipmentSettings.defaultSettings, calibrationInterval: parseInt(e.target.value)}
-              })}
+              onChange={(e) => {
+                setEquipmentSettings({
+                  ...equipmentSettings,
+                  defaultSettings: {...equipmentSettings.defaultSettings, calibrationInterval: parseInt(e.target.value)}
+                });
+                setHasChanges(true);
+              }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
@@ -855,10 +1007,13 @@ const LabSettingsModule = () => {
             <input
               type="number"
               value={equipmentSettings.defaultSettings.maintenanceInterval}
-              onChange={(e) => setEquipmentSettings({
-                ...equipmentSettings,
-                defaultSettings: {...equipmentSettings.defaultSettings, maintenanceInterval: parseInt(e.target.value)}
-              })}
+              onChange={(e) => {
+                setEquipmentSettings({
+                  ...equipmentSettings,
+                  defaultSettings: {...equipmentSettings.defaultSettings, maintenanceInterval: parseInt(e.target.value)}
+                });
+                setHasChanges(true);
+              }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
@@ -866,10 +1021,13 @@ const LabSettingsModule = () => {
             <label className="block text-sm font-medium text-gray-700 mb-2">QC Frequency</label>
             <select
               value={equipmentSettings.defaultSettings.qualityControlFrequency}
-              onChange={(e) => setEquipmentSettings({
-                ...equipmentSettings,
-                defaultSettings: {...equipmentSettings.defaultSettings, qualityControlFrequency: e.target.value}
-              })}
+              onChange={(e) => {
+                setEquipmentSettings({
+                  ...equipmentSettings,
+                  defaultSettings: {...equipmentSettings.defaultSettings, qualityControlFrequency: e.target.value}
+                });
+                setHasChanges(true);
+              }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
               <option value="daily">Daily</option>
@@ -882,13 +1040,16 @@ const LabSettingsModule = () => {
             <input
               type="number"
               value={equipmentSettings.defaultSettings.alertThresholds.reagentLow}
-              onChange={(e) => setEquipmentSettings({
-                ...equipmentSettings,
-                defaultSettings: {
-                  ...equipmentSettings.defaultSettings,
-                  alertThresholds: {...equipmentSettings.defaultSettings.alertThresholds, reagentLow: parseInt(e.target.value)}
-                }
-              })}
+              onChange={(e) => {
+                setEquipmentSettings({
+                  ...equipmentSettings,
+                  defaultSettings: {
+                    ...equipmentSettings.defaultSettings,
+                    alertThresholds: {...equipmentSettings.defaultSettings.alertThresholds, reagentLow: parseInt(e.target.value)}
+                  }
+                });
+                setHasChanges(true);
+              }}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
             />
           </div>
@@ -1057,11 +1218,12 @@ const LabSettingsModule = () => {
     </div>
   );
 
+  // Define tabs array with locked status
   const tabs = [
     { id: 'general', label: 'General', icon: Settings, component: GeneralSection, locked: false },
-    { id: 'system', label: 'System', icon: Server, component: SystemSection, locked: false },
-    { id: 'notifications', label: 'Notifications', icon: Bell, component: NotificationSection, locked: false },
-    { id: 'equipment', label: 'Equipment', icon: Monitor, component: EquipmentSection, locked: false },
+    { id: 'system', label: 'System', icon: Server, component: SystemSection, locked: true },
+    { id: 'notifications', label: 'Notifications', icon: Bell, component: NotificationSection, locked: true },
+    { id: 'equipment', label: 'Equipment', icon: Monitor, component: EquipmentSection, locked: true },
     { id: 'users', label: 'Users', icon: Users, component: UserSection, locked: true },
     { id: 'integrations', label: 'Integrations', icon: Globe, component: IntegrationSection, locked: true }
   ];
@@ -1131,7 +1293,28 @@ const LabSettingsModule = () => {
 
           {/* Content Area */}
           <div className="flex-1 min-w-0">
-            {tabs.find(tab => tab.id === activeTab)?.component()}
+            {(() => {
+              const currentTab = tabs.find(tab => tab.id === activeTab);
+              if (currentTab?.locked) {
+                // Show locked message for locked tabs
+                return (
+                  <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                    <div className="text-6xl mb-4">🔒</div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Module Locked</h2>
+                    <p className="text-gray-600 mb-4">
+                      The {currentTab.label} module is currently locked and unavailable.
+                    </p>
+                    <button
+                      onClick={() => setActiveTab('general')}
+                      className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors"
+                    >
+                      Return to General Settings
+                    </button>
+                  </div>
+                );
+              }
+              return currentTab?.component();
+            })()}
           </div>
         </div>
       </div>
@@ -1151,6 +1334,50 @@ const LabSettingsModule = () => {
             </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div className="bg-teal-500 h-2 rounded-full animate-pulse" style={{ width: '75%' }}></div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Success/Error Message Popup */}
+      {showSuccessMessage && (
+        <div className="fixed top-4 right-4 z-50">
+          <div className={`rounded-lg p-4 shadow-lg max-w-sm ${
+            successMessage.includes('Failed') 
+              ? 'bg-red-50 border border-red-200' 
+              : 'bg-green-50 border border-green-200'
+          }`}>
+            <div className="flex items-center space-x-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                successMessage.includes('Failed') 
+                  ? 'bg-red-100' 
+                  : 'bg-green-100'
+              }`}>
+                {successMessage.includes('Failed') ? (
+                  <X className="w-5 h-5 text-red-600" />
+                ) : (
+                  <Check className="w-5 h-5 text-green-600" />
+                )}
+              </div>
+              <div className="flex-1">
+                <p className={`text-sm font-medium ${
+                  successMessage.includes('Failed') 
+                    ? 'text-red-800' 
+                    : 'text-green-800'
+                }`}>
+                  {successMessage}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowSuccessMessage(false)}
+                className={`ml-2 ${
+                  successMessage.includes('Failed') 
+                    ? 'text-red-400 hover:text-red-600' 
+                    : 'text-green-400 hover:text-green-600'
+                }`}
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>

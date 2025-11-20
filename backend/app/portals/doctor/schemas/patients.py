@@ -31,8 +31,8 @@ class PatientStatusEnum(str, Enum):
 class EmergencyContact(BaseModel):
     name: str = Field(..., min_length=2, max_length=100)
     relationship: str = Field(..., min_length=2, max_length=50)
-    phone: str = Field(..., regex=r'^\+?[\d\s\-\(\)]{10,20}$')
-    email: Optional[str] = Field(None, regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    phone: str = Field(..., pattern=r'^\+?[\d\s\-\(\)]{10,20}$')
+    email: Optional[str] = Field(None, pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
 
 class InsuranceInfo(BaseModel):
     provider: str = Field(..., min_length=2, max_length=100)
@@ -48,8 +48,8 @@ class PatientBase(BaseModel):
     middle_name: Optional[str] = Field(None, max_length=50)
     date_of_birth: date
     gender: GenderEnum
-    phone: str = Field(..., regex=r'^\+?[\d\s\-\(\)]{10,20}$')
-    email: Optional[str] = Field(None, regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    phone: str = Field(..., pattern=r'^\+?[\d\s\-\(\)]{10,20}$')
+    email: Optional[str] = Field(None, pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
     
     # Address
     address_line_1: str = Field(..., min_length=5, max_length=200)
@@ -86,8 +86,8 @@ class PatientUpdate(BaseModel):
     middle_name: Optional[str] = Field(None, max_length=50)
     date_of_birth: Optional[date] = None
     gender: Optional[GenderEnum] = None
-    phone: Optional[str] = Field(None, regex=r'^\+?[\d\s\-\(\)]{10,20}$')
-    email: Optional[str] = Field(None, regex=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+    phone: Optional[str] = Field(None, pattern=r'^\+?[\d\s\-\(\)]{10,20}$')
+    email: Optional[str] = Field(None, pattern=r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
     
     address_line_1: Optional[str] = Field(None, min_length=5, max_length=200)
     address_line_2: Optional[str] = Field(None, max_length=200)
@@ -156,8 +156,8 @@ class PatientSearch(BaseModel):
     size: int = Field(20, ge=1, le=100)
     
     # Sorting
-    sort_by: str = Field("last_name", regex=r'^(first_name|last_name|date_of_birth|last_visit|created_at)$')
-    sort_order: str = Field("asc", regex=r'^(asc|desc)$')
+    sort_by: str = Field("last_name", pattern=r'^(first_name|last_name|date_of_birth|last_visit|created_at)$')
+    sort_order: str = Field("asc", pattern=r'^(asc|desc)$')
 
 # ================================
 # Medical History Schemas

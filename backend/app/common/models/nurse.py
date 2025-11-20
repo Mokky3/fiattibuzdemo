@@ -36,9 +36,10 @@ class NurseRole(str, enum.Enum):
 class Nurse(Base):
     """Nurse profile model."""
     __tablename__ = "nurses"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(String(36), ForeignKey("users.id"), unique=True, nullable=False)
+    user_id = Column(String(36), ForeignKey("core.users.id"), unique=True, nullable=False)
     
     # Professional information
     license_number = Column(String(50), unique=True, nullable=False, index=True)
@@ -47,9 +48,9 @@ class Nurse(Base):
     license_expiry_date = Column(Date, nullable=True)
     
     # Specialization
-    primary_specialty = Column(Enum(NurseSpecialty), nullable=False)
+    primary_specialty = Column(Enum(NurseSpecialty, native_enum=False), nullable=False)
     secondary_specialties = Column(JSON, nullable=True)  # Array of specialties
-    role = Column(Enum(NurseRole), nullable=False)
+    role = Column(Enum(NurseRole, native_enum=False), nullable=False)
     
     # Certifications
     certifications = Column(JSON, nullable=True)  # Array of certification objects
@@ -68,7 +69,7 @@ class Nurse(Base):
     preferred_shifts = Column(JSON, nullable=True)  # Array of shift preferences
     
     # Department assignments
-    primary_department_id = Column(String(36), ForeignKey("hospital_departments.id"), nullable=True)
+    primary_department_id = Column(String(36), ForeignKey("ref.hospital_departments.id"), nullable=True)
     can_float = Column(Boolean, default=True)  # Can work in multiple departments
     
     # Performance
@@ -82,17 +83,23 @@ class Nurse(Base):
     # Relationships
     user = relationship("User", back_populates="nurse_profile")
     primary_department = relationship("HospitalDepartment")
-    shift_assignments = relationship("NurseShiftAssignment", back_populates="nurse", cascade="all, delete-orphan")
+    shift_assignments = relationship(
+        "NurseShiftAssignment",
+        back_populates="nurse",
+        cascade="all, delete-orphan",
+        foreign_keys="NurseShiftAssignment.nurse_id",
+    )
     patient_assignments = relationship("NursePatientAssignment", back_populates="nurse", cascade="all, delete-orphan")
 
 
 class NurseShiftAssignment(Base):
     """Nurse shift assignments."""
     __tablename__ = "nurse_shift_assignments"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    nurse_id = Column(String(36), ForeignKey("nurses.id"), nullable=False)
-    department_id = Column(String(36), ForeignKey("hospital_departments.id"), nullable=False)
+    nurse_id = Column(String(36), ForeignKey("ehr.nurses.id"), nullable=False)
+    department_id = Column(String(36), ForeignKey("ref.hospital_departments.id"), nullable=False)
     
     # Shift details
     shift_date = Column(Date, nullable=False, index=True)
@@ -108,7 +115,7 @@ class NurseShiftAssignment(Base):
     # Coverage
     is_overtime = Column(Boolean, default=False)
     is_holiday = Column(Boolean, default=False)
-    replaced_nurse_id = Column(String(36), ForeignKey("nurses.id"), nullable=True)
+    replaced_nurse_id = Column(String(36), ForeignKey("ehr.nurses.id"), nullable=True)
     
     # Notes
     notes = Column(Text, nullable=True)
@@ -126,10 +133,11 @@ class NurseShiftAssignment(Base):
 class NursePatientAssignment(Base):
     """Nurse-patient assignments for care coordination."""
     __tablename__ = "nurse_patient_assignments"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    nurse_id = Column(String(36), ForeignKey("nurses.id"), nullable=False)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    nurse_id = Column(String(36), ForeignKey("ehr.nurses.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # Assignment details
     assignment_date = Column(Date, nullable=False, index=True)
@@ -150,3 +158,53 @@ class NursePatientAssignment(Base):
     # Relationships
     nurse = relationship("Nurse", back_populates="patient_assignments")
     patient = relationship("Patient")
+
+
+class MedicationAdministrationEvent(Base):
+    """Audit log of medication administrations or skips by nurses."""
+    __tablename__ = "medication_administration_events"
+    __table_args__ = {"schema": "ops"}
+    
+    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    medication_id = Column(String(36), ForeignKey("ops.patient_medications.id"), nullable=True)
+    nurse_id = Column(String(36), ForeignKey("ehr.nurses.id"), nullable=False)
+    
+    action = Column(String(20), nullable=False)  # administered|skipped
+    reason = Column(Text, nullable=True)
+    dose_given = Column(String(100), nullable=True)
+    route = Column(String(50), nullable=True)
+    administered_at = Column(DateTime(timezone=True), server_default=func.now())
+    comments = Column(Text, nullable=True)
+    
+    # Relationships
+    nurse = relationship("Nurse")
+    
+
+class NurseSettings(Base):
+    """Per-nurse preference/settings (portal-specific)."""
+    __tablename__ = "nurse_settings"
+    __table_args__ = {"schema": "ehr"}
+    
+    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+    nurse_id = Column(String(36), ForeignKey("ehr.nurses.id"), unique=True, nullable=False)
+    
+    # Notification
+    notify_critical_results = Column(Boolean, default=True)
+    notify_medication_due = Column(Boolean, default=True)
+    notify_task_overdue = Column(Boolean, default=True)
+    
+    # Display
+    dashboard_default_tab = Column(String(50), default="overview")
+    items_per_page = Column(Integer, default=20)
+    
+    # Workflow
+    auto_assign_vitals = Column(Boolean, default=True)
+    allow_cross_unit_tasks = Column(Boolean, default=False)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    nurse = relationship("Nurse")

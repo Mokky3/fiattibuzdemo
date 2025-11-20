@@ -4,6 +4,7 @@ from sqlalchemy import Column, String, Date, DateTime, Text, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from sqlalchemy import String
 from sqlalchemy.sql import func
+from sqlalchemy.dialects.postgresql import UUID
 import uuid
 import enum
 
@@ -100,6 +101,7 @@ class ImmunizationStatus(str, enum.Enum):
 class Condition(Base):
     """Patient conditions/diagnoses - converted from FHIR Condition."""
     __tablename__ = "conditions"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -108,16 +110,16 @@ class Condition(Base):
     identifiers = Column(JSON, nullable=True)  # Array of identifiers
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.encounters.id"), nullable=True)
     
     # Status
-    clinical_status = Column(Enum(ClinicalStatus), nullable=False)
-    verification_status = Column(Enum(VerificationStatus), nullable=False)
+    clinical_status = Column(Enum(ClinicalStatus, native_enum=False), nullable=False)
+    verification_status = Column(Enum(VerificationStatus, native_enum=False), nullable=False)
     
     # Category and severity
-    category = Column(Enum(ConditionCategory), nullable=False)
-    severity = Column(Enum(Severity), nullable=True)
+    category = Column(Enum(ConditionCategory, native_enum=False), nullable=False)
+    severity = Column(Enum(Severity, native_enum=False), nullable=True)
     
     # Condition details
     code = Column(JSON, nullable=False)  # CodeableConcept with ICD-10, SNOMED, etc.
@@ -142,8 +144,8 @@ class Condition(Base):
     
     # Recording
     recorded_date = Column(DateTime(timezone=True), nullable=False)
-    recorder_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    asserter_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    recorder_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
+    asserter_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     
     # Clinical notes
     notes = Column(JSON, nullable=True)  # Array of annotations
@@ -166,9 +168,10 @@ class Condition(Base):
 class ConditionStage(Base):
     """Staging information for conditions."""
     __tablename__ = "condition_stages"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    condition_id = Column(String(36), ForeignKey("conditions.id"), nullable=False)
+    condition_id = Column(String(36), ForeignKey("ehr.conditions.id"), nullable=False)
     
     # Stage details
     summary = Column(JSON, nullable=False)  # CodeableConcept
@@ -185,9 +188,10 @@ class ConditionStage(Base):
 class ConditionEvidence(Base):
     """Supporting evidence for conditions."""
     __tablename__ = "condition_evidence"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    condition_id = Column(String(36), ForeignKey("conditions.id"), nullable=False)
+    condition_id = Column(String(36), ForeignKey("ehr.conditions.id"), nullable=False)
     
     # Evidence
     code = Column(JSON, nullable=True)  # CodeableConcept for manifestation
@@ -203,22 +207,23 @@ class ConditionEvidence(Base):
 class Observation(Base):
     """Clinical observations - converted from FHIR Observation."""
     __tablename__ = "observations"
+    __table_args__ = {"schema": "ehr"}
     
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     
     # FHIR references
     fhir_observation_id = Column(String(255), unique=True, nullable=True)
     identifiers = Column(JSON, nullable=True)  # Array of identifiers
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=True)
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    encounter_id = Column(UUID(as_uuid=True), ForeignKey("ehr.encounters.id"), nullable=True)
     
     # Status
-    status = Column(Enum(ObservationStatus), nullable=False)
+    status = Column(Enum(ObservationStatus, native_enum=False), nullable=False)
     
     # Category and code
-    category = Column(Enum(ObservationCategory), nullable=False)
+    category = Column(Enum(ObservationCategory, native_enum=False), nullable=False)
     code = Column(JSON, nullable=False)  # CodeableConcept (LOINC, SNOMED, etc.)
     display_name = Column(String(500), nullable=False)
     
@@ -266,7 +271,7 @@ class Observation(Base):
     method = Column(JSON, nullable=True)  # CodeableConcept
     
     # Specimen
-    specimen_id = Column(String(36), nullable=True)  # Reference to specimen
+    specimen_id = Column(UUID(as_uuid=True), nullable=True)  # Reference to specimen
     
     # Device
     device = Column(JSON, nullable=True)  # Reference to device used
@@ -294,9 +299,10 @@ class Observation(Base):
 class ObservationComponent(Base):
     """Components of multi-part observations."""
     __tablename__ = "observation_components"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    observation_id = Column(String(36), ForeignKey("observations.id"), nullable=False)
+    observation_id = Column(String(36), ForeignKey("ehr.observations.id"), nullable=False)
     
     # Component details
     code = Column(JSON, nullable=False)  # CodeableConcept
@@ -327,6 +333,7 @@ class ObservationComponent(Base):
 class AllergyIntolerance(Base):
     """Patient allergies and intolerances - converted from FHIR AllergyIntolerance."""
     __tablename__ = "allergy_intolerances"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -335,19 +342,19 @@ class AllergyIntolerance(Base):
     identifiers = Column(JSON, nullable=True)  # Array of identifiers
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.encounters.id"), nullable=True)
     
     # Status
-    clinical_status = Column(Enum(ClinicalStatus), nullable=False)
-    verification_status = Column(Enum(VerificationStatus), nullable=False)
+    clinical_status = Column(Enum(ClinicalStatus, native_enum=False), nullable=False)
+    verification_status = Column(Enum(VerificationStatus, native_enum=False), nullable=False)
     
     # Type and category
-    type = Column(Enum(AllergyType), nullable=False)
+    type = Column(Enum(AllergyType, native_enum=False), nullable=False)
     categories = Column(JSON, nullable=True)  # Array of AllergyCategory values
     
     # Criticality
-    criticality = Column(Enum(AllergyCriticality), nullable=True)
+    criticality = Column(Enum(AllergyCriticality, native_enum=False), nullable=True)
     
     # Allergen
     code = Column(JSON, nullable=False)  # CodeableConcept
@@ -362,8 +369,8 @@ class AllergyIntolerance(Base):
     
     # Recording
     recorded_date = Column(DateTime(timezone=True), nullable=False)
-    recorder_id = Column(String(36), ForeignKey("users.id"), nullable=True)
-    asserter_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    recorder_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
+    asserter_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     
     # Last occurrence
     last_occurrence = Column(DateTime(timezone=True), nullable=True)
@@ -386,9 +393,10 @@ class AllergyIntolerance(Base):
 class AllergyReaction(Base):
     """Specific reactions to allergens."""
     __tablename__ = "allergy_reactions"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    allergy_id = Column(String(36), ForeignKey("allergy_intolerances.id"), nullable=False)
+    allergy_id = Column(String(36), ForeignKey("ehr.allergy_intolerances.id"), nullable=False)
     
     # Reaction details
     substance = Column(JSON, nullable=True)  # Specific substance if different from main allergen
@@ -396,7 +404,7 @@ class AllergyReaction(Base):
     description = Column(Text, nullable=True)
     
     # Severity
-    severity = Column(Enum(ReactionSeverity), nullable=True)
+    severity = Column(Enum(ReactionSeverity, native_enum=False), nullable=True)
     
     # Exposure route
     exposure_route = Column(JSON, nullable=True)  # CodeableConcept
@@ -417,6 +425,7 @@ class AllergyReaction(Base):
 class Immunization(Base):
     """Immunization records - converted from FHIR Immunization."""
     __tablename__ = "immunizations"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -425,11 +434,11 @@ class Immunization(Base):
     identifiers = Column(JSON, nullable=True)  # Array of identifiers
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.encounters.id"), nullable=True)
     
     # Status
-    status = Column(Enum(ImmunizationStatus), nullable=False)
+    status = Column(Enum(ImmunizationStatus, native_enum=False), nullable=False)
     status_reason = Column(JSON, nullable=True)  # CodeableConcept
     
     # Vaccine
@@ -446,7 +455,7 @@ class Immunization(Base):
     report_origin = Column(JSON, nullable=True)  # CodeableConcept if not primary
     
     # Location
-    location_id = Column(String(36), ForeignKey("hospital_departments.id"), nullable=True)
+    location_id = Column(String(36), ForeignKey("ref.hospital_departments.id"), nullable=True)
     
     # Manufacturer
     manufacturer = Column(String(200), nullable=True)
@@ -460,7 +469,7 @@ class Immunization(Base):
     dose_unit = Column(String(50), nullable=True)
     
     # Performer
-    performer_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    performer_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     performer_function = Column(JSON, nullable=True)  # CodeableConcept
     
     # Reason
@@ -500,9 +509,10 @@ class Immunization(Base):
 class ImmunizationReaction(Base):
     """Reactions to immunizations."""
     __tablename__ = "immunization_reactions"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    immunization_id = Column(String(36), ForeignKey("immunizations.id"), nullable=False)
+    immunization_id = Column(String(36), ForeignKey("ehr.immunizations.id"), nullable=False)
     
     # Reaction details
     date = Column(DateTime(timezone=True), nullable=True)
@@ -519,9 +529,10 @@ class ImmunizationReaction(Base):
 class ImmunizationProtocol(Base):
     """Protocol followed for immunization."""
     __tablename__ = "immunization_protocols"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    immunization_id = Column(String(36), ForeignKey("immunizations.id"), nullable=False)
+    immunization_id = Column(String(36), ForeignKey("ehr.immunizations.id"), nullable=False)
     
     # Protocol details
     series = Column(String(200), nullable=True)
@@ -545,6 +556,7 @@ class ImmunizationProtocol(Base):
 class FamilyMemberHistory(Base):
     """Family member health history."""
     __tablename__ = "family_member_histories"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -553,7 +565,7 @@ class FamilyMemberHistory(Base):
     identifiers = Column(JSON, nullable=True)
     
     # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # Status
     status = Column(String(20), nullable=False)  # partial, completed, entered-in-error, health-unknown
@@ -604,9 +616,10 @@ class FamilyMemberHistory(Base):
 class FamilyMemberCondition(Base):
     """Conditions of family members."""
     __tablename__ = "family_member_conditions"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    family_member_id = Column(String(36), ForeignKey("family_member_histories.id"), nullable=False)
+    family_member_id = Column(String(36), ForeignKey("ehr.family_member_histories.id"), nullable=False)
     
     # Condition
     code = Column(JSON, nullable=False)  # CodeableConcept

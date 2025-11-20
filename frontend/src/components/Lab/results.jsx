@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, FileText, Download, Eye, Calendar, Clock, CheckCircle, AlertTriangle, TrendingUp, TrendingDown, Minus, BarChart3, Users, Activity } from 'lucide-react';
 // Import the header component
 import LabHeader from './header';
+import { getResults } from '../../services/labService';
 
 const LabResultsModule = () => {
   const [selectedResult, setSelectedResult] = useState(null);
@@ -13,140 +14,21 @@ const LabResultsModule = () => {
   const [sortBy, setSortBy] = useState('date');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Mock results data
-  const [labResults] = useState([
-    {
-      id: 'LR-001',
-      patientName: 'Muhammad Hariton',
-      patientId: 'P-025',
-      orderId: 'LO-001',
-      testType: 'Complete Blood Count',
-      testCategory: 'Hematology',
-      orderDate: '2025-06-28',
-      completedDate: '2025-06-28',
-      time: '14:30',
-      physician: 'Dr. Johnson',
-      status: 'completed',
-      priority: 'routine',
-      technician: 'Lab Tech 001',
-      results: [
-        { test: 'Hemoglobin', value: '14.2', unit: 'g/dL', range: '12.0-16.0', status: 'normal', trend: 'stable' },
-        { test: 'Hematocrit', value: '42.1', unit: '%', range: '36.0-46.0', status: 'normal', trend: 'up' },
-        { test: 'White Blood Cells', value: '7500', unit: '/μL', range: '4500-11000', status: 'normal', trend: 'stable' },
-        { test: 'Platelets', value: '285000', unit: '/μL', range: '150000-450000', status: 'normal', trend: 'down' },
-        { test: 'Red Blood Cells', value: '4.8', unit: 'million/μL', range: '4.2-5.4', status: 'normal', trend: 'stable' }
-      ],
-      flags: [],
-      notes: 'All values within normal limits. Patient appears healthy.'
-    },
-    {
-      id: 'LR-002',
-      patientName: 'Sarah Davis',
-      patientId: 'P-012',
-      orderId: 'LO-002',
-      testType: 'Lipid Panel',
-      testCategory: 'Chemistry',
-      orderDate: '2025-06-28',
-      completedDate: '2025-06-28',
-      time: '11:15',
-      physician: 'Dr. Wilson',
-      status: 'completed',
-      priority: 'routine',
-      technician: 'Lab Tech 002',
-      results: [
-        { test: 'Total Cholesterol', value: '245', unit: 'mg/dL', range: '<200', status: 'high', trend: 'up' },
-        { test: 'HDL Cholesterol', value: '38', unit: 'mg/dL', range: '>40', status: 'low', trend: 'down' },
-        { test: 'LDL Cholesterol', value: '165', unit: 'mg/dL', range: '<100', status: 'high', trend: 'up' },
-        { test: 'Triglycerides', value: '210', unit: 'mg/dL', range: '<150', status: 'high', trend: 'up' }
-      ],
-      flags: ['High Cholesterol', 'Low HDL'],
-      notes: 'Elevated cholesterol levels. Recommend dietary consultation and lifestyle modifications.'
-    },
-    {
-      id: 'LR-003',
-      patientName: 'Mike Johnson',
-      patientId: 'P-047',
-      orderId: 'LO-003',
-      testType: 'Blood Glucose',
-      testCategory: 'Chemistry',
-      orderDate: '2025-06-27',
-      completedDate: '2025-06-28',
-      time: '09:30',
-      physician: 'Dr. Brown',
-      status: 'completed',
-      priority: 'urgent',
-      technician: 'Lab Tech 001',
-      results: [
-        { test: 'Fasting Glucose', value: '142', unit: 'mg/dL', range: '70-100', status: 'high', trend: 'up' },
-        { test: 'HbA1c', value: '7.2', unit: '%', range: '<5.7', status: 'high', trend: 'up' }
-      ],
-      flags: ['Diabetes Alert', 'High Glucose'],
-      notes: 'Elevated glucose levels indicating poor diabetes control. Immediate physician consultation recommended.'
-    },
-    {
-      id: 'LR-004',
-      patientName: 'Emma Wilson',
-      patientId: 'P-089',
-      orderId: 'LO-004',
-      testType: 'Thyroid Panel',
-      testCategory: 'Endocrinology',
-      orderDate: '2025-06-27',
-      completedDate: '2025-06-27',
-      time: '16:45',
-      physician: 'Dr. Smith',
-      status: 'completed',
-      priority: 'routine',
-      technician: 'Lab Tech 003',
-      results: [
-        { test: 'TSH', value: '2.1', unit: 'mIU/L', range: '0.4-4.0', status: 'normal', trend: 'stable' },
-        { test: 'Free T4', value: '1.2', unit: 'ng/dL', range: '0.8-1.8', status: 'normal', trend: 'stable' },
-        { test: 'Free T3', value: '3.1', unit: 'pg/mL', range: '2.3-4.2', status: 'normal', trend: 'stable' }
-      ],
-      flags: [],
-      notes: 'Thyroid function within normal parameters.'
-    },
-    {
-      id: 'LR-005',
-      patientName: 'David Brown',
-      patientId: 'P-156',
-      orderId: 'LO-005',
-      testType: 'Liver Function Tests',
-      testCategory: 'Chemistry',
-      orderDate: '2025-06-26',
-      completedDate: '2025-06-27',
-      time: '13:20',
-      physician: 'Dr. Davis',
-      status: 'completed',
-      priority: 'routine',
-      technician: 'Lab Tech 002',
-      results: [
-        { test: 'ALT', value: '45', unit: 'U/L', range: '7-35', status: 'high', trend: 'up' },
-        { test: 'AST', value: '42', unit: 'U/L', range: '8-40', status: 'high', trend: 'up' },
-        { test: 'Bilirubin Total', value: '1.1', unit: 'mg/dL', range: '0.3-1.2', status: 'normal', trend: 'stable' },
-        { test: 'Alkaline Phosphatase', value: '95', unit: 'U/L', range: '44-147', status: 'normal', trend: 'stable' }
-      ],
-      flags: ['Elevated Liver Enzymes'],
-      notes: 'Mild elevation in liver enzymes. Follow-up testing recommended in 4 weeks.'
-    },
-    {
-      id: 'LR-006',
-      patientName: 'Anna Martinez',
-      patientId: 'P-203',
-      orderId: 'LO-006',
-      testType: 'Urinalysis',
-      testCategory: 'Microbiology',
-      orderDate: '2025-06-26',
-      completedDate: null,
-      time: null,
-      physician: 'Dr. Garcia',
-      status: 'pending',
-      priority: 'routine',
-      technician: 'Lab Tech 001',
-      results: [],
-      flags: [],
-      notes: 'Sample received. Processing in progress.'
-    }
-  ]);
+  const [labResults, setLabResults] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const data = await getResults();
+        if (active) setLabResults(data);
+      } catch (e) {
+        console.error('Error loading lab results:', e);
+        if (active) setLabResults([]);
+      }
+    })();
+    return () => { active = false };
+  }, []);
 
   // Filter and sort results
   const filteredResults = labResults.filter(result => {
@@ -159,7 +41,7 @@ const LabResultsModule = () => {
     const matchesTestType = testTypeFilter === 'all' || result.testCategory.toLowerCase() === testTypeFilter.toLowerCase();
     
     const matchesDate = dateFilter === 'all' || 
-                       (dateFilter === 'today' && result.completedDate === '2025-06-28') ||
+                       (dateFilter === 'today' && result.completedDate === new Date().toISOString().split('T')[0]) ||
                        (dateFilter === 'week' && new Date(result.completedDate) >= new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
     
     const matchesTab = activeTab === 'all' || 
@@ -394,48 +276,57 @@ const LabResultsModule = () => {
       {/* Header Component */}
       <LabHeader />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {!selectedResult ? (
-          <>
+      <div className="flex h-[calc(100vh-64px)]">
+        {/* Left Sidebar - Fixed */}
+        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+          <div className="p-6 space-y-4">
             {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-l-4 border-teal-500 pl-3">Result Statistics</h3>
+              <div className="bg-gradient-to-br from-teal-50 to-blue-50 rounded-lg border border-teal-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <BarChart3 className="w-8 h-8 text-gray-500" />
+                  <BarChart3 className="w-6 h-6 text-gray-500" />
                 </div>
                 <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
                 <div className="text-sm text-gray-600">Total Results</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <CheckCircle className="w-8 h-8 text-green-500" />
+                  <CheckCircle className="w-6 h-6 text-green-500" />
                 </div>
                 <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
                 <div className="text-sm text-gray-600">Completed</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Clock className="w-8 h-8 text-yellow-500" />
+                  <Clock className="w-6 h-6 text-yellow-500" />
                 </div>
                 <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
                 <div className="text-sm text-gray-600">Pending</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <AlertTriangle className="w-8 h-8 text-yellow-500" />
+                  <AlertTriangle className="w-6 h-6 text-yellow-500" />
                 </div>
                 <div className="text-2xl font-bold text-yellow-600">{stats.abnormal}</div>
                 <div className="text-sm text-gray-600">Abnormal</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Activity className="w-8 h-8 text-red-500" />
+                  <Activity className="w-6 h-6 text-red-500" />
                 </div>
                 <div className="text-2xl font-bold text-red-600">{stats.urgent}</div>
                 <div className="text-sm text-gray-600">Urgent</div>
               </div>
             </div>
+              </div>
+            </div>
 
+        {/* Main Content Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {!selectedResult ? (
+              <>
             {/* Results List */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               {/* Header with Filters */}
@@ -549,6 +440,8 @@ const LabResultsModule = () => {
         ) : (
           <ResultDetails result={selectedResult} />
         )}
+          </div>
+        </div>
       </div>
     </div>
   );

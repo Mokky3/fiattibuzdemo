@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Clock, Eye, FileText, Monitor, Camera, AlertCircle, CheckCircle, Calendar, User, ChevronDown, ChevronUp, SortAsc, SortDesc, Pause, Play, Flag, X, Users, TrendingUp, Activity, BarChart3, PieChart, ArrowUp, ArrowDown } from 'lucide-react';
-// Import the radiology header component
+import { Search, Filter, Clock, Eye, FileText, Monitor, Camera, AlertCircle, CheckCircle, User, ChevronDown, ChevronUp, Flag, X, Activity, BarChart3, ArrowUp } from 'lucide-react';
 import RadiologyHeader from './header';
+import StudyListItem from './shared/StudyListItem';
+import StudyGridItem from './shared/StudyGridItem';
+import { getWorklistStudies, getDashboardSummary, getWorklistStats, getWorklistCollection, getRecentActivity } from '../../services/radiologyService';
+import { getModalityIcon, getPriorityColor, getReadingStatusColor, getTimeAgo } from './shared/studyUtils';
 
 const RadiologyDashboard = () => {
   const [selectedFilter, setSelectedFilter] = useState('unread');
@@ -22,186 +25,58 @@ const RadiologyDashboard = () => {
     timeRange: 'today'
   });
 
-  // Mock worklist data
-  const [worklistStudies, setWorklistStudies] = useState([
-    {
-      id: 'RAD-001',
-      accessionNumber: 'ACC2025001',
-      patientName: 'Smith, John',
-      patientId: 'P-12345',
-      mrn: 'MRN001234',
-      age: 45,
-      gender: 'M',
-      dob: '1980-03-15',
-      studyDate: '2025-06-29T09:00:00',
-      studyTime: '09:00',
-      modality: 'CT',
-      bodyPart: 'Chest',
-      studyDescription: 'CT Chest W/O Contrast',
-      indication: 'Chest pain, rule out pulmonary embolism',
-      priority: 'STAT',
-      orderingPhysician: 'Dr. Johnson, Emergency',
-      technologist: 'Sarah Chen',
-      status: 'acquired',
-      readingStatus: 'unread',
-      imageCount: 156,
-      seriesCount: 4,
-      studySize: '245 MB',
-      contrast: false,
-      location: 'Emergency Department',
-      room: 'CT Room 1',
-      protocolName: 'Chest PE Protocol',
-      assignedRadiologist: null,
-      priorStudies: 2,
-      criticalFlag: true,
-      tags: ['STAT', 'Emergency'],
-      turnaroundTime: '30 min',
-      estimatedReadTime: '15 min'
-    },
-    {
-      id: 'RAD-002',
-      accessionNumber: 'ACC2025002',
-      patientName: 'Davis, Sarah',
-      patientId: 'P-12346',
-      mrn: 'MRN001235',
-      age: 32,
-      gender: 'F',
-      dob: '1993-07-22',
-      studyDate: '2025-06-29T08:30:00',
-      studyTime: '08:30',
-      modality: 'MRI',
-      bodyPart: 'Brain',
-      studyDescription: 'MRI Brain W/ and W/O Contrast',
-      indication: 'Headaches, rule out space-occupying lesion',
-      priority: 'Routine',
-      orderingPhysician: 'Dr. Wilson, Neurology',
-      technologist: 'Mike Rodriguez',
-      status: 'preliminary',
-      readingStatus: 'preliminary',
-      imageCount: 324,
-      seriesCount: 8,
-      studySize: '542 MB',
-      contrast: true,
-      location: 'Neurology Clinic',
-      room: 'MRI Suite 2',
-      protocolName: 'Brain Tumor Protocol',
-      assignedRadiologist: 'Dr. Anderson',
-      priorStudies: 0,
-      criticalFlag: false,
-      tags: ['Routine'],
-      turnaroundTime: '4 hours',
-      estimatedReadTime: '25 min',
-      preliminaryFindings: 'No acute intracranial abnormality identified on preliminary review.'
-    },
-    {
-      id: 'RAD-003',
-      accessionNumber: 'ACC2025003',
-      patientName: 'Johnson, Mike',
-      patientId: 'P-12347',
-      mrn: 'MRN001236',
-      age: 28,
-      gender: 'M',
-      dob: '1997-01-10',
-      studyDate: '2025-06-29T11:00:00',
-      studyTime: '11:00',
-      modality: 'XR',
-      bodyPart: 'Chest',
-      studyDescription: 'Chest X-Ray 2 Views',
-      indication: 'Cough and fever, rule out pneumonia',
-      priority: 'Urgent',
-      orderingPhysician: 'Dr. Brown, Internal Medicine',
-      technologist: 'Lisa Park',
-      status: 'acquired',
-      readingStatus: 'unread',
-      imageCount: 2,
-      seriesCount: 1,
-      studySize: '12 MB',
-      contrast: false,
-      location: 'Internal Medicine',
-      room: 'X-Ray Room 3',
-      protocolName: 'Chest 2 View',
-      assignedRadiologist: null,
-      priorStudies: 1,
-      criticalFlag: false,
-      tags: ['Urgent'],
-      turnaroundTime: '2 hours',
-      estimatedReadTime: '5 min'
-    },
-    {
-      id: 'RAD-004',
-      accessionNumber: 'ACC2025004',
-      patientName: 'Wilson, Emma',
-      patientId: 'P-12348',
-      mrn: 'MRN001237',
-      age: 35,
-      gender: 'F',
-      dob: '1990-05-18',
-      studyDate: '2025-06-29T14:00:00',
-      studyTime: '14:00',
-      modality: 'US',
-      bodyPart: 'Abdomen',
-      studyDescription: 'Ultrasound Abdomen Complete',
-      indication: 'Right upper quadrant pain, rule out gallstones',
-      priority: 'Routine',
-      orderingPhysician: 'Dr. Smith, Surgery',
-      technologist: 'David Kim',
-      status: 'final',
-      readingStatus: 'final',
-      imageCount: 45,
-      seriesCount: 6,
-      studySize: '89 MB',
-      contrast: false,
-      location: 'Surgery Clinic',
-      room: 'US Room 1',
-      protocolName: 'Abdomen Complete',
-      assignedRadiologist: 'Dr. Anderson',
-      priorStudies: 0,
-      criticalFlag: false,
-      tags: ['Routine'],
-      turnaroundTime: '1 hour',
-      estimatedReadTime: '10 min',
-      finalReport: {
-        radiologist: 'Dr. Anderson',
-        reportDate: '2025-06-29T15:30:00',
-        impression: 'Normal abdominal ultrasound. No evidence of gallstones or biliary dilation.',
-        findings: 'The liver demonstrates normal size, echogenicity, and contour. No focal lesions identified. The gallbladder shows no stones, wall thickening, or pericholecystic fluid. Common bile duct measures 4mm (normal). Pancreas, kidneys, and spleen appear normal.'
+  const [worklistStudies, setWorklistStudies] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState({});
+  const [worklistStats, setWorklistStats] = useState({});
+  const [recentActivity, setRecentActivity] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let mounted = true;
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        // Fetch dashboard summary and worklist data in parallel
+        const [summaryData, statsData, studiesData, activityData] = await Promise.all([
+          getDashboardSummary(),
+          getWorklistStats(),
+          getWorklistCollection({ 
+            readingStatus: selectedFilter, 
+            modality: filters.modality, 
+            priority: filters.priority,
+            timeRange: filters.timeRange,
+            size: 50
+          }),
+          getRecentActivity()
+        ]);
+        
+        if (mounted) {
+          setDashboardSummary(summaryData);
+          setWorklistStats(statsData);
+          setWorklistStudies(studiesData.items || []);
+          setRecentActivity(activityData);
+        }
+      } catch (err) {
+        console.error('Error fetching dashboard data:', err);
+        if (mounted) {
+          setError(err.message);
+          // Fallback to empty data
+          setDashboardSummary({});
+          setWorklistStats({});
+          setWorklistStudies([]);
+          setRecentActivity([]);
+        }
+      } finally {
+        if (mounted) setLoading(false);
       }
-    },
-    {
-      id: 'RAD-005',
-      accessionNumber: 'ACC2025005',
-      patientName: 'Brown, David',
-      patientId: 'P-12349',
-      mrn: 'MRN001238',
-      age: 42,
-      gender: 'M',
-      dob: '1983-11-03',
-      studyDate: '2025-06-29T16:00:00',
-      studyTime: '16:00',
-      modality: 'CT',
-      bodyPart: 'Abdomen/Pelvis',
-      studyDescription: 'CT Abdomen/Pelvis W/ Contrast',
-      indication: 'Abdominal pain, rule out appendicitis',
-      priority: 'Urgent',
-      orderingPhysician: 'Dr. Davis, Emergency',
-      technologist: 'Jennifer Lee',
-      status: 'acquired',
-      readingStatus: 'reading',
-      imageCount: 287,
-      seriesCount: 5,
-      studySize: '398 MB',
-      contrast: true,
-      location: 'Emergency Department',
-      room: 'CT Room 2',
-      protocolName: 'Abdomen/Pelvis Emergency',
-      assignedRadiologist: 'Dr. Anderson',
-      priorStudies: 1,
-      criticalFlag: false,
-      tags: ['Urgent', 'Emergency'],
-      turnaroundTime: '1 hour',
-      estimatedReadTime: '20 min'
-    }
-  ]);
+    };
+
+    fetchDashboardData();
+    return () => { mounted = false };
+  }, [selectedFilter, filters.modality, filters.priority, filters.timeRange]);
 
 
   // Dashboard Stats Component
@@ -212,11 +87,13 @@ const RadiologyDashboard = () => {
           <div>
             <p className="text-gray-600 text-sm">Total Studies Today</p>
             <p className="text-3xl font-bold text-gray-900">
-              {worklistStudies.length}
+              {dashboardSummary.total || worklistStudies.length}
             </p>
             <div className="flex items-center mt-2">
               <ArrowUp className="w-4 h-4 text-green-500 mr-1" />
-              <span className="text-green-500 text-sm">+12% from yesterday</span>
+              <span className="text-green-500 text-sm">
+                {dashboardSummary.completionRate ? `${dashboardSummary.completionRate}% completion rate` : '+12% from yesterday'}
+              </span>
             </div>
           </div>
           <div className="bg-blue-100 p-3 rounded-lg">
@@ -230,11 +107,13 @@ const RadiologyDashboard = () => {
           <div>
             <p className="text-gray-600 text-sm">Pending Studies</p>
             <p className="text-3xl font-bold text-red-600">
-              {worklistStudies.filter(s => s.readingStatus === 'unread').length}
+              {dashboardSummary.unread || worklistStats.unread || worklistStudies.filter(s => s.readingStatus === 'unread').length}
             </p>
             <div className="flex items-center mt-2">
               <Clock className="w-4 h-4 text-orange-500 mr-1" />
-              <span className="text-orange-500 text-sm">Avg wait: 45 min</span>
+              <span className="text-orange-500 text-sm">
+                Avg wait: {dashboardSummary.avgTatHours ? `${Math.round(dashboardSummary.avgTatHours * 60)} min` : '45 min'}
+              </span>
             </div>
           </div>
           <div className="bg-red-100 p-3 rounded-lg">
@@ -248,11 +127,13 @@ const RadiologyDashboard = () => {
           <div>
             <p className="text-gray-600 text-sm">Completed Today</p>
             <p className="text-3xl font-bold text-green-600">
-              {worklistStudies.filter(s => s.readingStatus === 'final').length}
+              {dashboardSummary.final || worklistStats.final || worklistStudies.filter(s => s.readingStatus === 'final').length}
             </p>
             <div className="flex items-center mt-2">
               <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
-              <span className="text-green-500 text-sm">On track for goals</span>
+              <span className="text-green-500 text-sm">
+                {dashboardSummary.completionRate && dashboardSummary.completionRate > 80 ? 'On track for goals' : 'Keep up the pace'}
+              </span>
             </div>
           </div>
           <div className="bg-green-100 p-3 rounded-lg">
@@ -266,11 +147,13 @@ const RadiologyDashboard = () => {
           <div>
             <p className="text-gray-600 text-sm">Critical Studies</p>
             <p className="text-3xl font-bold text-orange-600">
-              {worklistStudies.filter(s => s.priority === 'STAT').length}
+              {dashboardSummary.stat || worklistStats.statCount || worklistStudies.filter(s => s.priority === 'STAT').length}
             </p>
             <div className="flex items-center mt-2">
               <Flag className="w-4 h-4 text-red-500 mr-1" />
-              <span className="text-red-500 text-sm">Requires attention</span>
+              <span className="text-red-500 text-sm">
+                {dashboardSummary.critical > 0 ? 'Requires attention' : 'All clear'}
+              </span>
             </div>
           </div>
           <div className="bg-orange-100 p-3 rounded-lg">
@@ -328,38 +211,45 @@ const RadiologyDashboard = () => {
       <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
         <div className="space-y-4">
-          <div className="flex items-start space-x-3">
-            <div className="bg-green-100 p-1 rounded-full">
-              <CheckCircle className="w-4 h-4 text-green-600" />
+          {recentActivity.length > 0 ? (
+            recentActivity.map((activity) => {
+              const getIcon = () => {
+                switch (activity.icon) {
+                  case 'check': return <CheckCircle className="w-4 h-4 text-green-600" />;
+                  case 'eye': return <Eye className="w-4 h-4 text-blue-600" />;
+                  case 'alert': return <AlertCircle className="w-4 h-4 text-red-600" />;
+                  default: return <Activity className="w-4 h-4 text-gray-600" />;
+                }
+              };
+              
+              const getBgColor = () => {
+                switch (activity.color) {
+                  case 'green': return 'bg-green-100';
+                  case 'blue': return 'bg-blue-100';
+                  case 'red': return 'bg-red-100';
+                  default: return 'bg-gray-100';
+                }
+              };
+              
+              return (
+                <div key={activity.id} className="flex items-start space-x-3">
+                  <div className={`${getBgColor()} p-1 rounded-full`}>
+                    {getIcon()}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-gray-900">{activity.message}</p>
+                    <p className="text-xs text-gray-500">{activity.patient}</p>
+                    <p className="text-xs text-gray-400">{activity.time}</p>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="text-center py-4 text-gray-500">
+              <Activity className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+              <p className="text-sm">No recent activity</p>
             </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-900">Report finalized</p>
-              <p className="text-xs text-gray-500">Wilson, Emma - Ultrasound Abdomen</p>
-              <p className="text-xs text-gray-400">2 hours ago</p>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-3">
-            <div className="bg-blue-100 p-1 rounded-full">
-              <Eye className="w-4 h-4 text-blue-600" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-900">Study reviewed</p>
-              <p className="text-xs text-gray-500">Johnson, Mike - Chest X-Ray</p>
-              <p className="text-xs text-gray-400">3 hours ago</p>
-            </div>
-          </div>
-          
-          <div className="flex items-start space-x-3">
-            <div className="bg-red-100 p-1 rounded-full">
-              <AlertCircle className="w-4 h-4 text-red-600" />
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-900">Critical finding</p>
-              <p className="text-xs text-gray-500">Smith, John - CT Chest</p>
-              <p className="text-xs text-gray-400">4 hours ago</p>
-            </div>
-          </div>
+          )}
         </div>
       </div>
       
@@ -372,7 +262,7 @@ const RadiologyDashboard = () => {
               <span className="text-sm text-gray-700">CT Scans</span>
             </div>
             <span className="font-medium text-gray-900">
-              {worklistStudies.filter(s => s.modality === 'CT').length}
+              {dashboardSummary.ct || worklistStats.byModality?.CT || worklistStudies.filter(s => s.modality === 'CT').length}
             </span>
           </div>
           
@@ -382,7 +272,7 @@ const RadiologyDashboard = () => {
               <span className="text-sm text-gray-700">MRI</span>
             </div>
             <span className="font-medium text-gray-900">
-              {worklistStudies.filter(s => s.modality === 'MRI').length}
+              {dashboardSummary.mri || worklistStats.byModality?.MRI || worklistStudies.filter(s => s.modality === 'MRI').length}
             </span>
           </div>
           
@@ -392,7 +282,7 @@ const RadiologyDashboard = () => {
               <span className="text-sm text-gray-700">X-Ray</span>
             </div>
             <span className="font-medium text-gray-900">
-              {worklistStudies.filter(s => s.modality === 'XR').length}
+              {dashboardSummary.xr || worklistStats.byModality?.XR || worklistStudies.filter(s => s.modality === 'XR').length}
             </span>
           </div>
           
@@ -402,7 +292,7 @@ const RadiologyDashboard = () => {
               <span className="text-sm text-gray-700">Ultrasound</span>
             </div>
             <span className="font-medium text-gray-900">
-              {worklistStudies.filter(s => s.modality === 'US').length}
+              {dashboardSummary.us || worklistStats.byModality?.US || worklistStudies.filter(s => s.modality === 'US').length}
             </span>
           </div>
         </div>
@@ -463,28 +353,30 @@ const RadiologyDashboard = () => {
           <div className="flex items-center justify-between">
             <span className="text-gray-600">Studies Read</span>
             <span className="font-semibold text-gray-900">
-              {worklistStudies.filter(s => s.readingStatus === 'final').length}/
-              {worklistStudies.length}
+              {dashboardSummary.studiesRead || worklistStudies.filter(s => s.readingStatus === 'final').length}/
+              {dashboardSummary.studiesTotal || worklistStudies.length}
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
             <div 
               className="bg-teal-500 h-2 rounded-full" 
               style={{ 
-                width: `${(worklistStudies.filter(s => s.readingStatus === 'final').length / worklistStudies.length) * 100}%` 
+                width: `${dashboardSummary.completionRate || (worklistStudies.filter(s => s.readingStatus === 'final').length / worklistStudies.length) * 100}%` 
               }}
             ></div>
           </div>
           
           <div className="flex items-center justify-between">
             <span className="text-gray-600">Average TAT</span>
-            <span className="font-semibold text-gray-900">1.2 hours</span>
+            <span className="font-semibold text-gray-900">
+              {dashboardSummary.avgTatHours || 1.2} hours
+            </span>
           </div>
           
           <div className="flex items-center justify-between">
             <span className="text-gray-600">Reports Pending</span>
             <span className="font-semibold text-orange-600">
-              {worklistStudies.filter(s => s.readingStatus === 'preliminary').length}
+              {dashboardSummary.pendingReports || worklistStudies.filter(s => s.readingStatus === 'preliminary').length}
             </span>
           </div>
         </div>
@@ -495,77 +387,36 @@ const RadiologyDashboard = () => {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-gray-600">Total Studies</span>
-            <span className="font-semibold text-gray-900">247</span>
+            <span className="font-semibold text-gray-900">
+              {dashboardSummary.weeklyTotal || 247}
+            </span>
           </div>
           
           <div className="flex items-center justify-between">
             <span className="text-gray-600">Average per Day</span>
-            <span className="font-semibold text-gray-900">35.3</span>
+            <span className="font-semibold text-gray-900">
+              {dashboardSummary.dailyAverage || 35.3}
+            </span>
           </div>
           
           <div className="flex items-center justify-between">
             <span className="text-gray-600">Critical Findings</span>
-            <span className="font-semibold text-red-600">12</span>
+            <span className="font-semibold text-red-600">
+              {dashboardSummary.weeklyCritical || dashboardSummary.criticalFindings || 12}
+            </span>
           </div>
           
           <div className="flex items-center justify-between">
             <span className="text-gray-600">Quality Score</span>
-            <span className="font-semibold text-green-600">98.5%</span>
+            <span className="font-semibold text-green-600">
+              {dashboardSummary.qualityScore || 98.5}%
+            </span>
           </div>
         </div>
       </div>
     </div>
   );
-  const getModalityIcon = (modality) => {
-    switch (modality) {
-      case 'CT': return <Monitor className="w-4 h-4 text-blue-600" />;
-      case 'MRI': return <Monitor className="w-4 h-4 text-purple-600" />;
-      case 'XR': return <Camera className="w-4 h-4 text-gray-600" />;
-      case 'US': return <Eye className="w-4 h-4 text-green-600" />;
-      default: return <FileText className="w-4 h-4" />;
-    }
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'STAT': return 'bg-red-100 text-red-800 border-red-200';
-      case 'Urgent': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'Routine': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getReadingStatusColor = (status) => {
-    switch (status) {
-      case 'unread': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'reading': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'preliminary': return 'bg-purple-100 text-purple-800 border-purple-200';
-      case 'final': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getTimeAgo = (studyDate) => {
-    const now = new Date();
-    const study = new Date(studyDate);
-    const diffMs = now - study;
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-    
-    if (diffHours > 24) {
-      return study.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } else if (diffHours > 0) {
-      return `${diffHours}h ago`;
-    } else {
-      return `${diffMinutes}m ago`;
-    }
-  };
+  // Common utilities imported from shared
 
   // Filtering and sorting logic
   const filteredStudies = worklistStudies.filter(study => {
@@ -605,34 +456,6 @@ const RadiologyDashboard = () => {
     return sortOrder === 'asc' ? comparison : -comparison;
   });
 
-  // Header Component
-  const RadiologyHeader = () => (
-    <div className="bg-gradient-to-r from-teal-600 to-teal-700 shadow-lg">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between py-4">
-          <div className="flex items-center space-x-4">
-            <div className="bg-white p-2 rounded-lg">
-              <Activity className="w-8 h-8 text-teal-600" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-white">RadPortal</h1>
-              <p className="text-teal-100 text-sm">Radiology Information System</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-6">
-            <div className="text-white text-sm">
-              <div className="font-medium">Dr. Sarah Johnson</div>
-              <div className="text-teal-100">Radiologist</div>
-            </div>
-            <div className="bg-teal-500 p-2 rounded-lg">
-              <User className="w-6 h-6 text-white" />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 
   // Stats Component
   const WorklistStats = () => (
@@ -858,163 +681,7 @@ const RadiologyDashboard = () => {
     </div>
   );
 
-  // Study List Item Component
-  const StudyListItem = ({ study }) => (
-    <div className={`bg-white rounded-lg shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200 ${study.criticalFlag ? 'border-l-4 border-l-red-500' : ''}`}>
-      <div className="flex items-start justify-between">
-        <div className="flex items-start space-x-4 flex-1">
-          {/* Priority and Critical Indicators */}
-          <div className="flex flex-col items-center space-y-2">
-            {study.criticalFlag && (
-              <Flag className="w-5 h-5 text-red-500" />
-            )}
-            <div className="flex items-center space-x-1">
-              {getModalityIcon(study.modality)}
-              <span className="text-xs font-medium text-gray-600">{study.modality}</span>
-            </div>
-          </div>
-
-          {/* Patient and Study Info */}
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center space-x-3 mb-2">
-              <h3 className="font-semibold text-gray-900 text-lg">{study.patientName}</h3>
-              <span className="text-sm text-gray-500">({study.age}{study.gender})</span>
-              <span className="text-sm text-gray-400">MRN: {study.mrn}</span>
-            </div>
-            
-            <p className="text-gray-700 font-medium mb-1">{study.studyDescription}</p>
-            <p className="text-gray-600 text-sm mb-2">{study.indication}</p>
-            
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
-              <span>Acc: {study.accessionNumber}</span>
-              <span>{getTimeAgo(study.studyDate)}</span>
-              <span>{study.imageCount} images</span>
-              <span>{study.studySize}</span>
-              {study.priorStudies > 0 && (
-                <span className="text-blue-600">{study.priorStudies} prior studies</span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Status and Actions */}
-        <div className="flex flex-col items-end space-y-3">
-          <div className="flex items-center space-x-2">
-            <span className={`px-3 py-1 rounded-lg text-sm border ${getPriorityColor(study.priority)}`}>
-              {study.priority}
-            </span>
-            <span className={`px-3 py-1 rounded-lg text-sm border ${getReadingStatusColor(study.readingStatus)}`}>
-              {study.readingStatus}
-            </span>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={() => setExpandedStudy(expandedStudy === study.id ? null : study.id)}
-              className="px-3 py-1 text-sm text-gray-600 hover:text-gray-900 border border-gray-300 rounded hover:bg-gray-50"
-            >
-              {expandedStudy === study.id ? 'Less' : 'More'}
-            </button>
-            <button
-              onClick={() => setSelectedStudy(study)}
-              className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-1"
-            >
-              <Eye className="w-4 h-4" />
-              <span>Read</span>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Expanded Details */}
-      {expandedStudy === study.id && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">Clinical Details</h4>
-              <div className="space-y-1 text-gray-600">
-                <div>Ordering Physician: {study.orderingPhysician}</div>
-                <div>Location: {study.location}</div>
-                <div>Protocol: {study.protocolName}</div>
-                {study.contrast && <div className="text-yellow-600">Contrast: Yes</div>}
-              </div>
-            </div>
-            
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">Technical Details</h4>
-              <div className="space-y-1 text-gray-600">
-                <div>Room: {study.room}</div>
-                <div>Technologist: {study.technologist}</div>
-                <div>Series: {study.seriesCount}</div>
-                <div>Est. Read Time: {study.estimatedReadTime}</div>
-              </div>
-            </div>
-            
-            <div>
-              <h4 className="font-medium text-gray-900 mb-2">Workflow</h4>
-              <div className="space-y-1 text-gray-600">
-                <div>TAT Goal: {study.turnaroundTime}</div>
-                {study.assignedRadiologist && (
-                  <div>Assigned: {study.assignedRadiologist}</div>
-                )}
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {study.tags.map(tag => (
-                    <span key={tag} className="px-2 py-1 bg-gray-100 text-gray-700 rounded-full text-xs">
-                      {tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-          
-          {study.preliminaryFindings && (
-            <div className="mt-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
-              <h4 className="font-medium text-purple-900 mb-1">Preliminary Findings</h4>
-              <p className="text-purple-800 text-sm">{study.preliminaryFindings}</p>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-
-  // Study Grid Item Component
-  const StudyGridItem = ({ study }) => (
-    <div className={`bg-white rounded-lg shadow-sm border border-gray-100 p-4 hover:shadow-md transition-all duration-200 ${study.criticalFlag ? 'border-l-4 border-l-red-500' : ''}`}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center space-x-2">
-          {getModalityIcon(study.modality)}
-          <span className="font-medium text-gray-900">{study.modality}</span>
-          {study.criticalFlag && <Flag className="w-4 h-4 text-red-500" />}
-        </div>
-        <span className={`px-2 py-1 rounded text-xs border ${getPriorityColor(study.priority)}`}>
-          {study.priority}
-        </span>
-      </div>
-      
-      <h3 className="font-semibold text-gray-900 mb-1">{study.patientName}</h3>
-      <p className="text-gray-600 text-sm mb-2">{study.studyDescription}</p>
-      <p className="text-gray-500 text-xs mb-3 line-clamp-2">{study.indication}</p>
-      
-      <div className="flex items-center justify-between text-xs text-gray-500 mb-3">
-        <span>{getTimeAgo(study.studyDate)}</span>
-        <span>{study.imageCount} images</span>
-      </div>
-      
-      <div className="flex items-center justify-between">
-        <span className={`px-2 py-1 rounded text-xs border ${getReadingStatusColor(study.readingStatus)}`}>
-          {study.readingStatus}
-        </span>
-        <button
-          onClick={() => setSelectedStudy(study)}
-          className="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1 rounded text-sm transition-colors"
-        >
-          Read
-        </button>
-      </div>
-    </div>
-  );
+  // Use shared StudyListItem and StudyGridItem
 
   // Study Detail Modal Component
   const StudyDetailModal = ({ study }) => (
@@ -1223,59 +890,92 @@ const RadiologyDashboard = () => {
           <p className="text-gray-600 mt-2">Welcome back, Dr. Johnson. Here's your radiology overview for today.</p>
         </div>
 
-        {/* Dashboard Stats */}
-        <DashboardStats />
-
-        {/* Priority Cases */}
-        <PriorityCases />
-
-        {/* Quick Actions and Info */}
-        <QuickActions />
-
-        {/* Performance Metrics */}
-        <PerformanceMetrics />
-
-        {/* Recent Studies Preview */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">Recent Studies</h3>
-            <button 
-              onClick={() => setViewMode('list')}
-              className="text-teal-600 hover:text-teal-800 text-sm font-medium"
-            >
-              View All Studies
-            </button>
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+            <span className="ml-3 text-gray-600">Loading dashboard data...</span>
           </div>
-          
-          <div className="space-y-4">
-            {worklistStudies.slice(0, 5).map(study => (
-              <div key={study.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    {getModalityIcon(study.modality)}
-                    <span className="text-sm font-medium text-gray-600">{study.modality}</span>
-                  </div>
-                  <div>
-                    <p className="font-medium text-gray-900">{study.patientName}</p>
-                    <p className="text-sm text-gray-600">{study.studyDescription}</p>
-                  </div>
-                </div>
-                <div className="flex items-center space-x-3">
-                  <span className={`px-2 py-1 rounded text-xs border ${getReadingStatusColor(study.readingStatus)}`}>
-                    {study.readingStatus}
-                  </span>
-                  <span className="text-sm text-gray-500">{getTimeAgo(study.studyDate)}</span>
-                  <button
-                    onClick={() => setSelectedStudy(study)}
-                    className="text-teal-600 hover:text-teal-800 text-sm font-medium"
-                  >
-                    View
-                  </button>
-                </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Error loading dashboard data</h3>
+                <p className="text-sm text-red-600 mt-1">{error}</p>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Dashboard Content */}
+        {!loading && !error && (
+          <>
+            {/* Dashboard Stats */}
+            <DashboardStats />
+
+            {/* Priority Cases */}
+            <PriorityCases />
+
+            {/* Quick Actions and Info */}
+            <QuickActions />
+
+            {/* Performance Metrics */}
+            <PerformanceMetrics />
+
+            {/* Recent Studies Preview */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Recent Studies</h3>
+                <button 
+                  onClick={() => setViewMode('list')}
+                  className="text-teal-600 hover:text-teal-800 text-sm font-medium"
+                >
+                  View All Studies
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                {worklistStudies.length > 0 ? (
+                  worklistStudies.slice(0, 5).map(study => (
+                    <div key={study.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-4">
+                        <div className="flex items-center space-x-2">
+                          {getModalityIcon(study.modality)}
+                          <span className="text-sm font-medium text-gray-600">{study.modality}</span>
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">{study.patientName}</p>
+                          <p className="text-sm text-gray-600">{study.studyDescription}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className={`px-2 py-1 rounded text-xs border ${getReadingStatusColor(study.readingStatus)}`}>
+                          {study.readingStatus}
+                        </span>
+                        <span className="text-sm text-gray-500">{getTimeAgo(study.studyDate)}</span>
+                        <button
+                          onClick={() => setSelectedStudy(study)}
+                          className="text-teal-600 hover:text-teal-800 text-sm font-medium"
+                        >
+                          View
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Monitor className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                    <p>No studies found for the selected filters.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {selectedStudy && <StudyDetailModal study={selectedStudy} />}

@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ReceptionistHeader } from './ReceptionHeader';
-import { FiSearch, FiFilter, FiCalendar, FiClock, FiUser, FiPhone, FiMail, FiEdit, FiTrash2, FiPlus, FiDownload, FiRefreshCw, FiX, FiAlertTriangle, FiMessageSquare, FiFileText, FiUserCheck } from 'react-icons/fi';
+import { FiSearch, FiFilter, FiCalendar, FiClock, FiUser, FiPhone, FiMail, FiEdit, FiTrash2, FiPlus, FiX, FiAlertTriangle, FiMessageSquare, FiFileText, FiUserCheck, FiArrowRight } from 'react-icons/fi';
+import { receptionAPI } from '../../services/apiService';
 
 // New Appointment Modal Component
-const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
+const NewAppointmentModal = ({ isOpen, onClose, onSubmit, clinicId }) => {
   const [formData, setFormData] = useState({
     patientId: '',
     patientName: '',
@@ -25,21 +27,24 @@ const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
   const [searchResults, setSearchResults] = useState([]);
   const [showPatientSearch, setShowPatientSearch] = useState(false);
   const [errors, setErrors] = useState({});
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchError, setSearchError] = useState('');
+  const [doctors, setDoctors] = useState([]);
+  const [doctorsLoading, setDoctorsLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Mock patient data for search
-  const mockPatients = [
-    { id: 1, name: 'Muhammad Hariton', phone: '+998 90 123 45 67', email: 'muhammad@email.com', lastVisit: '2025-05-15' },
-    { id: 2, name: 'Sarah Johnson', phone: '+998 90 987 65 43', email: 'sarah@email.com', lastVisit: '2025-06-10' },
-    { id: 3, name: 'Michael Brown', phone: '+998 90 555 12 34', email: 'michael@email.com', lastVisit: '2025-04-20' },
-  ];
-
-  // Mock doctors data
-  const doctors = [
-    { id: 1, name: 'Dr. Smith', specialty: 'General Medicine', available: true },
-    { id: 2, name: 'Dr. Wilson', specialty: 'Cardiology', available: true },
-    { id: 3, name: 'Dr. Johnson', specialty: 'Psychiatry', available: false },
-    { id: 4, name: 'Dr. Davis', specialty: 'Dermatology', available: true },
-  ];
+  // Map frontend appointment types to backend enum values
+  const appointmentTypeMap = {
+    'General Consultation': 'consultation',
+    'Follow-up Visit': 'follow_up',
+    'Annual Check-up': 'routine_checkup',
+    'Emergency Visit': 'emergency',
+    'Specialist Consultation': 'consultation',
+    'Therapy Session': 'consultation',
+    'Diagnostic Test': 'procedure',
+    'Procedure': 'procedure',
+    'Vaccination': 'vaccination'
+  };
 
   const appointmentTypes = [
     'General Consultation',
@@ -52,6 +57,27 @@ const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
     'Procedure',
     'Vaccination'
   ];
+
+  // Load doctors when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      loadDoctors();
+    }
+  }, [isOpen]);
+
+  const loadDoctors = async () => {
+    setDoctorsLoading(true);
+    try {
+      const resp = await receptionAPI.getDoctors();
+      const doctorsList = Array.isArray(resp) ? resp : (resp?.data || []);
+      setDoctors(doctorsList);
+    } catch (e) {
+      console.error('Failed to load doctors', e);
+      setDoctors([]);
+    } finally {
+      setDoctorsLoading(false);
+    }
+  };
 
   const timeSlots = [
     '08:00', '08:30', '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
@@ -66,18 +92,34 @@ const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
     }
   };
 
-  const searchPatients = (searchTerm) => {
-    if (searchTerm.length > 2) {
-      const results = mockPatients.filter(patient =>
-        patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        patient.phone.includes(searchTerm) ||
-        patient.email.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-      setSearchResults(results);
-      setShowPatientSearch(true);
-    } else {
-      setSearchResults([]);
-      setShowPatientSearch(false);
+  const searchPatients = async (searchTerm) => {
+    setSearchError('')
+    if (searchTerm.length < 3) {
+      setSearchResults([])
+      setShowPatientSearch(false)
+      return
+    }
+    setSearchLoading(true)
+    try {
+      // Use the patients/list endpoint which has proper permissions
+      const resp = await receptionAPI.getPatientsList(searchTerm)
+      const items = Array.isArray(resp) ? resp : (resp?.data || resp?.items || [])
+      const mapped = items.map(p => ({ 
+        id: p.id || p.patient_id, 
+        name: p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Unknown Patient', 
+        phone: p.phone_number || p.phone || '', 
+        email: p.email || '', 
+        lastVisit: p.last_visit || p.last_appointment || '' 
+      }))
+      setSearchResults(mapped)
+      setShowPatientSearch(mapped.length > 0)
+    } catch (e) {
+      console.error('Patient search error:', e)
+      setSearchError('Search failed. Please try again.')
+      setShowPatientSearch(false)
+      setSearchResults([])
+    } finally {
+      setSearchLoading(false)
     }
   };
 
@@ -109,12 +151,80 @@ const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (validateForm()) {
+    if (!validateForm()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      let patientId = formData.patientId;
+
+      // If new patient, register them first
+      if (formData.isNewPatient || !patientId) {
+        try {
+          // Split patient name into first and last name
+          const nameParts = formData.patientName.trim().split(/\s+/);
+          const firstName = nameParts[0] || formData.patientName;
+          const lastName = nameParts.slice(1).join(' ') || '';
+
+          const registrationData = {
+            first_name: firstName,
+            last_name: lastName,
+            email: formData.patientEmail || `${formData.patientPhone.replace(/\s+/g, '')}@temp.patient`,
+            phone: formData.patientPhone,
+            date_of_birth: '', // Optional
+            gender: '', // Optional
+            address: '', // Optional
+            emergency_contact_name: '', // Optional
+            emergency_contact_phone: '', // Optional
+            insurance_provider: formData.insuranceProvider || '',
+            insurance_number: formData.insuranceId || ''
+          };
+
+          const regResp = await receptionAPI.registerPatient(registrationData);
+          patientId = regResp.patient_id || regResp.data?.patient_id;
+          if (!patientId) {
+            throw new Error('Failed to get patient ID after registration');
+          }
+        } catch (regError) {
+          console.error('Patient registration failed', regError);
+          alert(`Failed to register patient: ${regError.message || 'Unknown error'}`);
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
+      // Map appointment type to backend format
+      const backendAppointmentType = appointmentTypeMap[formData.appointmentType] || 'consultation';
+
+      // Book the appointment
+      const appointmentData = {
+        patient_id: patientId,
+        doctor_id: formData.doctorId,
+        appointment_date: formData.appointmentDate,
+        appointment_time: formData.appointmentTime,
+        appointment_type: backendAppointmentType,
+        duration: parseInt(formData.duration, 10),
+        notes: formData.notes || formData.reason,
+        location: null // Optional
+      };
+
+      await receptionAPI.bookAppointment(appointmentData);
+      
+      // Show success message
+      alert('Appointment scheduled successfully!');
+      
+      // Call parent onSubmit for any additional handling
       onSubmit(formData);
       resetForm();
       onClose();
+    } catch (error) {
+      console.error('Failed to create appointment', error);
+      alert(`Failed to schedule appointment: ${error.message || 'Unknown error'}`);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -142,7 +252,7 @@ const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-white/10 backdrop-blur-md flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -198,6 +308,12 @@ const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
                         className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
                       />
                     </div>
+                    {searchLoading && (
+                      <div className="text-xs text-gray-500 mt-1">Searching...</div>
+                    )}
+                    {searchError && (
+                      <div className="text-xs text-red-600 mt-1">{searchError}</div>
+                    )}
                     
                     {showPatientSearch && searchResults.length > 0 && (
                       <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
@@ -345,11 +461,14 @@ const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
                 <select
                   value={formData.doctorId}
                   onChange={(e) => handleInputChange('doctorId', e.target.value)}
+                  disabled={doctorsLoading}
                   className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent ${
                     errors.doctorId ? 'border-red-300' : 'border-gray-300'
-                  }`}
+                  } ${doctorsLoading ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                 >
-                  <option value="">Select doctor</option>
+                  <option value="">
+                    {doctorsLoading ? 'Loading doctors...' : 'Select doctor'}
+                  </option>
                   {doctors.map(doctor => (
                     <option 
                       key={doctor.id} 
@@ -361,6 +480,9 @@ const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
                   ))}
                 </select>
                 {errors.doctorId && <p className="text-red-500 text-sm mt-1">{errors.doctorId}</p>}
+                {doctors.length === 0 && !doctorsLoading && (
+                  <p className="text-yellow-600 text-sm mt-1">No doctors available. Please contact administration.</p>
+                )}
               </div>
 
               <div>
@@ -460,10 +582,20 @@ const NewAppointmentModal = ({ isOpen, onClose, onSubmit }) => {
             <button
               type="submit"
               onClick={handleSubmit}
-              className="px-6 py-3 bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white rounded-lg transition-colors flex items-center gap-2"
+              disabled={isSubmitting}
+              className="px-6 py-3 bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <FiPlus className="text-sm" />
-              Schedule Appointment
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Scheduling...
+                </>
+              ) : (
+                <>
+                  <FiPlus className="text-sm" />
+                  Schedule Appointment
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -554,7 +686,7 @@ const AppointmentConfirmationModal = ({
     : 'This will decline the appointment request. The patient will be notified that their request was not approved.';
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-white/10 backdrop-blur-md flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -704,66 +836,8 @@ const AppointmentConfirmationModal = ({
 };
 
 const ReceptionAppointments = () => {
-  const [appointments, setAppointments] = useState({
-    upcoming: [
-      {
-        id: 1,
-        time: '10:00',
-        date: '22.06.2025',
-        patient: 'Muhammad Hariton',
-        reason: 'Anxiety problems',
-        description: 'Description of problems and notes are written here',
-        doctor: 'Dr. Smith',
-        phone: '+998 90 123 45 67',
-        email: 'muhammad@email.com',
-        status: 'confirmed',
-        priority: 'medium'
-      },
-      {
-        id: 2,
-        time: '10:30',
-        date: '22.06.2025',
-        patient: 'Sarah Johnson',
-        reason: 'Regular checkup',
-        description: 'Annual physical examination and blood work review',
-        doctor: 'Dr. Smith',
-        phone: '+998 90 987 65 43',
-        email: 'sarah@email.com',
-        status: 'confirmed',
-        priority: 'low'
-      },
-    ],
-    pending: [
-      {
-        id: 5,
-        time: '14:00',
-        date: '02.07.2025',
-        patient: 'Michael Brown',
-        reason: 'Follow-up consultation',
-        description: 'Post-surgery follow-up and wound examination',
-        doctor: 'Dr. Wilson',
-        phone: '+998 90 555 12 34',
-        email: 'michael@email.com',
-        status: 'pending',
-        priority: 'high'
-      },
-    ],
-    past: [
-      {
-        id: 10,
-        time: '10:00',
-        date: '21.06.2025',
-        patient: 'Emma Davis',
-        reason: 'Therapy session',
-        description: 'Cognitive behavioral therapy session',
-        doctor: 'Dr. Johnson',
-        phone: '+998 90 777 88 99',
-        email: 'emma@email.com',
-        status: 'completed',
-        priority: 'medium'
-      },
-    ],
-  });
+  const navigate = useNavigate();
+  const [appointments, setAppointments] = useState({ upcoming: [], pending: [], past: [] });
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
@@ -775,6 +849,96 @@ const ReceptionAppointments = () => {
     appointment: null,
     action: null
   });
+
+  const clinicId = localStorage.getItem('clinic_id') || 'default-clinic'
+
+  const mapAppointment = (apt) => ({
+    id: apt.id,
+    time: apt.time,
+    date: apt.formatted_date || apt.date,
+    patient: apt.patient_name,
+    reason: apt.reason || apt.description || '',
+    description: apt.description || '',
+    doctor: apt.doctor_name,
+    phone: '',
+    email: '',
+    status: apt.status,
+    priority: apt.priority || 'medium'
+  })
+
+  const loadAppointments = async () => {
+    try {
+      // Load upcoming appointments from dedicated endpoint
+      const upcomingResp = await receptionAPI.getUpcoming(50, 168) // 50 appointments, 7 days ahead
+      const upcomingItems = Array.isArray(upcomingResp) ? upcomingResp : (upcomingResp?.data || upcomingResp?.items || [])
+      const upcomingMapped = upcomingItems.map(apt => ({
+        id: apt.id || apt.appointment_id,
+        time: apt.time,
+        date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }), // Will be updated when backend provides date
+        patient: apt.patient || 'Unknown Patient',
+        reason: apt.type || '',
+        description: apt.type || '',
+        doctor: apt.doctor || 'Unknown Doctor',
+        phone: '',
+        email: '',
+        status: apt.status || 'confirmed',
+        priority: 'medium'
+      }))
+      
+      // Load pending appointments from dedicated endpoint
+      const pendingResp = await receptionAPI.getPending(50)
+      const pendingItems = Array.isArray(pendingResp) ? pendingResp : (pendingResp?.data || pendingResp?.items || [])
+      const pendingMapped = pendingItems.map(apt => ({
+        id: apt.id || apt.appointment_id,
+        time: apt.time,
+        date: new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+        patient: apt.patient || 'Unknown Patient',
+        reason: apt.type || '',
+        description: apt.type || '',
+        doctor: apt.doctor || 'Unassigned',
+        phone: '',
+        email: '',
+        status: apt.status || 'pending',
+        priority: 'medium'
+      }))
+      
+      // Load past appointments with reports from dedicated endpoint
+      console.log('[APPOINTMENTS] Loading past appointments...')
+      const pastResp = await receptionAPI.getPast(50)
+      console.log('[APPOINTMENTS] Past appointments response:', pastResp)
+      const pastItems = Array.isArray(pastResp) ? pastResp : (pastResp?.data || pastResp?.items || [])
+      console.log('[APPOINTMENTS] Past items extracted:', pastItems, 'Count:', pastItems.length)
+      const pastMapped = pastItems.map(apt => ({
+        id: apt.appointment_id || apt.id,
+        time: apt.time || '',
+        date: apt.date || '',  // Date when report was made (for reports without appointments)
+        patient: apt.patient || 'Unknown Patient',
+        doctor: apt.doctor || 'Unknown Doctor',
+        type: apt.type || 'General Consultation',
+        status: apt.status || 'completed',
+        reason: apt.type || '',
+        description: apt.type || '',
+        phone: '',
+        email: '',
+        priority: 'medium',
+        patientId: apt.patient_id || '',
+        appointmentId: apt.appointment_id || apt.id
+      }))
+      console.log('[APPOINTMENTS] Past mapped:', pastMapped, 'Count:', pastMapped.length)
+      
+      // Filter out duplicates with upcoming and pending
+      const loadedIds = new Set([...upcomingMapped.map(a => a.id), ...pendingMapped.map(a => a.id)])
+      const past = pastMapped.filter(a => !loadedIds.has(a.id))
+      console.log('[APPOINTMENTS] Past after filtering duplicates:', past, 'Count:', past.length)
+      
+      setAppointments({ upcoming: upcomingMapped, pending: pendingMapped, past })
+    } catch (e) {
+      console.error('Failed to load appointments', e)
+      setAppointments({ upcoming: [], pending: [], past: [] })
+    }
+  }
+
+  useEffect(() => { loadAppointments() }, [])
 
   const openConfirmationModal = (appointment, action) => {
     setConfirmationModal({
@@ -793,78 +957,36 @@ const ReceptionAppointments = () => {
   };
 
   const handleConfirmAction = async (data) => {
-    const { appointmentId, reason, notifyPatient, action } = data;
-    
-    if (action === 'delete') {
-      // Remove from upcoming appointments
-      setAppointments(prev => ({
-        ...prev,
-        upcoming: prev.upcoming.filter(apt => apt.id !== appointmentId)
-      }));
-      
-      console.log(`Appointment ${appointmentId} cancelled. Reason: ${reason}. Notify patient: ${notifyPatient}`);
-      
-    } else if (action === 'decline') {
-      // Remove from pending appointments
-      setAppointments(prev => ({
-        ...prev,
-        pending: prev.pending.filter(apt => apt.id !== appointmentId)
-      }));
-      
-      console.log(`Appointment request ${appointmentId} declined. Reason: ${reason}. Notify patient: ${notifyPatient}`);
+    const { appointmentId, reason, action } = data
+    try {
+      await receptionAPI.cancelAppointment({ clinicId, appointmentId, reason })
+      await loadAppointments()
+      alert(`Appointment ${action === 'delete' ? 'cancelled' : 'declined'} successfully!`)
+    } catch (e) {
+      console.error('Cancel/decline failed', e)
+      alert('Failed to cancel appointment')
     }
-    
-    // Show success message
-    alert(`Appointment ${action === 'delete' ? 'cancelled' : 'declined'} successfully!`);
   };
 
-  const handleNewAppointment = (appointmentData) => {
-    // Map doctor ID to doctor name
-    const doctorMap = {
-      1: 'Dr. Smith',
-      2: 'Dr. Wilson', 
-      3: 'Dr. Johnson',
-      4: 'Dr. Davis'
-    };
-
-    // Create new appointment object
-    const newAppointment = {
-      id: Date.now(),
-      time: appointmentData.appointmentTime,
-      date: appointmentData.appointmentDate,
-      patient: appointmentData.patientName,
-      reason: appointmentData.reason,
-      description: appointmentData.notes || appointmentData.reason,
-      doctor: doctorMap[appointmentData.doctorId] || 'Unknown Doctor',
-      phone: appointmentData.patientPhone,
-      email: appointmentData.patientEmail,
-      status: 'confirmed',
-      priority: appointmentData.priority
-    };
-
-    // Add to appointments list
-    setAppointments(prev => ({
-      ...prev,
-      upcoming: [...prev.upcoming, newAppointment]
-    }));
-    
-    // Show success message
-    alert('Appointment scheduled successfully!');
+  const handleNewAppointment = async (appointmentData) => {
+    // The appointment is already created in the modal's handleSubmit
+    // This function is called after successful creation for any additional handling
+    try {
+      await loadAppointments();
+      // Success message is already shown in the modal
+    } catch (e) {
+      console.error('Failed to refresh appointments', e);
+    }
   };
 
-  const acceptAppointment = (id) => {
-    setAppointments(prev => {
-      const accepted = prev.pending.find(a => a.id === id);
-      if (accepted) {
-        accepted.status = 'confirmed';
-        return {
-          ...prev,
-          pending: prev.pending.filter(a => a.id !== id),
-          upcoming: [...prev.upcoming, accepted],
-        };
-      }
-      return prev;
-    });
+  const acceptAppointment = async (id) => {
+    try {
+      await receptionAPI.confirmAppointment({ clinicId, appointmentId: id })
+      await loadAppointments()
+    } catch (e) {
+      console.error('Confirm appointment failed', e)
+      alert('Failed to confirm appointment')
+    }
   };
 
   const getPriorityColor = (priority) => {
@@ -885,166 +1007,187 @@ const ReceptionAppointments = () => {
     }
   };
 
-  const renderCard = (appt, actions = null) => (
-    <div key={appt.id} className="bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-100 mb-4 hover:shadow-md transition-shadow">
-      <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
-        <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 flex-1">
-          <div className="bg-[#4DB6B0] text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-center min-w-[70px] sm:min-w-[80px]">
-            <div className="text-base sm:text-lg font-bold">{appt.time}</div>
-            <div className="text-xs opacity-90">{appt.date}</div>
+  const renderCard = (appt, actions = null, isPastAppointment = false) => {
+    const handleCardClick = (e) => {
+      // Only make clickable if it's a past appointment and not clicking on a button
+      if (isPastAppointment && !e.target.closest('button')) {
+        navigate(`/reception/appointments/${appt.appointmentId || appt.id}`);
+      }
+    };
+
+    return (
+      <div 
+        key={appt.id} 
+        className={`bg-white p-4 sm:p-6 rounded-lg shadow border border-gray-100 mb-4 hover:shadow-md transition-shadow ${
+          isPastAppointment ? 'cursor-pointer' : ''
+        }`}
+        onClick={isPastAppointment ? handleCardClick : undefined}
+      >
+        <div className="flex flex-col lg:flex-row justify-between items-start gap-4">
+          <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 flex-1">
+            <div className="bg-[#4DB6B0] text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-center min-w-[70px] sm:min-w-[80px]">
+              <div className="text-base sm:text-lg font-bold">{appt.time}</div>
+              <div className="text-xs opacity-90">{appt.date}</div>
+            </div>
+            
+            <div className="flex-1">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
+                <h3 className="font-semibold text-gray-800 text-base sm:text-lg">{appt.patient}</h3>
+                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(appt.priority)}`}>
+                  {appt.priority} priority
+                </span>
+                {getStatusIcon(appt.status)}
+              </div>
+              
+              <div className="text-sm text-[#4DB6B0] font-medium mb-2">{appt.reason}</div>
+              <div className="text-sm text-gray-600 mb-3">{appt.description}</div>
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 text-sm text-gray-500">
+                <div className="flex items-center gap-2">
+                  <FiUser className="text-[#4DB6B0]" />
+                  <span className="text-xs sm:text-sm">Provider: {appt.doctor}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <FiPhone className="text-[#4DB6B0]" />
+                  <span className="text-xs sm:text-sm">{appt.phone}</span>
+                </div>
+                <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-1">
+                  <FiMail className="text-[#4DB6B0]" />
+                  <span className="text-xs sm:text-sm">{appt.email}</span>
+                </div>
+              </div>
+            </div>
           </div>
           
-          <div className="flex-1">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-2">
-              <h3 className="font-semibold text-gray-800 text-base sm:text-lg">{appt.patient}</h3>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getPriorityColor(appt.priority)}`}>
-                {appt.priority} priority
-              </span>
-              {getStatusIcon(appt.status)}
-            </div>
-            
-            <div className="text-sm text-[#4DB6B0] font-medium mb-2">{appt.reason}</div>
-            <div className="text-sm text-gray-600 mb-3">{appt.description}</div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 text-sm text-gray-500">
-              <div className="flex items-center gap-2">
-                <FiUser className="text-[#4DB6B0]" />
-                <span className="text-xs sm:text-sm">Provider: {appt.doctor}</span>
+          <div className="flex flex-col gap-2 w-full lg:w-auto">
+            {actions ? (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openConfirmationModal(appt, 'decline');
+                  }}
+                  className="bg-red-100 hover:bg-red-200 text-red-600 px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-1 text-sm"
+                >
+                  <FiTrash2 className="text-xs" />
+                  Decline
+                </button>
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    acceptAppointment(appt.id);
+                  }}
+                  className="bg-green-500 hover:bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm"
+                >
+                  Accept
+                </button>
               </div>
-              <div className="flex items-center gap-2">
-                <FiPhone className="text-[#4DB6B0]" />
-                <span className="text-xs sm:text-sm">{appt.phone}</span>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigate(`/reception/appointments/${appt.appointmentId || appt.id}`);
+                  }}
+                  className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm"
+                >
+                  View Details
+                </button>
+                {appt.status !== 'completed' && (
+                  <>
+                    <button 
+                      onClick={(e) => e.stopPropagation()}
+                      className="bg-blue-100 hover:bg-blue-200 text-blue-600 px-3 py-2 rounded-lg transition-colors text-sm"
+                    >
+                      <FiEdit className="text-sm" />
+                    </button>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openConfirmationModal(appt, 'delete');
+                      }}
+                      className="bg-red-100 hover:bg-red-200 text-red-600 px-3 py-2 rounded-lg transition-colors text-sm"
+                    >
+                      <FiTrash2 className="text-sm" />
+                    </button>
+                  </>
+                )}
               </div>
-              <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-1">
-                <FiMail className="text-[#4DB6B0]" />
-                <span className="text-xs sm:text-sm">{appt.email}</span>
-              </div>
-            </div>
+            )}
           </div>
         </div>
-        
-        <div className="flex flex-col gap-2 w-full lg:w-auto">
-          {actions ? (
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button 
-                onClick={() => openConfirmationModal(appt, 'decline')}
-                className="bg-red-100 hover:bg-red-200 text-red-600 px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-1 text-sm"
-              >
-                <FiTrash2 className="text-xs" />
-                Decline
-              </button>
-              <button 
-                onClick={() => acceptAppointment(appt.id)} 
-                className="bg-green-500 hover:bg-green-600 text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm"
-              >
-                Accept
-              </button>
-            </div>
-          ) : (
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm">
-                View Details
-              </button>
-              {appt.status !== 'completed' && (
-                <>
-                  <button className="bg-blue-100 hover:bg-blue-200 text-blue-600 px-3 py-2 rounded-lg transition-colors text-sm">
-                    <FiEdit className="text-sm" />
-                  </button>
-                  <button 
-                    onClick={() => openConfirmationModal(appt, 'delete')}
-                    className="bg-red-100 hover:bg-red-200 text-red-600 px-3 py-2 rounded-lg transition-colors text-sm"
-                  >
-                    <FiTrash2 className="text-sm" />
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
       </div>
-    </div>
-  );
+    );
+  };
 
-  const totalAppointments = appointments.upcoming.length + appointments.pending.length + appointments.past.length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
       <ReceptionistHeader />
       
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-6 py-4 sm:py-8">
-        {/* Header Section with Search and Filters */}
-        <div className="bg-white rounded-xl p-4 sm:p-6 shadow-sm border border-gray-100 mb-6 sm:mb-8">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-4 sm:mb-6">
-            <div>
-              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">
-                Appointment Management
-              </h1>
-              <p className="text-gray-600 mt-1 text-sm sm:text-base">Manage all patient appointments and schedules</p>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3 w-full lg:w-auto">
+      <div className="flex flex-row max-w-screen-2xl mx-auto px-2 sm:px-4 py-6 sm:py-10 gap-4 sm:gap-6">
+        {/* Left Sidebar - Appointment Management */}
+        <div className="w-80 flex-shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 h-fit sticky top-6">
+          <div className="p-4 border-b border-gray-100">
+            <h1 className="text-lg sm:text-xl font-bold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent mb-2">
+              Appointment Management
+            </h1>
+            <p className="text-gray-600 text-xs sm:text-sm">Manage all patient appointments and schedules</p>
+          </div>
+          
+          <div className="p-4 space-y-4">
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-2">
               <button 
                 onClick={() => setShowNewAppointmentModal(true)}
-                className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
+                className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm w-full"
               >
                 <FiPlus className="text-sm" />
                 New Appointment
               </button>
-              <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 sm:px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm">
-                <FiDownload className="text-sm" />
-                Export
-              </button>
             </div>
-          </div>
-          
-          {/* Search and Filter Controls */}
-          <div className="flex flex-col md:flex-row gap-3 sm:gap-4">
-            <div className="relative flex-1">
-              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+            
+            {/* Search */}
+            <div className="relative">
+              <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
               <input
                 type="text"
-                placeholder="Search patients, doctors, or reasons..."
+                placeholder="Search patients, doctors..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent text-sm sm:text-base"
+                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
               />
             </div>
             
-            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-              <div className="relative">
-                <FiCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full sm:w-auto pl-10 pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent text-sm sm:text-base"
-                />
-              </div>
-              
-              <button 
-                onClick={() => setShowFilters(!showFilters)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
-              >
-                <FiFilter className="text-sm" />
-                Filters
-              </button>
-              
-              <button className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 sm:px-4 py-2 sm:py-3 rounded-lg transition-colors text-sm">
-                <FiRefreshCw className="text-sm" />
-              </button>
+            {/* Date Filter */}
+            <div className="relative">
+              <FiCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+              />
             </div>
-          </div>
-          
-          {/* Filter Options */}
-          {showFilters && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            
+            {/* Filter Toggle */}
+            <button 
+              onClick={() => setShowFilters(!showFilters)}
+              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
+            >
+              <FiFilter className="text-sm" />
+              {showFilters ? 'Hide Filters' : 'Show Filters'}
+            </button>
+            
+            {/* Filter Options */}
+            {showFilters && (
+              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                  <label className="block text-xs font-medium text-gray-700 mb-2">Status</label>
                   <select 
                     value={filterStatus}
                     onChange={(e) => setFilterStatus(e.target.value)}
-                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0]"
+                    className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0]"
                   >
                     <option value="all">All Status</option>
                     <option value="confirmed">Confirmed</option>
@@ -1053,8 +1196,8 @@ const ReceptionAppointments = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Priority</label>
-                  <select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0]">
+                  <label className="block text-xs font-medium text-gray-700 mb-2">Priority</label>
+                  <select className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0]">
                     <option value="all">All Priorities</option>
                     <option value="high">High</option>
                     <option value="medium">Medium</option>
@@ -1062,8 +1205,8 @@ const ReceptionAppointments = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Doctor</label>
-                  <select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0]">
+                  <label className="block text-xs font-medium text-gray-700 mb-2">Doctor</label>
+                  <select className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0]">
                     <option value="all">All Doctors</option>
                     <option value="dr-smith">Dr. Smith</option>
                     <option value="dr-wilson">Dr. Wilson</option>
@@ -1071,8 +1214,8 @@ const ReceptionAppointments = () => {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Time Range</label>
-                  <select className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0]">
+                  <label className="block text-xs font-medium text-gray-700 mb-2">Time Range</label>
+                  <select className="w-full p-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0]">
                     <option value="all">All Times</option>
                     <option value="morning">Morning (8AM-12PM)</option>
                     <option value="afternoon">Afternoon (12PM-5PM)</option>
@@ -1080,55 +1223,18 @@ const ReceptionAppointments = () => {
                   </select>
                 </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-6 sm:mb-8">
-          <div className="bg-white p-4 sm:p-6 rounded-xl shadow border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600">Total Appointments</p>
-                <p className="text-xl sm:text-2xl font-bold text-gray-800">{totalAppointments}</p>
-              </div>
-              <FiCalendar className="text-xl sm:text-2xl text-[#4DB6B0]" />
-            </div>
-          </div>
-          <div className="bg-white p-4 sm:p-6 rounded-xl shadow border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600">Upcoming Today</p>
-                <p className="text-xl sm:text-2xl font-bold text-blue-600">{appointments.upcoming.length}</p>
-              </div>
-              <FiClock className="text-xl sm:text-2xl text-blue-500" />
-            </div>
-          </div>
-          <div className="bg-white p-4 sm:p-6 rounded-xl shadow border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600">Pending Approval</p>
-                <p className="text-xl sm:text-2xl font-bold text-yellow-600">{appointments.pending.length}</p>
-              </div>
-              <FiClock className="text-xl sm:text-2xl text-yellow-500" />
-            </div>
-          </div>
-          <div className="bg-white p-4 sm:p-6 rounded-xl shadow border border-gray-100">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs sm:text-sm text-gray-600">Completed</p>
-                <p className="text-xl sm:text-2xl font-bold text-green-600">{appointments.past.length}</p>
-              </div>
-              <FiClock className="text-xl sm:text-2xl text-green-500" />
-            </div>
+            )}
+            
           </div>
         </div>
 
-        <div className="space-y-6 sm:space-y-8">
+        {/* Main Content Area - Appointment Boxes */}
+        <div className="flex-1 min-w-0">
+          <div className="space-y-6 sm:space-y-8">
           {/* Upcoming Appointments */}
           <div className="bg-white rounded-xl p-4 sm:p-6 shadow border border-gray-100">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-2 sm:gap-0">
-              <h2 className="text-lg sm:text-xl font-semibold text-[#4DB6B0]">Upcoming appointments for June 22, 2025</h2>
+              <h2 className="text-lg sm:text-xl font-semibold text-[#4DB6B0]">Upcoming Appointments</h2>
               <span className="text-xs sm:text-sm bg-blue-100 text-blue-800 px-2 sm:px-3 py-1 rounded-full font-medium">
                 {appointments.upcoming.length} appointments
               </span>
@@ -1170,13 +1276,27 @@ const ReceptionAppointments = () => {
               </span>
             </div>
             {appointments.past.length > 0 ? (
-              appointments.past.map(appt => renderCard(appt))
+              <>
+                {appointments.past.slice(0, 5).map(appt => renderCard(appt, null, true))}
+                {appointments.past.length > 5 && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => navigate('/reception/appointments/past')}
+                      className="w-full bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm font-medium"
+                    >
+                      See All Past Appointments
+                      <FiArrowRight className="text-sm" />
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="text-center py-6 sm:py-8 text-gray-500">
                 <FiClock className="text-3xl sm:text-4xl mx-auto mb-3 text-gray-300" />
                 <p className="text-sm sm:text-base">No past appointments</p>
               </div>
             )}
+          </div>
           </div>
         </div>
 
@@ -1185,6 +1305,7 @@ const ReceptionAppointments = () => {
           isOpen={showNewAppointmentModal}
           onClose={() => setShowNewAppointmentModal(false)}
           onSubmit={handleNewAppointment}
+          clinicId={clinicId}
         />
 
         <AppointmentConfirmationModal

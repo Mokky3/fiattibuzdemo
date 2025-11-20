@@ -15,15 +15,17 @@ from app.db.base_class import Base, UUIDColumn
 practitioner_specialties = Table(
     'practitioner_specialties',
     Base.metadata,
-    Column('practitioner_role_id', String(36), ForeignKey('practitioner_roles.id'), primary_key=True),
-    Column('specialty_id', String(36), ForeignKey('specialties.id'), primary_key=True),
+    Column('practitioner_role_id', String(36), ForeignKey('ehr.practitioner_roles.id'), primary_key=True),
+    Column('specialty_id', String(36), ForeignKey('ehr.specialties.id'), primary_key=True),
+    schema='ehr'
 )
 
 practitioner_locations = Table(
     'practitioner_locations',
     Base.metadata,
-    Column('practitioner_role_id', String(36), ForeignKey('practitioner_roles.id'), primary_key=True),
-    Column('location_id', String(36), ForeignKey('hospital_departments.id'), primary_key=True),
+    Column('practitioner_role_id', String(36), ForeignKey('ehr.practitioner_roles.id'), primary_key=True),
+    Column('location_id', String(36), ForeignKey('ref.hospital_departments.id'), primary_key=True),
+    schema='ehr'
 )
 
 # Enums
@@ -48,18 +50,19 @@ class PractitionerRole(str, enum.Enum):
 class Practitioner(Base):
     """Healthcare provider model (doctors, nurses, etc.) - converted from FHIR."""
     __tablename__ = "practitioners"
+    __table_args__ = {"schema": "ehr"}
     
     id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
     
     # Link to user account
-    user_id = UUIDColumn(ForeignKey("users.id"), unique=True, nullable=False)
+    user_id = UUIDColumn(ForeignKey("core.users.id"), unique=True, nullable=False)
     
     # FHIR identifiers
     fhir_practitioner_id = Column(String(255), unique=True, nullable=True)
     identifiers = Column(JSON, nullable=True)  # Array of {system, value, type, period}
     
     # Status
-    status = Column(Enum(PractitionerStatus), default=PractitionerStatus.ACTIVE)
+    status = Column(Enum(PractitionerStatus, native_enum=False), default=PractitionerStatus.ACTIVE)
     
     # Personal information (additional to User model)
     gender = Column(String(20), nullable=True)
@@ -88,6 +91,7 @@ class Practitioner(Base):
 class PractitionerRole(Base):
     """Links practitioners to organizations, departments, and their roles."""
     __tablename__ = "practitioner_roles"
+    __table_args__ = {"schema": "ehr"}
     
     id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
     
@@ -95,8 +99,8 @@ class PractitionerRole(Base):
     fhir_practitioner_role_id = Column(String(255), unique=True, nullable=True)
     
     # Core relationships
-    practitioner_id = UUIDColumn(ForeignKey("practitioners.id"), nullable=False)
-    organization_id = UUIDColumn(ForeignKey("hospitals.id"), nullable=False)  # Changed from organizations.id to hospitals.id
+    practitioner_id = UUIDColumn(ForeignKey("ehr.practitioners.id"), nullable=False)
+    organization_id = UUIDColumn(ForeignKey("ref.hospitals.id"), nullable=False)  # Changed from organizations.id to hospitals.id
     
     # Role and specialty
     roles = Column(JSON, nullable=True)  # Array of role codes {coding: [{system, code, display}], text}
@@ -131,13 +135,14 @@ class PractitionerRole(Base):
     # Relationships
     practitioner = relationship("Practitioner", back_populates="practitioner_roles")
     organization = relationship("Hospital")  # Changed from Organization to Hospital
-    specialties = relationship("Specialty", secondary=practitioner_specialties)
-    locations = relationship("HospitalDepartment", secondary=practitioner_locations)  # Changed from Department to HospitalDepartment
+    # specialties = relationship("Specialty", secondary=practitioner_specialties)  # Temporarily disabled due to cross-schema relationship issues
+    # locations = relationship("HospitalDepartment", secondary=practitioner_locations)  # Temporarily disabled due to cross-schema relationship issues
 
 
 class Specialty(Base):
     """Medical specialties lookup table."""
     __tablename__ = "specialties"
+    __table_args__ = {"schema": "ehr"}
     
     id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
     
@@ -148,7 +153,7 @@ class Specialty(Base):
     
     # Additional info
     description = Column(Text, nullable=True)
-    parent_id = UUIDColumn(ForeignKey("specialties.id"), nullable=True)
+    parent_id = UUIDColumn(ForeignKey("ehr.specialties.id"), nullable=True)
     
     # Status
     is_active = Column(Boolean, default=True)
@@ -158,8 +163,8 @@ class Specialty(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    parent = relationship("Specialty", remote_side=[id])
-    sub_specialties = relationship("Specialty", back_populates="parent")
+    # parent = relationship("Specialty", remote_side="Specialty.id")  # Temporarily disabled due to self-referential relationship issues
+    # sub_specialties = relationship("Specialty", back_populates="parent", cascade="all, delete-orphan")  # Temporarily disabled due to self-referential relationship issues
 
 
 # Integration with existing User model
@@ -173,5 +178,5 @@ class Specialty(Base):
 # 2. Keep Doctor as a separate model that references Practitioner instead of User
 
 # For option 2, update Doctor model:
-# practitioner_id = UUIDColumn(ForeignKey("practitioners.id"), unique=True, nullable=False)
+# practitioner_id = UUIDColumn(ForeignKey("ehr.practitioners.id"), unique=True, nullable=False)
 # practitioner = relationship("Practitioner")

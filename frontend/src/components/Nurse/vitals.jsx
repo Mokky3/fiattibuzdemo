@@ -1,112 +1,126 @@
-import React, { useState } from 'react';
-import { Search, Filter, Thermometer, Heart, Activity, Droplets, Eye, Plus, Calendar, Clock, User, TrendingUp, AlertTriangle } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Thermometer, Heart, Activity, Droplets, Eye, Plus, Calendar, Clock, User, TrendingUp, AlertTriangle, X } from 'lucide-react';
 import NurseHeader from './header';
+import { getVitals, getPatients, createPatientVital } from '../../services/nurseService';
+import { VitalSignForm } from './PatientProfileForms';
 
 const NurseVitalsModule = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [selectedDate, setSelectedDate] = useState('2025-06-28');
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [viewMode, setViewMode] = useState('table'); // table or cards
 
-  // Sample vitals data
-  const vitalsData = [
-    {
-      id: 1,
-      patient: 'John Doe',
-      room: '101A',
-      time: '14:00',
-      date: '28.06.2025',
-      temperature: '36.8°C',
-      bloodPressure: '120/80',
-      heartRate: '72',
-      respiratory: '16',
-      oxygenSat: '98%',
-      pain: '3/10',
-      status: 'normal',
-      nurse: 'Sarah Johnson',
-      alerts: []
-    },
-    {
-      id: 2,
-      patient: 'Sarah Lee',
-      room: '102B',
-      time: '13:45',
-      date: '28.06.2025',
-      temperature: '38.2°C',
-      bloodPressure: '135/90',
-      heartRate: '88',
-      respiratory: '20',
-      oxygenSat: '96%',
-      pain: '5/10',
-      status: 'abnormal',
-      nurse: 'Sarah Johnson',
-      alerts: ['High Temperature', 'Elevated BP']
-    },
-    {
-      id: 3,
-      patient: 'Amir Rahimov',
-      room: '103A',
-      time: '13:30',
-      date: '28.06.2025',
-      temperature: '36.5°C',
-      bloodPressure: '110/70',
-      heartRate: '65',
-      respiratory: '14',
-      oxygenSat: '99%',
-      pain: '2/10',
-      status: 'normal',
-      nurse: 'Sarah Johnson',
-      alerts: []
-    },
-    {
-      id: 4,
-      patient: 'Lucy Zhang',
-      room: '104B',
-      time: '13:15',
-      date: '28.06.2025',
-      temperature: '37.1°C',
-      bloodPressure: '125/82',
-      heartRate: '78',
-      respiratory: '18',
-      oxygenSat: '97%',
-      pain: '4/10',
-      status: 'attention',
-      nurse: 'Sarah Johnson',
-      alerts: ['Slightly Elevated Temp']
-    },
-    {
-      id: 5,
-      patient: 'Maria Lopez',
-      room: '105A',
-      time: '12:00',
-      date: '28.06.2025',
-      temperature: '36.7°C',
-      bloodPressure: '118/75',
-      heartRate: '70',
-      respiratory: '16',
-      oxygenSat: '98%',
-      pain: '1/10',
-      status: 'normal',
-      nurse: 'Sarah Johnson',
-      alerts: []
-    },
-    {
-      id: 6,
-      patient: 'Ahmed Hassan',
-      room: '106B',
-      time: 'Due',
-      date: '28.06.2025',
-      temperature: '-',
-      bloodPressure: '-',
-      heartRate: '-',
-      respiratory: '-',
-      oxygenSat: '-',
-      pain: '-',
-      status: 'pending',
-      nurse: '-',
-      alerts: []
+  const [vitalsData, setVitalsData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal] = useState(0);
+  
+  // Modal state for recording vitals
+  const [showRecordModal, setShowRecordModal] = useState(false);
+  const [patients, setPatients] = useState([]);
+  const [selectedPatientId, setSelectedPatientId] = useState(null);
+  const [patientSearchTerm, setPatientSearchTerm] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        setLoading(true)
+        const response = await getVitals({ 
+          search: searchTerm,
+          status: statusFilter,
+          date_filter: selectedDate === new Date().toISOString().split('T')[0] ? 'today' : 'all'
+        })
+        console.log('🔍 [vitals.jsx] getVitals response:', response)
+        console.log('🔍 [vitals.jsx] response.items:', response?.items)
+        console.log('🔍 [vitals.jsx] response.data:', response?.data)
+        if (active) {
+          // Handle both array response and object with items
+          if (Array.isArray(response)) {
+            console.log('🔍 [vitals.jsx] Response is array, length:', response.length)
+            setVitalsData(response)
+            setTotal(response.length)
+          } else if (response && response.items) {
+            console.log('🔍 [vitals.jsx] Response has items, count:', response.items.length)
+            setVitalsData(response.items)
+            setTotal(response.total || response.items.length)
+          } else {
+            console.log('🔍 [vitals.jsx] No items found in response')
+            setVitalsData([])
+            setTotal(0)
+          }
+        }
+      } catch (e) {
+        console.error('Error loading vitals:', e)
+        if (active) {
+          setVitalsData([])
+          setTotal(0)
+        }
+      } finally {
+        if (active) setLoading(false)
+      }
+    })()
+    return () => { active = false }
+  }, [searchTerm, statusFilter, selectedDate])
+
+  // Load patients when modal opens
+  useEffect(() => {
+    if (showRecordModal && patients.length === 0) {
+      const loadPatients = async () => {
+        try {
+          const response = await getPatients({})
+          const patientList = response?.items || response || []
+          setPatients(patientList)
+        } catch (e) {
+          console.error('Error loading patients:', e)
+        }
+      }
+      loadPatients()
     }
-  ];
+  }, [showRecordModal, patients.length])
+
+  const handleRecordVital = async (vitalData) => {
+    if (!selectedPatientId) {
+      alert('Please select a patient first')
+      return
+    }
+
+    try {
+      setSubmitting(true)
+      await createPatientVital(selectedPatientId, vitalData)
+      
+      // Refresh vitals list
+      const response = await getVitals({ 
+        search: searchTerm,
+        status: statusFilter,
+        date_filter: selectedDate === new Date().toISOString().split('T')[0] ? 'today' : 'all'
+      })
+      if (Array.isArray(response)) {
+        setVitalsData(response)
+        setTotal(response.length)
+      } else if (response && response.items) {
+        setVitalsData(response.items)
+        setTotal(response.total || response.items.length)
+      }
+      
+      // Close modal and reset
+      setShowRecordModal(false)
+      setSelectedPatientId(null)
+      setPatientSearchTerm('')
+    } catch (e) {
+      console.error('Error recording vital:', e)
+      alert('Error recording vital: ' + (e.message || 'Unknown error'))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const filteredPatients = patients.filter(p => {
+    const name = `${p.firstName || ''} ${p.lastName || ''}`.toLowerCase()
+    return name.includes(patientSearchTerm.toLowerCase())
+  })
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -148,7 +162,14 @@ const NurseVitalsModule = () => {
       );
     } else {
       return (
-        <button className="bg-white border border-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-50 flex items-center">
+        <button 
+          onClick={() => {
+            if (vital.patientId) {
+              navigate(`/nurse/patients/${vital.patientId}/profile`);
+            }
+          }}
+          className="bg-white border border-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-50 flex items-center"
+        >
           <Eye className="w-3 h-3 mr-1" />
           View
         </button>
@@ -191,7 +212,10 @@ const NurseVitalsModule = () => {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]"
               />
-              <button className="bg-[#5ACCC3] text-white px-4 py-2 rounded hover:bg-teal-600 flex items-center">
+              <button 
+                onClick={() => setShowRecordModal(true)}
+                className="bg-[#5ACCC3] text-white px-4 py-2 rounded hover:bg-teal-600 flex items-center"
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Record Vitals
               </button>
@@ -247,11 +271,6 @@ const NurseVitalsModule = () => {
                 <option value="abnormal">Abnormal</option>
                 <option value="pending">Pending</option>
               </select>
-              
-              <button className="flex items-center px-3 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
-                <Filter className="w-4 h-4 mr-2" />
-                Filter
-              </button>
             </div>
 
             <div className="flex items-center space-x-2">
@@ -299,7 +318,23 @@ const NurseVitalsModule = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredVitals.map((vital) => (
+                  {loading ? (
+                    <tr>
+                      <td colSpan="9" className="px-6 py-8 text-center text-gray-500">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#5ACCC3] mr-2"></div>
+                          Loading vitals data...
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredVitals.length === 0 ? (
+                    <tr>
+                      <td colSpan="9" className="px-6 py-8 text-center text-gray-500">
+                        No vital signs found
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredVitals.map((vital) => (
                     <tr key={vital.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
@@ -365,7 +400,8 @@ const NurseVitalsModule = () => {
                         {getActionButton(vital.status, vital)}
                       </td>
                     </tr>
-                  ))}
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -440,6 +476,102 @@ const NurseVitalsModule = () => {
           Showing {filteredVitals.length} of {vitalsData.length} patients for {selectedDate}
         </div>
       </div>
+
+      {/* Record Vitals Modal */}
+      {showRecordModal && (
+        <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-[#5ACCC3]">Record Vital Signs</h2>
+                <button
+                  onClick={() => {
+                    setShowRecordModal(false)
+                    setSelectedPatientId(null)
+                    setPatientSearchTerm('')
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              {!selectedPatientId ? (
+                <div>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Select Patient
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Search patients..."
+                        value={patientSearchTerm}
+                        onChange={(e) => setPatientSearchTerm(e.target.value)}
+                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]"
+                      />
+                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                    </div>
+                  </div>
+                  <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+                    {filteredPatients.length > 0 ? (
+                      <ul className="divide-y divide-gray-200">
+                        {filteredPatients.map((patient) => (
+                          <li
+                            key={patient.id}
+                            onClick={() => setSelectedPatientId(patient.id)}
+                            className="p-3 hover:bg-gray-50 cursor-pointer"
+                          >
+                            <div className="font-medium text-gray-900">
+                              {patient.firstName} {patient.lastName}
+                            </div>
+                            {patient.dateOfBirth && (
+                              <div className="text-sm text-gray-500">
+                                DOB: {new Date(patient.dateOfBirth).toLocaleDateString()}
+                              </div>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <div className="p-4 text-center text-gray-500">
+                        No patients found
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-sm text-gray-600">Recording vitals for:</p>
+                      <p className="font-medium text-gray-900">
+                        {patients.find(p => p.id === selectedPatientId)?.firstName}{' '}
+                        {patients.find(p => p.id === selectedPatientId)?.lastName}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => setSelectedPatientId(null)}
+                      className="text-sm text-[#5ACCC3] hover:text-teal-700"
+                    >
+                      Change Patient
+                    </button>
+                  </div>
+                  <VitalSignForm
+                    onSubmit={handleRecordVital}
+                    onCancel={() => {
+                      setShowRecordModal(false)
+                      setSelectedPatientId(null)
+                      setPatientSearchTerm('')
+                    }}
+                    submitting={submitting}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

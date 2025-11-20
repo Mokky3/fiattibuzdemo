@@ -1,6 +1,6 @@
 # app/common/models/admin.py
 """Admin models for the EHR system."""
-from sqlalchemy import Column, String, Boolean, DateTime, Integer, Float, JSON, ForeignKey, Enum, Text, Date
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, Float, JSON, ForeignKey, Enum, Text, Date, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy import String
@@ -45,6 +45,17 @@ class ActivityType(str, enum.Enum):
     CONFIG_CHANGE = "config_change"
     PERMISSION_CHANGE = "permission_change"
     SECURITY_EVENT = "security_event"
+    # Admin/user domain-specific events used by routers
+    USER_CREATED = "user_created"
+    USER_UPDATED = "user_updated"
+    USER_DELETED = "user_deleted"
+    USER_ACTIVATED = "user_activated"
+    USER_DEACTIVATED = "user_deactivated"
+    REPORT_GENERATED = "report_generated"
+    CONFIG_UPDATED = "config_updated"
+    BULK_IMPORT = "bulk_import"
+    DATA_EXPORT = "data_export"
+    ADMIN_READ = "admin_read"
 
 
 # Note: Organization functionality has been moved to Hospital model in hospital.py
@@ -55,9 +66,10 @@ class ActivityType(str, enum.Enum):
 class Department(Base):
     """Department/Location within an organization."""
     __tablename__ = "admin_departments"  # Changed from "departments" to avoid conflicts
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
+    organization_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=False)
     
     # Basic information
     name = Column(String(100), nullable=False)
@@ -82,7 +94,7 @@ class Department(Base):
     is_24_hours = Column(Boolean, default=False)
     
     # Head of department
-    head_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    head_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     
     # Status
     is_active = Column(Boolean, default=True)
@@ -95,8 +107,8 @@ class Department(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    organization = relationship("Hospital", back_populates="admin_departments")
-    users = relationship("User", back_populates="admin_department")
+    organization = relationship("Hospital")  # Removed back_populates to avoid conflict
+    # users = relationship("User", back_populates="admin_department", foreign_keys="User.admin_department_id")  # Commented out - foreign key mismatch
     head = relationship("User", foreign_keys=[head_id])
     stats = relationship("DepartmentStats", back_populates="department", uselist=False)
 
@@ -104,9 +116,10 @@ class Department(Base):
 class OrganizationStats(Base):
     """Statistics for organization dashboard."""
     __tablename__ = "organization_stats"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    organization_id = Column(String(36), ForeignKey("hospitals.id"), unique=True, nullable=False)
+    organization_id = Column(String(36), ForeignKey("ref.hospitals.id"), unique=True, nullable=False)
     
     # Patient statistics
     total_patients = Column(Integer, default=0)
@@ -144,15 +157,16 @@ class OrganizationStats(Base):
     last_calculated = Column(DateTime(timezone=True), server_default=func.now())
     
     # Relationships
-    organization = relationship("Hospital", back_populates="stats")
+    # organization = relationship("Hospital", back_populates="stats")  # Commented out to avoid circular dependency
 
 
 class DepartmentStats(Base):
     """Statistics for department dashboard."""
     __tablename__ = "department_stats"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    department_id = Column(String(36), ForeignKey("admin_departments.id"), unique=True, nullable=False)
+    department_id = Column(String(36), ForeignKey("ops.admin_departments.id"), unique=True, nullable=False)
     
     # Staff statistics
     total_staff = Column(Integer, default=0)
@@ -189,10 +203,11 @@ class DepartmentStats(Base):
 class ServicePrice(Base):
     """Service pricing configuration."""
     __tablename__ = "service_prices"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
-    department_id = Column(String(36), ForeignKey("admin_departments.id"), nullable=True)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("ref.hospitals.id"), nullable=False)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("ops.admin_departments.id"), nullable=True)
     
     # Service details
     service_code = Column(String(50), nullable=False)
@@ -225,8 +240,8 @@ class ServicePrice(Base):
     valid_to = Column(Date, nullable=True)
     
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    approved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), nullable=True)
+    approved_by = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), nullable=True)
     approved_at = Column(DateTime(timezone=True), nullable=True)
     
     # Timestamps
@@ -234,16 +249,17 @@ class ServicePrice(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    organization = relationship("Hospital", back_populates="service_prices")
+    # organization = relationship("Hospital", back_populates="service_prices")  # Commented out to avoid circular dependency
     department = relationship("Department")
 
 
 class SystemConfig(Base):
     """System configuration settings."""
     __tablename__ = "system_configs"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=True)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("ref.hospitals.id"), nullable=True)
     
     # Configuration
     category = Column(String(50), nullable=False)  # general, security, billing, appointments, etc.
@@ -266,26 +282,27 @@ class SystemConfig(Base):
     is_public = Column(Boolean, default=False)  # Can be viewed by non-admins
     
     # Metadata
-    modified_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    modified_by = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
-    organization = relationship("Hospital", back_populates="system_configs")
+    # organization = relationship("Hospital", back_populates="system_configs")  # Commented out to avoid circular dependency
 
 
 class AdminActivity(Base):
     """Admin activity log for audit trail."""
     __tablename__ = "admin_activities"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
-    organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=True)
+    user_id = Column(UUID, ForeignKey("core.users.id"), nullable=False)
+    organization_id = Column(UUID, ForeignKey("ref.hospitals.id"), nullable=True)
     
     # Activity details
-    activity_type = Column(Enum(ActivityType), nullable=False)
+    activity_type = Column(Enum(ActivityType, native_enum=False), nullable=False)
     category = Column(String(50), nullable=False)  # user_management, config, billing, etc.
     action = Column(String(200), nullable=False)  # Detailed action description
     
@@ -320,12 +337,13 @@ class AdminActivity(Base):
 class SystemAlert(Base):
     """System alerts and notifications."""
     __tablename__ = "system_alerts"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
     # Alert details
-    alert_type = Column(Enum(AlertType), nullable=False)
-    severity = Column(Enum(AlertSeverity), nullable=False)
+    alert_type = Column(Enum(AlertType, native_enum=False), nullable=False)
+    severity = Column(Enum(AlertSeverity, native_enum=False), nullable=False)
     category = Column(String(50), nullable=False)  # system, security, performance, billing
     
     # Content
@@ -335,19 +353,19 @@ class SystemAlert(Base):
     
     # Target
     is_global = Column(Boolean, default=False)  # System-wide alert
-    organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=True)
-    department_id = Column(String(36), ForeignKey("admin_departments.id"), nullable=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    organization_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=True)
+    department_id = Column(String(36), ForeignKey("ops.admin_departments.id"), nullable=True)
+    user_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     
     # Status
     is_active = Column(Boolean, default=True)
     is_acknowledged = Column(Boolean, default=False)
-    acknowledged_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    acknowledged_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
     
     # Resolution
     is_resolved = Column(Boolean, default=False)
-    resolved_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    resolved_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
     resolution_notes = Column(Text, nullable=True)
     
@@ -369,9 +387,10 @@ class SystemAlert(Base):
 class BulkOperation(Base):
     """Bulk import/export operations."""
     __tablename__ = "bulk_operations"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
+    organization_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=False)
     
     # Operation details
     operation_type = Column(String(20), nullable=False)  # import, export
@@ -404,7 +423,7 @@ class BulkOperation(Base):
     # Execution
     started_at = Column(DateTime(timezone=True), nullable=True)
     completed_at = Column(DateTime(timezone=True), nullable=True)
-    performed_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    performed_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Results
     result_summary = Column(JSON, nullable=True)
@@ -421,9 +440,10 @@ class BulkOperation(Base):
 class ReportTemplate(Base):
     """Report templates for admin reporting."""
     __tablename__ = "report_templates"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=True)
+    organization_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=True)
     
     # Template details
     name = Column(String(200), nullable=False)
@@ -456,8 +476,8 @@ class ReportTemplate(Base):
     is_system = Column(Boolean, default=False)  # System-provided template
     
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    modified_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    created_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
+    modified_by = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -472,10 +492,11 @@ class ReportTemplate(Base):
 class ScheduledReport(Base):
     """Scheduled report instances."""
     __tablename__ = "scheduled_reports"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    template_id = Column(String(36), ForeignKey("report_templates.id"), nullable=False)
-    organization_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
+    template_id = Column(String(36), ForeignKey("ops.report_templates.id"), nullable=False)
+    organization_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=False)
     
     # Schedule configuration
     name = Column(String(200), nullable=False)
@@ -500,7 +521,7 @@ class ScheduledReport(Base):
     next_run_at = Column(DateTime(timezone=True), nullable=True)
     
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -510,3 +531,44 @@ class ScheduledReport(Base):
     template = relationship("ReportTemplate")
     organization = relationship("Hospital")
     creator = relationship("User")
+
+
+class SystemLog(Base):
+    """Application system log entries."""
+    __tablename__ = "system_logs"
+    __table_args__ = {"schema": "ops"}
+
+    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+    level = Column(String(20), nullable=False)  # INFO, WARN, ERROR, DEBUG
+    message = Column(Text, nullable=False)
+    module = Column(String(200), nullable=True)
+    function = Column(String(200), nullable=True)
+    line_number = Column(Integer, nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    user_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
+    session_id = Column(String(100), nullable=True)
+    request_id = Column(String(100), nullable=True)
+    # Avoid reserved attribute name 'metadata' in SQLAlchemy declarative
+    log_metadata = Column("metadata", JSON, nullable=True)
+
+    user = relationship("User")
+
+
+class AuditTrail(Base):
+    """Generic audit trail records for user actions."""
+    __tablename__ = "audit_trail"
+    __table_args__ = {"schema": "ops"}
+
+    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+    user_id = Column(String(36), ForeignKey("core.users.id"), nullable=False)
+    user_name = Column(String(255), nullable=True)
+    action = Column(String(100), nullable=False)
+    resource_type = Column(String(50), nullable=False)
+    resource_id = Column(String(36), nullable=False)
+    old_values = Column(JSON, nullable=True)
+    new_values = Column(JSON, nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    timestamp = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    user = relationship("User")

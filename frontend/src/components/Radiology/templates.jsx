@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Filter, Plus, Edit, Copy, Trash2, FileText, Monitor, Camera, Eye, Star, Clock, User, ChevronDown, ChevronUp, X, Save } from 'lucide-react';
 import RadiologyHeader from './header';
+import { getTemplates, getTemplateStats, createTemplate, updateTemplate, deleteTemplate, duplicateTemplate, updateTemplateUsage } from '../../services/radiologyService';
 
 const RadiologyTemplates = () => {
   const [activeTab, setActiveTab] = useState('all');
@@ -15,8 +16,64 @@ const RadiologyTemplates = () => {
     author: 'all'
   });
 
-  // Mock templates data
-  const [templates, setTemplates] = useState([
+  // Real templates data from API
+  const [templates, setTemplates] = useState([]);
+  const [templateStats, setTemplateStats] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [pagination, setPagination] = useState({
+    page: 1,
+    size: 50,
+    total: 0
+  });
+
+  // Fetch templates data from API
+  useEffect(() => {
+    let mounted = true;
+    const fetchTemplatesData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const [templatesData, statsData] = await Promise.all([
+          getTemplates({
+            tab: activeTab,
+            modality: filters.modality === 'all' ? undefined : filters.modality,
+            category: filters.category === 'all' ? undefined : filters.category,
+            author: filters.author === 'all' ? undefined : filters.author,
+            search: searchTerm || undefined,
+            page: pagination.page,
+            size: pagination.size
+          }),
+          getTemplateStats()
+        ]);
+        
+        if (mounted) {
+          setTemplates(templatesData.items || []);
+          setTemplateStats(statsData);
+          setPagination(prev => ({
+            ...prev,
+            total: templatesData.total || 0
+          }));
+        }
+      } catch (err) {
+        console.error('Error fetching templates data:', err);
+        if (mounted) {
+          setError(err.message);
+          setTemplates([]);
+          setTemplateStats({});
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    fetchTemplatesData();
+    return () => { mounted = false };
+  }, [activeTab, filters, searchTerm, pagination.page, pagination.size]);
+
+  // Mock templates data for fallback
+  const mockTemplates = [
     {
       id: 'TPL-001',
       name: 'Normal Chest CT',
@@ -117,7 +174,7 @@ const RadiologyTemplates = () => {
       },
       tags: ['fracture', 'trauma', 'bone']
     }
-  ]);
+  ];
 
   const [newTemplate, setNewTemplate] = useState({
     name: '',
@@ -151,42 +208,70 @@ const RadiologyTemplates = () => {
     }
   };
 
-  const filteredTemplates = templates.filter(template => {
-    const matchesTab = activeTab === 'all' || 
-                      (activeTab === 'favorites' && template.isFavorite) ||
-                      (activeTab === 'my_templates' && template.author === 'Dr. Anderson') ||
-                      template.category.toLowerCase() === activeTab;
-    
-    const matchesSearch = template.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         template.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         template.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-    
-    const matchesFilters = (filters.modality === 'all' || template.modality === filters.modality) &&
-                          (filters.category === 'all' || template.category === filters.category);
-    
-    return matchesTab && matchesSearch && matchesFilters;
-  });
+  // Since filtering is now done on the backend, we use the templates directly
+  const filteredTemplates = templates;
 
-  const toggleFavorite = (templateId) => {
-    setTemplates(prev => prev.map(template => 
-      template.id === templateId 
-        ? { ...template, isFavorite: !template.isFavorite }
-        : template
-    ));
+  const toggleFavorite = async (templateId) => {
+    try {
+      const template = templates.find(t => t.id === templateId);
+      if (template) {
+        await updateTemplate(templateId, { isFavorite: !template.isFavorite });
+        // Refresh templates data
+        const templatesData = await getTemplates({
+          tab: activeTab,
+          modality: filters.modality === 'all' ? undefined : filters.modality,
+          category: filters.category === 'all' ? undefined : filters.category,
+          author: filters.author === 'all' ? undefined : filters.author,
+          search: searchTerm || undefined,
+          page: pagination.page,
+          size: pagination.size
+        });
+        setTemplates(templatesData.items || []);
+      }
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+    }
   };
 
-  const duplicateTemplate = (template) => {
-    const newTemplate = {
-      ...template,
-      id: `TPL-${String(templates.length + 1).padStart(3, '0')}`,
-      name: `${template.name} (Copy)`,
-      author: 'Dr. Anderson',
-      createdDate: new Date().toISOString().split('T')[0],
-      lastModified: new Date().toISOString().split('T')[0],
-      usageCount: 0,
-      isPrivate: true
-    };
-    setTemplates(prev => [...prev, newTemplate]);
+  const handleDuplicateTemplate = async (template) => {
+    try {
+      await duplicateTemplate(template.id, {
+        name: `${template.name} (Copy)`,
+        isPrivate: true
+      });
+      // Refresh templates data
+      const templatesData = await getTemplates({
+        tab: activeTab,
+        modality: filters.modality === 'all' ? undefined : filters.modality,
+        category: filters.category === 'all' ? undefined : filters.category,
+        author: filters.author === 'all' ? undefined : filters.author,
+        search: searchTerm || undefined,
+        page: pagination.page,
+        size: pagination.size
+      });
+      setTemplates(templatesData.items || []);
+    } catch (err) {
+      console.error('Error duplicating template:', err);
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId) => {
+    try {
+      await deleteTemplate(templateId);
+      // Refresh templates data
+      const templatesData = await getTemplates({
+        tab: activeTab,
+        modality: filters.modality === 'all' ? undefined : filters.modality,
+        category: filters.category === 'all' ? undefined : filters.category,
+        author: filters.author === 'all' ? undefined : filters.author,
+        search: searchTerm || undefined,
+        page: pagination.page,
+        size: pagination.size
+      });
+      setTemplates(templatesData.items || []);
+    } catch (err) {
+      console.error('Error deleting template:', err);
+    }
   };
 
   const TemplateCard = ({ template }) => (
@@ -238,7 +323,7 @@ const RadiologyTemplates = () => {
             <Star className={`w-4 h-4 ${template.isFavorite ? 'fill-current' : ''}`} />
           </button>
           <button
-            onClick={() => duplicateTemplate(template)}
+            onClick={() => handleDuplicateTemplate(template)}
             className="p-1 text-gray-400 hover:text-gray-600 rounded hover:bg-gray-100"
           >
             <Copy className="w-4 h-4" />
@@ -552,11 +637,11 @@ const RadiologyTemplates = () => {
             <div className="flex items-center space-x-4">
               <div className="flex bg-gray-100 rounded-lg p-1">
                 {[
-                  { key: 'all', label: 'All', count: templates.length },
-                  { key: 'favorites', label: 'Favorites', count: templates.filter(t => t.isFavorite).length },
-                  { key: 'my_templates', label: 'My Templates', count: templates.filter(t => t.author === 'Dr. Anderson').length },
-                  { key: 'normal', label: 'Normal', count: templates.filter(t => t.category === 'Normal').length },
-                  { key: 'pathology', label: 'Pathology', count: templates.filter(t => t.category === 'Pathology').length }
+                  { key: 'all', label: 'All', count: templateStats.total || templates.length },
+                  { key: 'favorites', label: 'Favorites', count: templateStats.favorites || templates.filter(t => t.isFavorite).length },
+                  { key: 'my_templates', label: 'My Templates', count: templateStats.byAuthor?.['Dr. Anderson'] || templates.filter(t => t.author === 'Dr. Anderson').length },
+                  { key: 'normal', label: 'Normal', count: templateStats.byCategory?.Normal || templates.filter(t => t.category === 'Normal').length },
+                  { key: 'pathology', label: 'Pathology', count: templateStats.byCategory?.Pathology || templates.filter(t => t.category === 'Pathology').length }
                 ].map(tab => (
                   <button
                     key={tab.key}
@@ -645,13 +730,37 @@ const RadiologyTemplates = () => {
           )}
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+            <span className="ml-3 text-gray-600">Loading templates...</span>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <X className="w-5 h-5 text-red-500 mr-2" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Error loading templates</h3>
+                <p className="text-sm text-red-600 mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Stats and Content */}
+        {!loading && !error && (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
           <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-gray-600 text-sm">Total Templates</p>
-                <p className="text-3xl font-bold text-blue-600">{templates.length}</p>
+                <p className="text-3xl font-bold text-blue-600">{templateStats.total || templates.length}</p>
               </div>
               <FileText className="w-8 h-8 text-blue-600" />
             </div>
@@ -662,7 +771,7 @@ const RadiologyTemplates = () => {
               <div>
                 <p className="text-gray-600 text-sm">My Templates</p>
                 <p className="text-3xl font-bold text-teal-600">
-                  {templates.filter(t => t.author === 'Dr. Anderson').length}
+                  {templateStats.byAuthor?.['Dr. Anderson'] || templates.filter(t => t.author === 'Dr. Anderson').length}
                 </p>
               </div>
               <User className="w-8 h-8 text-teal-600" />
@@ -674,7 +783,7 @@ const RadiologyTemplates = () => {
               <div>
                 <p className="text-gray-600 text-sm">Favorites</p>
                 <p className="text-3xl font-bold text-yellow-600">
-                  {templates.filter(t => t.isFavorite).length}
+                  {templateStats.favorites || templates.filter(t => t.isFavorite).length}
                 </p>
               </div>
               <Star className="w-8 h-8 text-yellow-600" />
@@ -686,7 +795,7 @@ const RadiologyTemplates = () => {
               <div>
                 <p className="text-gray-600 text-sm">Most Used</p>
                 <p className="text-3xl font-bold text-green-600">
-                  {Math.max(...templates.map(t => t.usageCount))}
+                  {templateStats.mostUsed || (templates.length > 0 ? Math.max(...templates.map(t => t.usageCount)) : 0)}
                 </p>
               </div>
               <Clock className="w-8 h-8 text-green-600" />
@@ -704,24 +813,56 @@ const RadiologyTemplates = () => {
                `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Templates`}
             </h2>
             <span className="text-gray-500 text-sm">
-              {filteredTemplates.length} of {templates.length} templates
+              {filteredTemplates.length} of {pagination.total} templates
             </span>
           </div>
 
-          {filteredTemplates.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 font-medium">No templates found</p>
-              <p className="text-gray-400 text-sm">Try adjusting your filters or search terms</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredTemplates.map(template => (
-                <TemplateCard key={template.id} template={template} />
-              ))}
-            </div>
-          )}
-        </div>
+            {filteredTemplates.length === 0 ? (
+              <div className="text-center py-12">
+                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <p className="text-gray-500 font-medium">No templates found</p>
+                <p className="text-gray-400 text-sm">Try adjusting your filters or search terms</p>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-4">
+                  {filteredTemplates.map(template => (
+                    <TemplateCard key={template.id} template={template} />
+                  ))}
+                </div>
+                
+                {/* Pagination */}
+                {pagination.total > pagination.size && (
+                  <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
+                    <div className="text-sm text-gray-500">
+                      Showing {((pagination.page - 1) * pagination.size) + 1} to {Math.min(pagination.page * pagination.size, pagination.total)} of {pagination.total} templates
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
+                        disabled={pagination.page === 1}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Previous
+                      </button>
+                      <span className="px-3 py-2 text-sm text-gray-700">
+                        Page {pagination.page} of {Math.ceil(pagination.total / pagination.size)}
+                      </span>
+                      <button
+                        onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                        disabled={pagination.page >= Math.ceil(pagination.total / pagination.size)}
+                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          </>
+        )}
       </div>
 
       {selectedTemplate && <TemplateModal template={selectedTemplate} />}

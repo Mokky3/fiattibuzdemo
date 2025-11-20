@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Search, Filter, FileText, Download, Eye, Calendar, Clock, CheckCircle, AlertTriangle, BarChart3, TrendingUp, Printer, Mail, Share2, Plus, Users, Activity, PieChart } from 'lucide-react';
 // Import the header component
 import LabHeader from './header';
+import { getReports, getReportResults } from '../../services/labService';
 
 const LabReportsModule = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [selectedReport, setSelectedReport] = useState(null);
   const [activeTab, setActiveTab] = useState('generated');
   const [searchTerm, setSearchTerm] = useState('');
@@ -14,208 +18,33 @@ const LabReportsModule = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [showNewReportForm, setShowNewReportForm] = useState(false);
 
-  // Mock reports data
-  const [labReports, setLabReports] = useState([
-    {
-      id: 'RPT-001',
-      title: 'Weekly Lab Statistics Report',
-      type: 'statistics',
-      category: 'Operational',
-      generatedDate: '2025-06-28',
-      generatedTime: '09:30',
-      generatedBy: 'Lab Tech 001',
-      status: 'completed',
-      format: 'PDF',
-      size: '2.4 MB',
-      pages: 15,
-      description: 'Comprehensive weekly statistics covering all lab departments',
-      period: 'June 21-28, 2025',
-      recipients: ['Dr. Johnson', 'Lab Manager', 'QA Team'],
-      downloadCount: 12,
-      lastAccessed: '2025-06-28 14:22',
-      data: {
-        totalTests: 324,
-        completedTests: 298,
-        pendingTests: 26,
-        avgTurnaroundTime: '3.2 hours',
-        abnormalResults: 45,
-        criticalResults: 8
-      }
-    },
-    {
-      id: 'RPT-002',
-      title: 'Patient Test Results - Muhammad Hariton',
-      type: 'patient',
-      category: 'Clinical',
-      generatedDate: '2025-06-28',
-      generatedTime: '11:15',
-      generatedBy: 'Lab Tech 002',
-      status: 'completed',
-      format: 'PDF',
-      size: '1.2 MB',
-      pages: 3,
-      description: 'Complete blood count and metabolic panel results',
-      period: 'Single Test Session',
-      recipients: ['Dr. Johnson', 'Patient'],
-      downloadCount: 5,
-      lastAccessed: '2025-06-28 15:45',
-      patientInfo: {
-        name: 'Muhammad Hariton',
-        id: 'P-025',
-        age: 20,
-        gender: 'Male'
-      }
-    },
-    {
-      id: 'RPT-003',
-      title: 'Quality Control Monthly Report',
-      type: 'quality',
-      category: 'Quality Assurance',
-      generatedDate: '2025-06-27',
-      generatedTime: '16:00',
-      generatedBy: 'QA Manager',
-      status: 'completed',
-      format: 'Excel',
-      size: '5.8 MB',
-      pages: 25,
-      description: 'Monthly quality control metrics and compliance review',
-      period: 'May 2025',
-      recipients: ['Lab Director', 'Compliance Team', 'Department Heads'],
-      downloadCount: 8,
-      lastAccessed: '2025-06-28 10:30',
-      data: {
-        controlTests: 156,
-        passedTests: 152,
-        failedTests: 4,
-        complianceRate: '97.4%',
-        calibrationEvents: 12,
-        maintenanceEvents: 8
-      }
-    },
-    {
-      id: 'RPT-004',
-      title: 'Abnormal Results Alert Report',
-      type: 'alerts',
-      category: 'Clinical',
-      generatedDate: '2025-06-27',
-      generatedTime: '08:45',
-      generatedBy: 'Lab Tech 003',
-      status: 'completed',
-      format: 'PDF',
-      size: '800 KB',
-      pages: 4,
-      description: 'Summary of all abnormal and critical results requiring attention',
-      period: 'June 26-27, 2025',
-      recipients: ['Dr. Wilson', 'Dr. Brown', 'Chief Resident'],
-      downloadCount: 15,
-      lastAccessed: '2025-06-28 12:10',
-      data: {
-        abnormalResults: 23,
-        criticalResults: 5,
-        urgentNotifications: 3,
-        followUpRequired: 8
-      }
-    },
-    {
-      id: 'RPT-005',
-      title: 'Department Performance Analysis',
-      type: 'performance',
-      category: 'Management',
-      generatedDate: '2025-06-26',
-      generatedTime: '14:20',
-      generatedBy: 'Lab Manager',
-      status: 'completed',
-      format: 'PowerPoint',
-      size: '12.3 MB',
-      pages: 18,
-      description: 'Quarterly performance analysis across all lab departments',
-      period: 'Q2 2025',
-      recipients: ['Hospital Administration', 'Department Heads', 'Board Members'],
-      downloadCount: 22,
-      lastAccessed: '2025-06-28 09:15',
-      data: {
-        totalOrders: 1248,
-        avgProcessingTime: '2.8 hours',
-        customerSatisfaction: '94.2%',
-        costPerTest: '$45.60',
-        efficiency: '96.8%'
-      }
-    },
-    {
-      id: 'RPT-006',
-      title: 'Inventory Usage Report',
-      type: 'inventory',
-      category: 'Operational',
-      generatedDate: '2025-06-25',
-      generatedTime: '10:30',
-      generatedBy: 'Inventory Manager',
-      status: 'pending',
-      format: 'Excel',
-      size: '3.1 MB',
-      pages: 8,
-      description: 'Monthly inventory consumption and stock level analysis',
-      period: 'June 2025',
-      recipients: ['Procurement Team', 'Lab Manager', 'Finance Department'],
-      downloadCount: 0,
-      lastAccessed: null,
-      data: {
-        itemsTracked: 245,
-        lowStockItems: 12,
-        expiredItems: 3,
-        totalValue: '$24,580',
-        monthlyConsumption: '$8,240'
-      }
-    }
-  ]);
+  const [labReports, setLabReports] = useState([]);
 
-  // Report templates
-  const [reportTemplates] = useState([
-    {
-      id: 'TPL-001',
-      name: 'Daily Lab Summary',
-      description: 'Daily overview of lab operations and key metrics',
-      category: 'Operational',
-      frequency: 'Daily',
-      estimatedTime: '5 minutes',
-      parameters: ['Date Range', 'Departments', 'Test Types']
-    },
-    {
-      id: 'TPL-002',
-      name: 'Patient Test Report',
-      description: 'Individual patient test results with reference ranges',
-      category: 'Clinical',
-      frequency: 'On Demand',
-      estimatedTime: '2 minutes',
-      parameters: ['Patient ID', 'Test Date', 'Test Types']
-    },
-    {
-      id: 'TPL-003',
-      name: 'Quality Control Report',
-      description: 'QC metrics and compliance status',
-      category: 'Quality Assurance',
-      frequency: 'Weekly',
-      estimatedTime: '10 minutes',
-      parameters: ['Date Range', 'QC Tests', 'Instruments']
-    },
-    {
-      id: 'TPL-004',
-      name: 'Financial Summary',
-      description: 'Revenue and cost analysis for lab operations',
-      category: 'Financial',
-      frequency: 'Monthly',
-      estimatedTime: '15 minutes',
-      parameters: ['Date Range', 'Cost Centers', 'Revenue Streams']
-    },
-    {
-      id: 'TPL-005',
-      name: 'Turnaround Time Analysis',
-      description: 'Analysis of test processing times and bottlenecks',
-      category: 'Performance',
-      frequency: 'Weekly',
-      estimatedTime: '8 minutes',
-      parameters: ['Date Range', 'Test Categories', 'Priority Levels']
+  const loadReports = async () => {
+    try {
+      const data = await getReports();
+      setLabReports(data);
+    } catch (e) {
+      console.error('Error loading lab reports:', e);
+      setLabReports([]);
     }
-  ]);
+  };
+
+  useEffect(() => {
+    let active = true;
+    loadReports();
+    return () => { active = false };
+  }, []);
+
+  // Refresh reports when navigating back from report creation
+  useEffect(() => {
+    if (location.pathname === '/lab/reports') {
+      loadReports();
+    }
+  }, [location.pathname]);
+
+  // Report templates - removed mock data
+  const [reportTemplates] = useState([]);
 
   // Filter and sort reports
   const filteredReports = labReports.filter(report => {
@@ -390,7 +219,202 @@ const LabReportsModule = () => {
     </div>
   );
 
-  const ReportDetails = ({ report }) => (
+  // Helper function to render structured test data
+  const renderTestData = (result) => {
+    const testData = result.attachments?.fullTestData || result.attachments?.panel_data?.fullTestData || {};
+    const testType = testData.testType || result.attachments?.testType;
+    
+    // For cytogenetics tests
+    if (testType === 'conventional_karyotyping') {
+      return (
+        <div className="mt-3 pt-3 border-t border-gray-200 space-y-3">
+          <h5 className="font-semibold text-gray-900 mb-3">Karyotyping Details</h5>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {testData.specimenType && (
+              <div>
+                <span className="text-sm text-gray-600">Specimen Type:</span>
+                <div className="font-medium text-gray-900">{testData.specimenType}</div>
+              </div>
+            )}
+            {testData.cultureType && (
+              <div>
+                <span className="text-sm text-gray-600">Culture Type:</span>
+                <div className="font-medium text-gray-900">{testData.cultureType}</div>
+              </div>
+            )}
+            {testData.totalMetaphases && (
+              <div>
+                <span className="text-sm text-gray-600">Total Metaphases Analyzed:</span>
+                <div className="font-medium text-gray-900">{testData.totalMetaphases}</div>
+              </div>
+            )}
+            {testData.normalMetaphases !== undefined && (
+              <div>
+                <span className="text-sm text-gray-600">Normal Metaphases:</span>
+                <div className="font-medium text-gray-900">{testData.normalMetaphases}</div>
+              </div>
+            )}
+            {testData.abnormalMetaphases !== undefined && (
+              <div>
+                <span className="text-sm text-gray-600">Abnormal Metaphases:</span>
+                <div className="font-medium text-gray-900">{testData.abnormalMetaphases}</div>
+              </div>
+            )}
+            {testData.modalChromosomeNumber && (
+              <div>
+                <span className="text-sm text-gray-600">Modal Chromosome Number:</span>
+                <div className="font-medium text-gray-900">{testData.modalChromosomeNumber}</div>
+              </div>
+            )}
+          </div>
+          {testData.karyotypeResult && (
+            <div className="mt-3">
+              <span className="text-sm text-gray-600">Karyotype Result (ISCN):</span>
+              <div className="font-medium text-gray-900 mt-1 bg-blue-50 p-2 rounded">{testData.karyotypeResult}</div>
+            </div>
+          )}
+          {testData.interpretation && (
+            <div className="mt-3">
+              <span className="text-sm text-gray-600">Interpretation:</span>
+              <div className="text-sm text-gray-900 mt-1">{testData.interpretation}</div>
+            </div>
+          )}
+          {testData.conclusion && (
+            <div className="mt-3">
+              <span className="text-sm text-gray-600">Conclusion:</span>
+              <div className="font-medium text-gray-900 mt-1">{testData.conclusion}</div>
+            </div>
+          )}
+        </div>
+      );
+    }
+    
+    // For panel tests with parameters
+    if (testData.parameters || testData.numericParameters) {
+      const parameters = testData.parameters || testData.numericParameters || [];
+      if (parameters.length > 0) {
+        return (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <h5 className="font-semibold text-gray-900 mb-3">Test Parameters</h5>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Parameter</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Result</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Unit</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Reference Range</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {parameters.map((param, idx) => (
+                    <tr key={idx}>
+                      <td className="px-4 py-2 text-sm text-gray-900">{param.name || param.code || `Parameter ${idx + 1}`}</td>
+                      <td className="px-4 py-2 text-sm font-medium text-gray-900">
+                        {param.resultValue || param.percentValue || param.absoluteValue || '-'}
+                      </td>
+                      <td className="px-4 py-2 text-sm text-gray-600">{param.unit || '-'}</td>
+                      <td className="px-4 py-2 text-sm text-gray-600">{param.ref || param.ref_percent || '-'}</td>
+                      <td className="px-4 py-2 text-sm">
+                        {param.isAbnormal ? (
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            param.abnormalityType === 'high' || param.abnormalityType === 'HIGH' ? 'bg-yellow-100 text-yellow-800' :
+                            param.abnormalityType === 'low' || param.abnormalityType === 'LOW' ? 'bg-orange-100 text-orange-800' :
+                            'bg-red-100 text-red-800'
+                          }`}>
+                            {param.abnormalityType || 'Abnormal'}
+                          </span>
+                        ) : (
+                          <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">Normal</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+    }
+    
+    // For other structured tests, show key-value pairs
+    if (Object.keys(testData).length > 0 && testType !== 'conventional_karyotyping') {
+      // Filter out internal fields
+      const displayFields = Object.entries(testData).filter(([key]) => 
+        !['testType', 'testName', 'testCode', 'testCategory', 'fullTestData', 'panel_data'].includes(key)
+      );
+      
+      if (displayFields.length > 0) {
+        return (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <h5 className="font-semibold text-gray-900 mb-3">Test Details</h5>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {displayFields.map(([key, value]) => {
+                if (value === null || value === undefined || value === '') return null;
+                if (typeof value === 'object' && !Array.isArray(value)) return null; // Skip nested objects
+                return (
+                  <div key={key}>
+                    <span className="text-sm text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span>
+                    <div className="font-medium text-gray-900 mt-1">
+                      {Array.isArray(value) ? value.join(', ') : String(value)}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      }
+    }
+    
+    return null;
+  };
+
+  const ReportDetails = ({ report }) => {
+    // Local state for this component
+    const [reportResults, setReportResults] = useState([]);
+    const [loadingResults, setLoadingResults] = useState(false);
+    
+    // Fetch test results when report is selected
+    useEffect(() => {
+      // Reset state when report changes
+      setReportResults([]);
+      setLoadingResults(false);
+      
+      if (!report || !report.id) {
+        return;
+      }
+      
+      let cancelled = false;
+      setLoadingResults(true);
+      
+      getReportResults(report.id)
+        .then(results => {
+          if (!cancelled) {
+            setReportResults(results || []);
+          }
+        })
+        .catch(err => {
+          if (!cancelled) {
+            console.error('Error loading report results:', err);
+            setReportResults([]);
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setLoadingResults(false);
+          }
+        });
+      
+      // Cleanup function to cancel if component unmounts or report changes
+      return () => {
+        cancelled = true;
+      };
+    }, [report?.id]); // Only depend on report.id, not the entire report object
+
+    return (
     <div className="bg-white rounded-lg border border-gray-200 p-6">
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
@@ -421,35 +445,8 @@ const LabReportsModule = () => {
         </div>
       </div>
 
-      {/* Report Information */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="font-semibold text-gray-900 mb-3">Report Details</h3>
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">Type:</span>
-              <div className="flex items-center space-x-1">
-                {getTypeIcon(report.type)}
-                <span className="font-medium capitalize">{report.type}</span>
-              </div>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Category:</span>
-              <span className="font-medium">{report.category}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Format:</span>
-              <span className="font-medium">{getFormatIcon(report.format)} {report.format}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Status:</span>
-              <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(report.status)}`}>
-                {report.status.charAt(0).toUpperCase() + report.status.slice(1)}
-              </span>
-            </div>
-          </div>
-        </div>
-
+      {/* Generation Info */}
+      <div className="mb-6">
         <div className="bg-gray-50 rounded-lg p-4">
           <h3 className="font-semibold text-gray-900 mb-3">Generation Info</h3>
           <div className="space-y-2">
@@ -462,37 +459,9 @@ const LabReportsModule = () => {
               <span className="font-medium">{report.generatedTime}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Generated By:</span>
-              <span className="font-medium">{report.generatedBy}</span>
-            </div>
-            <div className="flex justify-between">
               <span className="text-gray-600">Period:</span>
               <span className="font-medium">{report.period}</span>
             </div>
-          </div>
-        </div>
-
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="font-semibold text-gray-900 mb-3">Usage Statistics</h3>
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-gray-600">File Size:</span>
-              <span className="font-medium">{report.size}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Pages:</span>
-              <span className="font-medium">{report.pages}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-gray-600">Downloads:</span>
-              <span className="font-medium">{report.downloadCount}</span>
-            </div>
-            {report.lastAccessed && (
-              <div className="flex justify-between">
-                <span className="text-gray-600">Last Accessed:</span>
-                <span className="font-medium">{report.lastAccessed}</span>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -501,7 +470,14 @@ const LabReportsModule = () => {
       <div className="mb-6">
         <h3 className="font-semibold text-gray-900 mb-3">Recipients</h3>
         <div className="flex flex-wrap gap-2">
-          {report.recipients.map((recipient, index) => (
+          {/* Always show patient name if available */}
+          {report.patientInfo && report.patientInfo.name && (
+            <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium">
+              {report.patientInfo.name}
+            </span>
+          )}
+          {/* Show other recipients */}
+          {report.recipients && report.recipients.map((recipient, index) => (
             <span key={index} className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm">
               {recipient}
             </span>
@@ -512,12 +488,14 @@ const LabReportsModule = () => {
       {/* Data Summary (if available) */}
       {report.data && (
         <div className="mb-6">
-          <h3 className="font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">Report Data Summary</h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            {Object.entries(report.data).map(([key, value]) => (
-              <div key={key} className="bg-white border border-gray-200 rounded-lg p-4">
-                <div className="text-sm text-gray-600 capitalize">{key.replace(/([A-Z])/g, ' $1')}</div>
-                <div className="text-xl font-bold text-gray-900">{value}</div>
+          <h3 className="font-semibold text-gray-900 mb-3 border-l-4 border-teal-500 pl-3 text-sm">Report Data Summary</h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {Object.entries(report.data)
+              .filter(([key]) => key.toLowerCase() !== 'resultids') // Remove resultIds
+              .map(([key, value]) => (
+                <div key={key} className="bg-white border border-gray-200 rounded-lg p-3">
+                  <div className="text-xs text-gray-600 capitalize mb-1">{key.replace(/([A-Z])/g, ' $1')}</div>
+                  <div className="text-sm font-semibold text-gray-900">{value}</div>
               </div>
             ))}
           </div>
@@ -548,8 +526,122 @@ const LabReportsModule = () => {
           </div>
         </div>
       )}
+
+      {/* Test Results */}
+      <div className="mb-6">
+        <h3 className="font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">Test Results</h3>
+        {loadingResults ? (
+          <div className="text-center py-8">
+            <div className="text-gray-500">Loading test results...</div>
+          </div>
+        ) : reportResults.length === 0 ? (
+          <div className="text-center py-8 bg-gray-50 rounded-lg">
+            <div className="text-gray-500">No test results found for this report.</div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {reportResults.map((result, index) => (
+              <div key={result.id || index} className="bg-gray-50 rounded-lg border border-gray-200 p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h4 className="font-semibold text-gray-900">{result.testName}</h4>
+                    {result.testCode && (
+                      <p className="text-sm text-gray-600">Code: {result.testCode}</p>
+                    )}
+                    {result.panelName && (
+                      <p className="text-sm text-gray-600">Panel: {result.panelName}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {result.isAbnormal && (
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        result.abnormalityType === 'HIGH' ? 'bg-yellow-100 text-yellow-800' :
+                        result.abnormalityType === 'LOW' ? 'bg-orange-100 text-orange-800' :
+                        'bg-red-100 text-red-800'
+                      }`}>
+                        {result.abnormalityType || 'Abnormal'}
+                      </span>
+                    )}
+                    {result.isCritical && (
+                      <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                        Critical
+                      </span>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                  <div>
+                    <span className="text-sm text-gray-600">Result Value:</span>
+                    <div className="font-medium text-gray-900">
+                      {result.resultValue} {result.resultUnit && <span className="text-gray-600">({result.resultUnit})</span>}
+                    </div>
+                  </div>
+                  {result.referenceRange && (
+                    <div>
+                      <span className="text-sm text-gray-600">Reference Range:</span>
+                      <div className="font-medium text-gray-900">{result.referenceRange}</div>
+                    </div>
+                  )}
+                  {result.testCategory && (
+                    <div>
+                      <span className="text-sm text-gray-600">Category:</span>
+                      <div className="font-medium text-gray-900">{result.testCategory}</div>
+                    </div>
+                  )}
+                  {result.status && (
+                    <div>
+                      <span className="text-sm text-gray-600">Status:</span>
+                      <div className="font-medium text-gray-900 capitalize">{result.status.toLowerCase()}</div>
+                    </div>
+                  )}
+                </div>
+
+                {result.interpretation && (
+                  <div className="mt-3 pt-3 border-t border-gray-200">
+                    <span className="text-sm text-gray-600">Interpretation:</span>
+                    <div className="text-sm text-gray-900 mt-1">{result.interpretation}</div>
+                  </div>
+                )}
+
+                {result.comments && (
+                  <div className="mt-2">
+                    <span className="text-sm text-gray-600">Comments:</span>
+                    <div className="text-sm text-gray-900 mt-1">{result.comments}</div>
+                  </div>
+                )}
+
+                {/* Display structured test data for complex tests */}
+                {(() => {
+                  const structuredView = renderTestData(result);
+                  if (structuredView) {
+                    return structuredView;
+                  }
+                  // Fallback: Display raw JSON if structured rendering didn't work
+                  if (result.attachments && result.attachments.fullTestData) {
+                    return (
+                      <div className="mt-3 pt-3 border-t border-gray-200">
+                        <details className="text-sm">
+                          <summary className="cursor-pointer text-teal-600 hover:text-teal-700 font-medium">
+                            View Raw Test Data
+                          </summary>
+                          <pre className="mt-2 p-3 bg-gray-100 rounded text-xs overflow-auto max-h-64">
+                            {JSON.stringify(result.attachments.fullTestData, null, 2)}
+                          </pre>
+                        </details>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
+  };
 
   // Statistics
   const stats = {
@@ -565,48 +657,57 @@ const LabReportsModule = () => {
       {/* Header Component */}
       <LabHeader />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {!selectedReport ? (
-          <>
+      <div className="flex h-[calc(100vh-64px)]">
+        {/* Left Sidebar - Fixed */}
+        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+          <div className="p-6 space-y-4">
             {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-6">
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 border-l-4 border-teal-500 pl-3">Report Statistics</h3>
+              <div className="bg-gradient-to-br from-teal-50 to-blue-50 rounded-lg border border-teal-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <FileText className="w-8 h-8 text-gray-500" />
+                  <FileText className="w-6 h-6 text-gray-500" />
                 </div>
                 <div className="text-2xl font-bold text-gray-900">{stats.total}</div>
                 <div className="text-sm text-gray-600">Total Reports</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <CheckCircle className="w-8 h-8 text-green-500" />
+                  <CheckCircle className="w-6 h-6 text-green-500" />
                 </div>
                 <div className="text-2xl font-bold text-green-600">{stats.completed}</div>
                 <div className="text-sm text-gray-600">Completed</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Clock className="w-8 h-8 text-yellow-500" />
+                  <Clock className="w-6 h-6 text-yellow-500" />
                 </div>
                 <div className="text-2xl font-bold text-yellow-600">{stats.pending}</div>
                 <div className="text-sm text-gray-600">Pending</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <PieChart className="w-8 h-8 text-purple-500" />
+                  <PieChart className="w-6 h-6 text-purple-500" />
                 </div>
                 <div className="text-2xl font-bold text-purple-600">{stats.templates}</div>
                 <div className="text-sm text-gray-600">Templates</div>
               </div>
-              <div className="bg-white rounded-lg border border-gray-200 p-6 text-center">
+              <div className="bg-white rounded-lg border border-gray-200 p-4 text-center">
                 <div className="flex items-center justify-center mb-2">
-                  <Download className="w-8 h-8 text-blue-500" />
+                  <Download className="w-6 h-6 text-blue-500" />
                 </div>
                 <div className="text-2xl font-bold text-blue-600">{stats.totalDownloads}</div>
                 <div className="text-sm text-gray-600">Downloads</div>
               </div>
             </div>
+              </div>
+            </div>
 
+        {/* Main Content Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            {!selectedReport ? (
+              <>
             {/* Reports Management */}
             <div className="bg-white rounded-lg border border-gray-200 p-6">
               {/* Header with Actions */}
@@ -753,6 +854,8 @@ const LabReportsModule = () => {
         ) : (
           <ReportDetails report={selectedReport} />
         )}
+          </div>
+        </div>
       </div>
     </div>
   );

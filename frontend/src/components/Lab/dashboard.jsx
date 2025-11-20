@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Search, Filter, Bell, User, FileText, Clock, CheckCircle, AlertCircle, Send, Upload, Plus, Calendar } from 'lucide-react';
 import { format, isSameDay } from 'date-fns';
-// Import the header component
 import LabHeader from './header';
+import { getOrders, updateOrderStatus as updateOrderStatusSvc, submitOrderResults as submitOrderResultsSvc, getDashboardSummary } from '../../services/labService';
 
 
 const LabTechnicianDashboard = () => {
+  const navigate = useNavigate();
+  
   // Date management states
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -15,127 +18,66 @@ const LabTechnicianDashboard = () => {
   const [showResultEntry, setShowResultEntry] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Mock data
-  const [labOrders, setLabOrders] = useState([
-    {
-      id: 'LO-001',
-      patientName: 'John Smith',
-      patientId: 'P-12345',
-      age: 45,
-      gender: 'Male',
-      orderDate: '2025-06-28',
-      orderTime: '10:00',
-      priority: 'urgent',
-      status: 'not-received',
-      tests: [
-        { id: 'T-001', name: 'Complete Blood Count', type: 'CBC', unit: 'cells/μL', normalRange: '4.5-11.0' },
-        { id: 'T-002', name: 'Blood Glucose', type: 'GLU', unit: 'mg/dL', normalRange: '70-100' }
-      ],
-      physician: 'Dr. Johnson',
-      notes: 'Patient fasting for 12 hours',
-      description: 'Routine blood work for annual checkup'
-    },
-    {
-      id: 'LO-002',
-      patientName: 'Sarah Davis',
-      patientId: 'P-12346',
-      age: 32,
-      gender: 'Female',
-      orderDate: '2025-06-28',
-      orderTime: '10:30',
-      priority: 'routine',
-      status: 'received',
-      tests: [
-        { id: 'T-003', name: 'Lipid Panel', type: 'LIPID', unit: 'mg/dL', normalRange: 'Various' }
-      ],
-      physician: 'Dr. Wilson',
-      notes: '',
-      description: 'Cholesterol screening'
-    },
-    {
-      id: 'LO-003',
-      patientName: 'Mike Johnson',
-      patientId: 'P-12347',
-      age: 28,
-      gender: 'Male',
-      orderDate: '2025-06-28',
-      orderTime: '11:00',
-      priority: 'routine',
-      status: 'pending',
-      tests: [
-        { id: 'T-004', name: 'Hemoglobin A1C', type: 'HBA1C', unit: '%', normalRange: '<5.7' }
-      ],
-      physician: 'Dr. Brown',
-      notes: 'Diabetes monitoring',
-      description: 'Diabetes follow-up testing'
-    },
-    {
-      id: 'LO-004',
-      patientName: 'Emma Wilson',
-      patientId: 'P-12348',
-      age: 35,
-      gender: 'Female',
-      orderDate: '2025-06-28',
-      orderTime: '14:00',
-      priority: 'routine',
-      status: 'ready',
-      tests: [
-        { id: 'T-005', name: 'Thyroid Panel', type: 'TSH', unit: 'mIU/L', normalRange: '0.4-4.0' }
-      ],
-      physician: 'Dr. Smith',
-      notes: 'Thyroid function check',
-      description: 'Annual thyroid screening'
-    },
-    {
-      id: 'LO-005',
-      patientName: 'David Brown',
-      patientId: 'P-12349',
-      age: 42,
-      gender: 'Male',
-      orderDate: '2025-06-27',
-      orderTime: '09:00',
-      priority: 'routine',
-      status: 'sent',
-      tests: [
-        { id: 'T-006', name: 'Liver Function Tests', type: 'LFT', unit: 'U/L', normalRange: 'Various' }
-      ],
-      physician: 'Dr. Davis',
-      notes: 'Follow-up liver function',
-      description: 'Post-medication liver monitoring'
-    }
-  ]);
+  const [labOrders, setLabOrders] = useState([]);
+  const [dashboardSummary, setDashboardSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        setLoading(true);
+        // Fetch both orders and dashboard summary
+        const [ordersData, summaryData] = await Promise.all([
+          getOrders(),
+          getDashboardSummary()
+        ]);
+        
+        if (active) {
+          setLabOrders(ordersData);
+          setDashboardSummary(summaryData?.data || summaryData);
+        }
+      } catch (e) {
+        console.error('Error loading lab dashboard data:', e);
+        if (active) {
+          setLabOrders([]);
+          setDashboardSummary(null);
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    })();
+    return () => { active = false };
+  }, []);
 
   const [results, setResults] = useState({});
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'not-received': return 'bg-red-50 text-red-700 border border-red-200';
-      case 'received': return 'bg-blue-50 text-blue-700 border border-blue-200';
-      case 'pending': return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
-      case 'ready': return 'bg-purple-50 text-purple-700 border border-purple-200';
-      case 'sent': return 'bg-green-50 text-green-700 border border-green-200';
+      case 'active': return 'bg-blue-50 text-blue-700 border border-blue-200';
+      case 'completed': return 'bg-green-50 text-green-700 border border-green-200';
+      case 'on-hold': return 'bg-yellow-50 text-yellow-700 border border-yellow-200';
+      case 'revoked': return 'bg-red-50 text-red-700 border border-red-200';
       default: return 'bg-gray-50 text-gray-700 border border-gray-200';
     }
   };
 
   const getStatusDisplayName = (status) => {
     switch (status) {
-      case 'not-received': return 'Not Received';
-      case 'received': return 'Received';
-      case 'pending': return 'Pending';
-      case 'ready': return 'Ready';
-      case 'sent': return 'Sent';
+      case 'active': return 'Active';
+      case 'completed': return 'Completed';
+      case 'on-hold': return 'On Hold';
+      case 'revoked': return 'Revoked';
       default: return status;
     }
   };
 
   const getNextStatusAction = (status) => {
     switch (status) {
-      case 'not-received': return { action: 'Mark as Received', nextStatus: 'received', color: 'bg-blue-500' };
-      case 'received': return { action: 'Start Processing', nextStatus: 'pending', color: 'bg-yellow-500' };
-      case 'pending': return { action: 'Mark as Ready', nextStatus: 'ready', color: 'bg-purple-500' };
-      case 'ready': return { action: 'Send Results', nextStatus: 'sent', color: 'bg-green-500' };
-      case 'sent': return null;
+      case 'active': return { action: 'Mark as Completed', nextStatus: 'completed', color: 'bg-green-500' };
+      case 'completed': return null;
+      case 'on-hold': return { action: 'Resume Processing', nextStatus: 'active', color: 'bg-blue-500' };
+      case 'revoked': return null;
       default: return null;
     }
   };
@@ -158,14 +100,19 @@ const LabTechnicianDashboard = () => {
     }));
   };
 
-  const handleSubmitResults = (orderId) => {
-    setLabOrders(prev => prev.map(order => 
-      order.id === orderId 
-        ? { ...order, status: 'sent' }
-        : order
-    ));
-    setShowResultEntry(false);
-    setSelectedOrder(null);
+  const handleSubmitResults = async (orderId) => {
+    try {
+      await submitOrderResultsSvc(orderId, results);
+      setLabOrders(prev => prev.map(order => 
+        order.id === orderId 
+          ? { ...order, status: 'completed' }
+          : order
+      ));
+      setShowResultEntry(false);
+      setSelectedOrder(null);
+    } catch (e) {
+      // no-op
+    }
   };
 
   // Handle date selection
@@ -178,15 +125,19 @@ const LabTechnicianDashboard = () => {
     setCurrentDate(newDate);
   };
 
-  const updateOrderStatus = (orderId, newStatus) => {
-    setLabOrders(prev => prev.map(order => 
-      order.id === orderId 
-        ? { ...order, status: newStatus }
-        : order
-    ));
-    // Update selectedOrder if it's the same order
-    if (selectedOrder && selectedOrder.id === orderId) {
-      setSelectedOrder(prev => ({ ...prev, status: newStatus }));
+  const updateOrderStatus = async (orderId, newStatus) => {
+    try {
+      await updateOrderStatusSvc(orderId, newStatus);
+      setLabOrders(prev => prev.map(order => 
+        order.id === orderId 
+          ? { ...order, status: newStatus }
+          : order
+      ));
+      if (selectedOrder && selectedOrder.id === orderId) {
+        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
+      }
+    } catch (e) {
+      // no-op
     }
   };
 
@@ -206,7 +157,11 @@ const LabTechnicianDashboard = () => {
           </div>
           <div>
             <h3 className="font-semibold text-gray-900 text-lg">{order.patientName}</h3>
-            <p className="text-gray-600 text-sm">{order.description}</p>
+            <p className="text-gray-600 text-sm">
+              {order.tests && order.tests.length > 0 
+                ? `${order.tests.length} test${order.tests.length > 1 ? 's' : ''} - ${order.tests.map(t => t.name).join(', ')}`
+                : 'No tests specified'}
+            </p>
           </div>
         </div>
         <div className="flex items-center space-x-3">
@@ -239,39 +194,54 @@ const LabTechnicianDashboard = () => {
   );
 
   const QuickActionsCard = () => (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h3 className="font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">Quick Actions</h3>
       <div className="space-y-3">
-        <button className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2">
+        <button 
+          onClick={() => navigate('/lab/reports/new')}
+          className="w-full bg-teal-500 hover:bg-teal-600 text-white py-3 px-4 rounded-lg transition-colors flex items-center justify-center space-x-2"
+        >
           <Plus className="w-4 h-4" />
           <span>New Lab Order</span>
         </button>
-        <button className="w-full border border-teal-500 text-teal-700 py-3 px-4 rounded-lg hover:bg-teal-50 transition-colors flex items-center justify-center space-x-2">
+        <button 
+          onClick={() => navigate('/lab/orders?status=active')}
+          className="w-full border border-teal-500 text-teal-700 py-3 px-4 rounded-lg hover:bg-teal-50 transition-colors flex items-center justify-center space-x-2"
+        >
           <FileText className="w-4 h-4" />
-          <span>Not Received</span>
+          <span>Active Orders</span>
           <span className="bg-red-500 text-white text-xs rounded-full px-2 py-1 ml-2">
-            {labOrders.filter(o => o.status === 'not-received').length}
+            {labOrders.filter(o => o.status === 'active').length}
           </span>
         </button>
-        <button className="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2">
+        <button 
+          onClick={() => navigate('/lab/orders?status=pending')}
+          className="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2"
+        >
           <Clock className="w-4 h-4" />
-          <span>Pending Tests</span>
+          <span>In Progress</span>
           <span className="bg-yellow-500 text-white text-xs rounded-full px-2 py-1 ml-2">
-            {labOrders.filter(o => o.status === 'pending').length}
+            {labOrders.filter(o => o.status === 'pending' || o.status === 'active').length}
           </span>
         </button>
-        <button className="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2">
+        <button 
+          onClick={() => navigate('/lab/orders?status=completed')}
+          className="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2"
+        >
           <CheckCircle className="w-4 h-4" />
-          <span>Ready Results</span>
+          <span>Completed Orders</span>
           <span className="bg-purple-500 text-white text-xs rounded-full px-2 py-1 ml-2">
-            {labOrders.filter(o => o.status === 'ready').length}
+            {labOrders.filter(o => o.status === 'completed').length}
           </span>
         </button>
-        <button className="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2">
+        <button 
+          onClick={() => navigate('/lab/reports')}
+          className="w-full border border-gray-300 text-gray-700 py-3 px-4 rounded-lg hover:bg-gray-50 transition-colors flex items-center justify-center space-x-2"
+        >
           <Send className="w-4 h-4" />
-          <span>Sent Results</span>
+          <span>Finalized Reports</span>
           <span className="bg-green-500 text-white text-xs rounded-full px-2 py-1 ml-2">
-            {labOrders.filter(o => o.status === 'sent').length}
+            {dashboardSummary?.reports_completed || 0}
           </span>
         </button>
       </div>
@@ -279,13 +249,58 @@ const LabTechnicianDashboard = () => {
   );
 
   const TodaySummaryCard = () => (
-    <LabCalendarSidebar
-      selectedDate={selectedDate}
-      onDateSelect={handleDateClick}
-      currentDate={currentDate}
-      onMonthChange={handleMonthChange}
-      labOrders={labOrders}
-    />
+    <div className="bg-gradient-to-br from-teal-50 to-blue-50 rounded-lg shadow-sm border border-teal-200 p-6">
+      <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">Today's Summary</h3>
+      {loading ? (
+        <div className="space-y-3">
+          <div className="animate-pulse">
+            <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          </div>
+          <div className="animate-pulse">
+            <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          </div>
+          <div className="animate-pulse">
+            <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+            <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">Pending Orders</span>
+            <span className="text-lg font-bold text-orange-600">
+              {dashboardSummary?.orders_pending || 0}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">In Progress</span>
+            <span className="text-lg font-bold text-blue-600">
+              {dashboardSummary?.orders_total - dashboardSummary?.orders_pending - dashboardSummary?.orders_completed || 0}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">Completed</span>
+            <span className="text-lg font-bold text-green-600">
+              {dashboardSummary?.orders_completed || 0}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">Total Orders</span>
+            <span className="text-lg font-bold text-gray-900">
+              {dashboardSummary?.orders_total || 0}
+            </span>
+          </div>
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-gray-600">Urgent Orders</span>
+            <span className="text-lg font-bold text-red-600">
+              {dashboardSummary?.orders_urgent || 0}
+            </span>
+          </div>
+        </div>
+      )}
+    </div>
   );
 
   const OrderDetailsModal = ({ order }) => (
@@ -465,20 +480,44 @@ const LabTechnicianDashboard = () => {
       {/* Header Component */}
       <LabHeader />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-          {/* Left Sidebar */}
-          <div className="lg:col-span-1 space-y-6">
+      <div className="flex h-[calc(100vh-64px)]">
+        {/* Left Sidebar - Fixed */}
+        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+          <div className="p-6 space-y-6">
             <TodaySummaryCard />
             <QuickActionsCard />
           </div>
+          </div>
 
-          {/* Main Content */}
-          <div className="lg:col-span-3">
+        {/* Main Content Area - Scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             {showResultEntry && selectedOrder ? (
               <ResultEntryForm order={selectedOrder} />
             ) : selectedOrder ? (
               <OrderDetailsModal order={selectedOrder} />
+            ) : loading ? (
+              <div className="space-y-6">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                  <div className="animate-pulse">
+                    <div className="h-6 bg-gray-200 rounded w-1/4 mb-4"></div>
+                    <div className="space-y-3">
+                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                      <div className="h-4 bg-gray-200 rounded w-2/3"></div>
+                    </div>
+                  </div>
+                </div>
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                  <div className="animate-pulse">
+                    <div className="h-6 bg-gray-200 rounded w-1/3 mb-4"></div>
+                    <div className="space-y-3">
+                      <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                      <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="space-y-6">
                 {/* Lab Orders for Today */}
@@ -513,10 +552,10 @@ const LabTechnicianDashboard = () => {
                     <h2 className="text-lg font-semibold text-gray-900 border-l-4 border-teal-500 pl-3">
                       Sample Processing Queue
                     </h2>
-                    <span className="text-teal-500 text-sm">{labOrders.filter(o => o.status === 'not-received').length} not received</span>
+                    <span className="text-teal-500 text-sm">{labOrders.filter(o => o.status === 'active').length} active</span>
                   </div>
                   
-                  {labOrders.filter(order => order.status === 'not-received').map(order => (
+                  {labOrders.filter(order => order.status === 'active').map(order => (
                     <div key={order.id} className="bg-white border border-gray-200 rounded-lg p-6 mb-4">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center space-x-4">
@@ -600,10 +639,10 @@ const LabTechnicianDashboard = () => {
                     <h2 className="text-lg font-semibold text-gray-900 border-l-4 border-teal-500 pl-3">
                       Ready for Delivery
                     </h2>
-                    <span className="text-teal-500 text-sm">{labOrders.filter(o => o.status === 'ready').length} ready</span>
+                    <span className="text-teal-500 text-sm">{labOrders.filter(o => o.status === 'completed').length} completed</span>
                   </div>
                   
-                  {labOrders.filter(order => order.status === 'ready').map(order => (
+                  {labOrders.filter(order => order.status === 'completed').map(order => (
                     <div key={order.id} className="bg-purple-50 border border-purple-200 rounded-lg p-6 mb-4">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center space-x-4">
@@ -621,7 +660,7 @@ const LabTechnicianDashboard = () => {
                         <div className="flex items-center space-x-3">
                           <span className="text-gray-500 text-sm">Provider: {order.physician}</span>
                           <button 
-                            onClick={() => updateOrderStatus(order.id, 'sent')}
+                            onClick={() => updateOrderStatus(order.id, 'completed')}
                             className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
                           >
                             Send Results
@@ -631,7 +670,7 @@ const LabTechnicianDashboard = () => {
                     </div>
                   ))}
                   
-                  {labOrders.filter(o => o.status === 'ready').length === 0 && (
+                  {labOrders.filter(o => o.status === 'completed').length === 0 && (
                     <div className="text-center text-gray-500 py-8">
                       <CheckCircle className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                       <p>No results ready for delivery</p>
@@ -645,10 +684,10 @@ const LabTechnicianDashboard = () => {
                     <h2 className="text-lg font-semibold text-gray-900 border-l-4 border-teal-500 pl-3">
                       Completed Orders
                     </h2>
-                    <span className="text-teal-500 text-sm">{labOrders.filter(o => o.status === 'sent').length} sent</span>
+                    <span className="text-teal-500 text-sm">{labOrders.filter(o => o.status === 'completed').length} completed</span>
                   </div>
                   
-                  {labOrders.filter(order => order.status === 'sent').map(order => (
+                  {labOrders.filter(order => order.status === 'completed').map(order => (
                     <div key={order.id} className="bg-green-50 border border-green-200 rounded-lg p-6 mb-4">
                       <div className="flex items-start justify-between">
                         <div className="flex items-center space-x-4">
@@ -673,7 +712,7 @@ const LabTechnicianDashboard = () => {
                     </div>
                   ))}
                   
-                  {labOrders.filter(o => o.status === 'sent').length === 0 && (
+                  {labOrders.filter(o => o.status === 'completed').length === 0 && (
                     <div className="text-center text-gray-500 py-8">
                       <Send className="w-12 h-12 mx-auto mb-4 text-gray-300" />
                       <p>No completed orders yet</p>

@@ -3,6 +3,7 @@
 from sqlalchemy import Column, String, Date, DateTime, Text, ForeignKey, Boolean, Integer, Float, Enum, Time, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy import String
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 import uuid
 import enum
@@ -47,18 +48,19 @@ class ReminderPriority(str, enum.Enum):
 class Prescription(Base):
     """Prescription/MedicationRequest model - merged SQLAlchemy and FHIR concepts."""
     __tablename__ = "prescriptions"
+    __table_args__ = {"schema": "ehr"}
 
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     
     # FHIR MedicationRequest fields
     fhir_medication_request_id = Column(String(255), unique=True, nullable=True)
     identifiers = Column(JSON, nullable=True)  # Array of {system, value, use}
     
-    # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    doctor_id = Column(String(36), ForeignKey("doctors.id"), nullable=False)
-    hospital_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
-    encounter_id = Column(String(36), ForeignKey("appointments.id"), nullable=True)
+    # Core relationships - using UUID for PostgreSQL compatibility
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    doctor_id = Column(UUID(as_uuid=True), ForeignKey("ehr.doctors.id"), nullable=False)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey("ref.hospitals.id"), nullable=False)
+    encounter_id = Column(UUID(as_uuid=True), ForeignKey("ehr.appointments.id"), nullable=True)
     
     # Prescription details
     prescription_number = Column(String(50), unique=True, nullable=False, index=True)
@@ -69,10 +71,10 @@ class Prescription(Base):
     description = Column(Text, nullable=True)
     
     # Status and intent
-    status = Column(Enum(PrescriptionStatus), default=PrescriptionStatus.ACTIVE, nullable=False)
+    status = Column(Enum(PrescriptionStatus, native_enum=False), default=PrescriptionStatus.ACTIVE, nullable=False)
     status_reason = Column(JSON, nullable=True)  # CodeableConcept
-    intent = Column(Enum(PrescriptionIntent), default=PrescriptionIntent.ORDER, nullable=False)
-    priority = Column(Enum(PrescriptionPriority), default=PrescriptionPriority.ROUTINE)
+    intent = Column(Enum(PrescriptionIntent, native_enum=False), default=PrescriptionIntent.ORDER, nullable=False)
+    priority = Column(Enum(PrescriptionPriority, native_enum=False), default=PrescriptionPriority.ROUTINE)
     
     # Dates
     prescribed_date = Column(DateTime(timezone=True), nullable=False)
@@ -114,18 +116,18 @@ class Prescription(Base):
     currency = Column(String(3), default="UZS")
     
     # Prior prescription reference
-    prior_prescription_id = Column(String(36), ForeignKey("prescriptions.id"), nullable=True)
+    prior_prescription_id = Column(UUID(as_uuid=True), ForeignKey("ehr.prescriptions.id"), nullable=True)
     
     # Signature and authentication
     is_signed = Column(Boolean, default=False)
     signed_at = Column(DateTime(timezone=True), nullable=True)
     signature_data = Column(Text, nullable=True)
     
-    # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    prescribed_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    last_modified_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    cancelled_by = Column(String(36), ForeignKey("users.id"), nullable=True)
+    # Metadata - using UUID for PostgreSQL compatibility
+    created_by = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), nullable=False)
+    prescribed_by = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), nullable=False)
+    last_modified_by = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), nullable=True)
+    cancelled_by = Column(UUID(as_uuid=True), ForeignKey("core.users.id"), nullable=True)
     cancelled_at = Column(DateTime(timezone=True), nullable=True)
     cancellation_reason = Column(String(500), nullable=True)
     
@@ -145,16 +147,17 @@ class Prescription(Base):
     refills = relationship("PrescriptionRefill", back_populates="prescription", cascade="all, delete-orphan")
     reminders = relationship("PrescriptionReminder", back_populates="prescription", cascade="all, delete-orphan")
     pharmacy_prices = relationship("PharmacyPrescriptionPrice", back_populates="prescription", cascade="all, delete-orphan")
-    medications = relationship("PatientMedication", back_populates="prescription")
+    medications = relationship("PatientMedication", back_populates="prescription", cascade="all, delete-orphan")
 
 
 class PrescriptionReminder(Base):
     """Prescription reminder settings."""
     __tablename__ = "prescription_reminders"
+    __table_args__ = {"schema": "ehr"}
 
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    prescription_id = Column(String(36), ForeignKey("prescriptions.id"), nullable=False)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    prescription_id = Column(String(36), ForeignKey("ehr.prescriptions.id"), nullable=False)
     
     # Reminder details
     title = Column(String(200), nullable=False)
@@ -164,7 +167,7 @@ class PrescriptionReminder(Base):
     # Timing
     reminder_time = Column(DateTime(timezone=True), nullable=False)
     repeat_pattern = Column(String(50), nullable=True)  # daily, weekly, etc.
-    priority = Column(Enum(ReminderPriority), default=ReminderPriority.MEDIUM)
+    priority = Column(Enum(ReminderPriority, native_enum=False), default=ReminderPriority.MEDIUM)
     
     # Status
     is_active = Column(Boolean, default=True)
@@ -188,10 +191,11 @@ class PrescriptionReminder(Base):
 class PrescriptionRefill(Base):
     """Prescription refill history."""
     __tablename__ = "prescription_refills"
+    __table_args__ = {"schema": "ehr"}
 
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    prescription_id = Column(String(36), ForeignKey("prescriptions.id"), nullable=False)
-    pharmacy_id = Column(String(36), ForeignKey("pharmacies.id"), nullable=False)
+    prescription_id = Column(String(36), ForeignKey("ehr.prescriptions.id"), nullable=False)
+    pharmacy_id = Column(String(36), ForeignKey("ehr.pharmacies.id"), nullable=False)
     
     # Refill details
     refill_number = Column(Integer, nullable=False)
@@ -201,7 +205,7 @@ class PrescriptionRefill(Base):
     
     # Dispensing information
     dispensed_by = Column(String(200), nullable=True)  # Pharmacist name
-    dispensed_by_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    dispensed_by_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     
     # Pricing
     price = Column(Float, nullable=True)
@@ -223,6 +227,7 @@ class PrescriptionRefill(Base):
 class Pharmacy(Base):
     """Pharmacy information."""
     __tablename__ = "pharmacies"
+    __table_args__ = {"schema": "ehr"}
 
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -288,10 +293,11 @@ class Pharmacy(Base):
 class PharmacyPrescriptionPrice(Base):
     """Pharmacy-specific prescription pricing."""
     __tablename__ = "pharmacy_prescription_prices"
+    __table_args__ = {"schema": "ehr"}
 
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    pharmacy_id = Column(String(36), ForeignKey("pharmacies.id"), nullable=False)
-    prescription_id = Column(String(36), ForeignKey("prescriptions.id"), nullable=False)
+    pharmacy_id = Column(String(36), ForeignKey("ehr.pharmacies.id"), nullable=False)
+    prescription_id = Column(String(36), ForeignKey("ehr.prescriptions.id"), nullable=False)
     
     # Availability
     is_available = Column(Boolean, default=True)

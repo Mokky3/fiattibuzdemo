@@ -1,0 +1,4 @@
+-- Example RLS (adjust to your auth model)
+-- ALTER TABLE core.users ENABLE ROW LEVEL SECURITY;
+-- CREATE POLICY users_self_view ON core.users
+--   FOR SELECT USING (user_id::text = current_setting('app.current_user_id', true));

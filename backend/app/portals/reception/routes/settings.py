@@ -31,30 +31,18 @@ from datetime import time
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Body, status
+from app.common.auth.auth_service import (
+    AuthenticatedUser, require_receptionist_access, require_permission, Permission,
+)
 from pydantic import BaseModel, Field, EmailStr, constr
 
 # ---------------------------------------------------------------------------
-# Dependencies – you would replace these with real implementations
+# Dependencies – use DB-backed FHIR repository
 # ---------------------------------------------------------------------------
 
-def get_current_receptionist():  # noqa: D401 – stub
-    """Return the currently authenticated receptionist (Guardian stub)."""
-    return {
-        "user_id": "u1",
-        "name": "Sarah Roberts",
-    }
+# Auth is enforced via dependencies below
 
-class FHIRRepo:  # extremely naïve in‑memory store
-    _store: dict[str, dict] = {}
-
-    def get(self, resource_type: str, id_: str):
-        return self._store.get(f"{resource_type}/{id_}")
-
-    def save(self, resource: dict):
-        self._store[f"{resource['resourceType']}/{resource['id']}"] = resource
-        return resource
-
-fhir_repo = FHIRRepo()
+from app.services.fhir_repository import fhir_repo
 
 # ---------------------------------------------------------------------------
 # Pydantic models returned to / expected from the UI
@@ -122,7 +110,7 @@ class SettingsBundle(BaseModel):
 # Router
 # ---------------------------------------------------------------------------
 
-router = APIRouter(prefix="/api/reception/settings", tags=["Reception · Settings"])
+router = APIRouter(tags=["Reception · Settings"])
 
 _CACHE: SettingsBundle | None = None  # lazy‑load & persist
 
@@ -172,7 +160,9 @@ def _basic_resource(id_: str, code: str, content: dict) -> dict:
 # ---------- endpoints -------------------------------------------------------
 
 @router.get("", response_model=SettingsBundle)
-async def get_settings(_: dict = Depends(get_current_receptionist)):
+async def get_settings(
+    current_user: AuthenticatedUser = Depends(require_receptionist_access()),
+):
     """Return all settings in a single payload."""
     global _CACHE  # noqa: PLW0603
     if _CACHE:
@@ -261,7 +251,7 @@ async def get_settings(_: dict = Depends(get_current_receptionist)):
 @router.put("", response_model=SettingsBundle, status_code=status.HTTP_200_OK)
 async def save_settings(
     payload: SettingsBundle = Body(...),
-    _: dict = Depends(get_current_receptionist),
+    current_user: AuthenticatedUser = Depends(require_receptionist_access()),
 ):
     """Persist settings – creates/updates FHIR resources then returns the payload."""
     # General → Organization

@@ -15,15 +15,17 @@ from app.db.base_class import Base, UUIDColumn
 doctor_hospitals = Table(
     'doctor_hospitals',
     Base.metadata,
-    Column('doctor_id', String(36), ForeignKey('doctors.id'), primary_key=True),
-    Column('hospital_id', String(36), ForeignKey('hospitals.id'), primary_key=True)
+    Column('doctor_id', String(36), ForeignKey('ehr.doctors.id'), primary_key=True),
+    Column('hospital_id', String(36), ForeignKey('ref.hospitals.id'), primary_key=True),
+    schema='ehr'
 )
 
 doctor_departments = Table(
     'doctor_departments',
     Base.metadata,
-    Column('doctor_id', String(36), ForeignKey('doctors.id'), primary_key=True),
-    Column('department_id', String(36), ForeignKey('hospital_departments.id'), primary_key=True)
+    Column('doctor_id', String(36), ForeignKey('ehr.doctors.id'), primary_key=True),
+    Column('department_id', String(36), ForeignKey('ref.hospital_departments.id'), primary_key=True),
+    schema='ehr'
 )
 
 # Enums
@@ -36,9 +38,10 @@ class ConsultationType(str, enum.Enum):
 class Doctor(Base):
     """Doctor profile model."""
     __tablename__ = "doctors"
+    __table_args__ = {"schema": "ehr"}
     
     id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
-    user_id = UUIDColumn(ForeignKey("users.id"), unique=True, nullable=False)
+    user_id = UUIDColumn(ForeignKey("core.users.id"), unique=True, nullable=False)
     
     # Professional information
     license_number = Column(String(50), unique=True, nullable=False, index=True)
@@ -100,6 +103,7 @@ class Doctor(Base):
     prescriptions = relationship("Prescription", back_populates="doctor", cascade="all, delete-orphan")
     medical_records = relationship("MedicalRecord", back_populates="doctor", cascade="all, delete-orphan")
     clinical_notes = relationship("ClinicalNote", back_populates="doctor", cascade="all, delete-orphan")
+    general_reports = relationship("GeneralReport", back_populates="doctor", cascade="all, delete-orphan")
     lab_orders = relationship("LabOrder", foreign_keys="LabOrder.ordered_by", back_populates="orderer")
     
     # Schedule and availability
@@ -113,9 +117,10 @@ class Doctor(Base):
 class DoctorScheduleTemplate(Base):
     """Weekly schedule template for doctors."""
     __tablename__ = "doctor_schedule_templates"
+    __table_args__ = {"schema": "ehr"}
     
     id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
-    doctor_id = UUIDColumn(ForeignKey("doctors.id"), nullable=False)
+    doctor_id = UUIDColumn(ForeignKey("ehr.doctors.id"), nullable=False)
     
     # Day of week (0=Monday, 6=Sunday)
     day_of_week = Column(Integer, nullable=False)
@@ -133,7 +138,7 @@ class DoctorScheduleTemplate(Base):
     buffer_time = Column(Integer, default=10)  # minutes between appointments
     
     # Location
-    location_id = UUIDColumn(ForeignKey("locations.id"), nullable=True)
+    location_id = UUIDColumn(ForeignKey("ref.hospital_departments.id"), nullable=True)
     room_number = Column(String(50), nullable=True)
     
     # Consultation types allowed
@@ -153,9 +158,10 @@ class DoctorScheduleTemplate(Base):
 class DoctorScheduleException(Base):
     """Schedule exceptions (holidays, leaves, special hours)."""
     __tablename__ = "doctor_schedule_exceptions"
+    __table_args__ = {"schema": "ehr"}
     
     id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
-    doctor_id = UUIDColumn(ForeignKey("doctors.id"), nullable=False)
+    doctor_id = UUIDColumn(ForeignKey("ehr.doctors.id"), nullable=False)
     
     # Exception details
     exception_date = Column(Date, nullable=False)
@@ -180,11 +186,12 @@ class DoctorScheduleException(Base):
 class ClinicalNote(Base):
     """Clinical notes (SOAP notes, progress notes, etc.)."""
     __tablename__ = "clinical_notes"
+    __table_args__ = {"schema": "ehr"}
     
     id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
-    patient_id = UUIDColumn(ForeignKey("patients.id"), nullable=False)
-    doctor_id = UUIDColumn(ForeignKey("doctors.id"), nullable=False)
-    encounter_id = UUIDColumn(ForeignKey("appointments.id"), nullable=True)
+    patient_id = UUIDColumn(ForeignKey("ehr.patients.patient_id"), nullable=False)
+    doctor_id = UUIDColumn(ForeignKey("ehr.doctors.id"), nullable=False)
+    encounter_id = UUIDColumn(ForeignKey("ehr.appointments.id"), nullable=True)
     
     # Note type and format
     note_type = Column(String(50), nullable=False)  # soap, progress, consultation, discharge, operative
@@ -214,8 +221,8 @@ class ClinicalNote(Base):
     shared_with_team = Column(JSON, nullable=True)  # Array of user IDs
     
     # Metadata
-    created_by = UUIDColumn(ForeignKey("users.id"), nullable=False)
-    locked_by = UUIDColumn(ForeignKey("users.id"), nullable=True)
+    created_by = UUIDColumn(ForeignKey("core.users.id"), nullable=False)
+    locked_by = UUIDColumn(ForeignKey("core.users.id"), nullable=True)
     locked_at = Column(DateTime(timezone=True), nullable=True)
     
     # FHIR reference
@@ -234,10 +241,11 @@ class ClinicalNote(Base):
 # class CareTeamMember(Base):
 #     """Care team members for collaborative patient care."""
 #     __tablename__ = "care_team_members"
+    __table_args__ = {"schema": "ehr"}
 #     
 #     id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
 #     care_team_id = UUIDColumn(ForeignKey("care_teams.id"), nullable=False)
-#     doctor_id = UUIDColumn(ForeignKey("doctors.id"), nullable=False)
+#     doctor_id = UUIDColumn(ForeignKey("ehr.doctors.id"), nullable=False)
 #     
 #     # Role in team
 #     role = Column(String(100), nullable=False)  # primary, consultant, specialist, etc.
@@ -260,4 +268,94 @@ class ClinicalNote(Base):
 #     
 #     # Relationships
 #     doctor = relationship("Doctor", back_populates="care_teams")
-#     care_team = relationship("CareTeam", back_populates="members")
+#     care_team = relationship("CareTeam", back_populates="members", cascade="all, delete-orphan")
+
+
+class GeneralReport(Base):
+    """General Visit Report (#001) - Structured medical report model."""
+    __tablename__ = "general_reports"
+    __table_args__ = {"schema": "ehr"}
+    
+    id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
+    patient_id = UUIDColumn(ForeignKey("ehr.patients.patient_id"), nullable=False)
+    doctor_id = UUIDColumn(ForeignKey("ehr.doctors.id"), nullable=False)
+    encounter_id = UUIDColumn(ForeignKey("ehr.appointments.id"), nullable=True)
+    clinic_id = UUIDColumn(ForeignKey("ref.hospitals.id"), nullable=False)
+    
+    # Report metadata
+    report_code = Column(String(20), default="#001", nullable=False)
+    report_type = Column(String(50), default="general_visit", nullable=False)
+    status = Column(String(20), default="draft", nullable=False)  # draft, final, signed
+    
+    # Core report data - stored as structured JSON
+    chief_complaint = Column(Text, nullable=False)
+    onset_time = Column(DateTime(timezone=True), nullable=True)
+    info_source = Column(String(50), nullable=True)  # patient, relative, record
+    
+    # HPI (History of Present Illness)
+    hpi_onset = Column(String(50), nullable=True)  # остро, постепенно, неизвестно
+    hpi_duration = Column(String(100), nullable=True)
+    hpi_course = Column(String(50), nullable=True)  # ухудшается, улучшается, стабильно
+    hpi_modifiers = Column(JSON, nullable=True)  # Array of modifiers
+    hpi_associated_symptoms = Column(JSON, nullable=True)  # Array of symptoms
+    hpi_free_text = Column(Text, nullable=True)
+    
+    # PMH/FH/SH (Past Medical History, Family History, Social History)
+    pmh_conditions = Column(JSON, nullable=True)  # Array of conditions
+    pmh_surgeries = Column(Text, nullable=True)
+    fh_cardio = Column(String(20), nullable=True)  # yes, no, unknown
+    fh_diabetes = Column(String(20), nullable=True)
+    fh_cancer = Column(String(20), nullable=True)
+    fh_notes = Column(Text, nullable=True)
+    social_smoking = Column(String(20), nullable=True)  # never, former, current
+    social_audit_c = Column(Integer, nullable=True)  # 0-12
+    social_exercise = Column(String(20), nullable=True)  # low, moderate, high
+    
+    # ROS (Review of Systems) - 8 systems
+    ros_respiratory = Column(String(20), default="normal", nullable=False)
+    ros_cardio = Column(String(20), default="normal", nullable=False)
+    ros_gi = Column(String(20), default="normal", nullable=False)
+    ros_neuro = Column(String(20), default="normal", nullable=False)
+    ros_gu = Column(String(20), default="normal", nullable=False)
+    ros_derm = Column(String(20), default="normal", nullable=False)
+    ros_ent = Column(String(20), default="normal", nullable=False)
+    ros_msk = Column(String(20), default="normal", nullable=False)
+    ros_notes = Column(JSON, nullable=True)  # Notes for abnormal findings
+    
+    # PE (Physical Examination) - 6 areas
+    pe_general = Column(String(20), default="normal", nullable=False)
+    pe_lungs = Column(String(20), default="normal", nullable=False)
+    pe_heart = Column(String(20), default="normal", nullable=False)
+    pe_abdomen = Column(String(20), default="normal", nullable=False)
+    pe_neuro = Column(String(20), default="normal", nullable=False)
+    pe_extremities = Column(String(20), default="normal", nullable=False)
+    pe_notes = Column(JSON, nullable=True)  # Notes for abnormal findings
+    
+    # Assessment
+    working_diagnoses = Column(JSON, nullable=True)  # Array of {code, term}
+    differential_diagnoses = Column(JSON, nullable=True)  # Array of {code, term}
+    
+    # Plan
+    plan_tests = Column(JSON, nullable=True)  # Array of tests
+    plan_referrals = Column(JSON, nullable=True)  # Array of referrals
+    plan_med_changes = Column(JSON, nullable=True)  # Array of medication changes
+    plan_lifestyle = Column(JSON, nullable=True)  # Array of lifestyle recommendations
+    plan_follow_up = Column(String(50), nullable=True)  # 24h, 3d, 1w, PRN
+    
+    # Visit Summary
+    visit_summary = Column(Text, nullable=True)
+    
+    # FHIR Integration
+    fhir_document_reference_id = Column(String(255), nullable=True)
+    fhir_binary_id = Column(String(255), nullable=True)
+    
+    # Timestamps
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    signed_at = Column(DateTime(timezone=True), nullable=True)
+    
+    # Relationships
+    patient = relationship("Patient", back_populates="general_reports")
+    doctor = relationship("Doctor", back_populates="general_reports")
+    encounter = relationship("Appointment", back_populates="general_reports")
+    clinic = relationship("Hospital", back_populates="general_reports")

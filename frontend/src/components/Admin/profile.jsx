@@ -96,67 +96,83 @@ const AdminProfile = () => {
     return () => clearTimeout(timer)
   }, [])
 
-  // TODO: Implement API call to fetch admin profile
+  // Implement API call to fetch admin profile
   const fetchAdminProfile = async () => {
     try {
-      // const response = await fetch('/api/admin/profile', {
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      //     'Content-Type': 'application/json'
-      //   }
-      // })
-      // const data = await response.json()
-      // setProfile(data)
-      // setFormData(data)
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/profile`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!response.ok) {
+        throw new Error('Failed to fetch admin profile')
+      }
+      const json = await response.json()
+      const data = json?.data ?? json
+      setProfile(data)
+      setFormData(data)
     } catch (error) {
       console.error('Error fetching admin profile:', error)
-      // Handle error (show toast notification, etc.)
     }
   }
 
-  // TODO: Implement API call to fetch activity stats
+  // Implement API call to fetch activity stats
   const fetchActivityStats = async () => {
     try {
-      // const response = await fetch('/api/admin/activity-stats', {
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      //     'Content-Type': 'application/json'
-      //   }
-      // })
-      // const data = await response.json()
-      // setActivityStats(data)
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/activity-stats`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!response.ok) {
+        throw new Error('Failed to fetch activity stats')
+      }
+      const data = await response.json()
+      setActivityStats(data)
     } catch (error) {
       console.error('Error fetching activity stats:', error)
     }
   }
 
-  // TODO: Implement API call to fetch recent activities
+  // Implement API call to fetch recent activities
   const fetchRecentActivities = async () => {
     try {
-      // const response = await fetch('/api/admin/recent-activities', {
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      //     'Content-Type': 'application/json'
-      //   }
-      // })
-      // const data = await response.json()
-      // setRecentActivities(data)
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/recent-activities`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!response.ok) {
+        throw new Error('Failed to fetch recent activities')
+      }
+      const data = await response.json()
+      setRecentActivities(data)
     } catch (error) {
       console.error('Error fetching recent activities:', error)
     }
   }
 
-  // TODO: Implement API call to fetch permissions
+  // Implement API call to fetch permissions
   const fetchPermissions = async () => {
     try {
-      // const response = await fetch('/api/admin/permissions', {
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      //     'Content-Type': 'application/json'
-      //   }
-      // })
-      // const data = await response.json()
-      // setPermissions(data)
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/permissions`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!response.ok) {
+        throw new Error('Failed to fetch permissions')
+      }
+      const data = await response.json()
+      setPermissions(data)
     } catch (error) {
       console.error('Error fetching permissions:', error)
     }
@@ -172,32 +188,29 @@ const AdminProfile = () => {
     setIsEditing(false)
   }
 
-  // TODO: Implement API call to update admin profile
+  // Implement API call to update admin profile
   const handleSave = async () => {
     setLoading(true)
     setSaveStatus('')
     
     try {
-      // const response = await fetch('/api/admin/profile', {
-      //   method: 'PUT',
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      //     'Content-Type': 'application/json'
-      //   },
-      //   body: JSON.stringify(formData)
-      // })
-      // 
-      // if (!response.ok) {
-      //   throw new Error('Failed to update profile')
-      // }
-      // 
-      // const updatedProfile = await response.json()
-      // setProfile(updatedProfile)
-      
-      setProfile(formData) // TODO: Remove this line when API is implemented
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/v1/admin/profile`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+      })
+      if (!response.ok) {
+        throw new Error('Failed to update profile')
+      }
+      const updated = await response.json()
+      const updatedProfile = updated?.data ?? updated
+      setProfile(updatedProfile)
       setIsEditing(false)
       setSaveStatus('success')
-      
       setTimeout(() => setSaveStatus(''), 3000)
     } catch (error) {
       console.error('Error updating profile:', error)
@@ -207,38 +220,28 @@ const AdminProfile = () => {
     }
   }
 
-  // TODO: Implement API call to upload profile image
+  // Implement API call to upload profile image
   const handleImageUpload = async (e) => {
     const file = e.target.files[0]
     if (file) {
       try {
-        // const formData = new FormData()
-        // formData.append('profile_image', file)
-        // 
-        // const response = await fetch('/api/admin/profile/image', {
-        //   method: 'POST',
-        //   headers: {
-        //     'Authorization': `Bearer ${localStorage.getItem('token')}`
-        //   },
-        //   body: formData
-        // })
-        // 
-        // if (!response.ok) {
-        //   throw new Error('Failed to upload image')
-        // }
-        // 
-        // const data = await response.json()
-        // setFormData({ ...formData, profileImage: data.imageUrl })
-        
-        // Temporary local preview - remove when API is implemented
-        const reader = new FileReader()
-        reader.onloadend = () => {
-          setFormData({ ...formData, profileImage: reader.result })
+        const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+        const payload = new FormData()
+        payload.append('profile_image', file)
+        const response = await fetch(`${API_BASE_URL}/api/v1/admin/profile/image`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: payload
+        })
+        if (!response.ok) {
+          throw new Error('Failed to upload image')
         }
-        reader.readAsDataURL(file)
+        const data = await response.json()
+        setFormData({ ...formData, profileImage: data?.imageUrl || null })
       } catch (error) {
         console.error('Error uploading image:', error)
-        // Handle error (show toast notification, etc.)
       }
     }
   }

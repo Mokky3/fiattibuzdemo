@@ -5,10 +5,17 @@ from typing import List, Dict, Optional
 from uuid import uuid4
 from datetime import date, datetime, timezone
 from .auth import get_current_doctor, DoctorUser
+from app.common.schemas.responses_enhanced import SuccessResponse
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.crud.admin import admin as admin_crud
+from app.crud.todo import todo as todo_crud
+from app.crud.message import message as message_crud
+from app.crud.patient import patient as patient_crud
 
-router = APIRouter(prefix="/api/doctor/dashboard", tags=["Doctor · Dashboard"])
+router = APIRouter(tags=["Doctor · Dashboard"])
 
-# ────── Pydantic models ─────────────────────────────────────────
+# ────── Pydantic models (local, mapped to shared response) ─────────────────
 class Message(BaseModel):
     id: str
     name: str
@@ -221,24 +228,60 @@ _APPOINTMENTS: List[Appointment] = [
 
 # ────── routes ─────────────────────────────────────────────────
 
-@router.get("/messages", response_model=List[Message])
+@router.get("/messages", response_model=SuccessResponse[List[Message]])
 async def list_messages(
     limit: Optional[int] = Query(10, description="Number of messages to return"),
     unread_only: Optional[bool] = Query(False, description="Return only unread messages"),
-    _: DoctorUser = Depends(get_current_doctor)
+    current_doctor: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    """Get recent messages with optional filtering"""
-    messages = _MESSAGES.copy()
-    
-    if unread_only:
-        messages = [msg for msg in messages if msg.unread]
-    
-    # Sort by timestamp (most recent first)
-    messages.sort(key=lambda x: x.timestamp or "", reverse=True)
-    
-    return messages[:limit]
+    """Get recent messages with optional filtering from database"""
+    try:
+        # Get messages from database
+        db_messages = message_crud.get_messages_by_user(
+            db=db,
+            user_id=current_doctor.id,
+            unread_only=unread_only,
+            limit=limit
+        )
+        
+        # Convert database messages to dashboard format
+        dashboard_messages = []
+        for msg in db_messages:
+            # Get patient name for sender
+            patient_name = "Unknown Patient"
+            if msg.sender_id:
+                patient = patient_crud.get(db=db, id=msg.sender_id)
+                if patient:
+                    patient_name = f"{patient.first_name} {patient.last_name}".strip()
+            
+            # Create avatar from patient name
+            avatar = "".join([name[0].upper() for name in patient_name.split()[:2]])
+            if not avatar:
+                avatar = "P"
+            
+            dashboard_message = Message(
+                id=str(msg.id),
+                name=patient_name,
+                avatar=avatar,
+                lastMessage=msg.content or "No message content",
+                timestamp=msg.timestamp.isoformat() if msg.timestamp else None,
+                unread=not msg.read if msg.recipient_id == current_doctor.id else False,
+                sender_id=msg.sender_id
+            )
+            dashboard_messages.append(dashboard_message)
+        
+        # Sort by timestamp (most recent first)
+        dashboard_messages.sort(key=lambda x: x.timestamp or "", reverse=True)
+        
+        return SuccessResponse(data=dashboard_messages, message="Messages retrieved")
+        
+    except Exception as e:
+        # Log error but return empty array instead of mock data
+        print(f"Error fetching messages from database: {e}")
+        return SuccessResponse(data=[], message="No messages available")
 
-@router.post("/messages/{message_id}/mark-read")
+@router.post("/messages/{message_id}/mark-read", response_model=SuccessResponse[Dict[str, str]])
 async def mark_message_read(
     message_id: str = Path(..., description="Message ID"),
     _: DoctorUser = Depends(get_current_doctor)
@@ -247,83 +290,114 @@ async def mark_message_read(
     for message in _MESSAGES:
         if message.id == message_id:
             message.unread = False
-            return {"message": "Message marked as read"}
+            return SuccessResponse(data={"status": "marked"}, message="Message marked as read")
     
     raise HTTPException(status_code=404, detail="Message not found")
 
-@router.get("/todos", response_model=List[Todo])
+@router.get("/todos", response_model=SuccessResponse[List[Todo]])
 async def list_todos(
     completed: Optional[bool] = Query(None, description="Filter by completion status"),
     priority: Optional[str] = Query(None, description="Filter by priority: low, medium, high"),
     category: Optional[str] = Query(None, description="Filter by category"),
-    _: DoctorUser = Depends(get_current_doctor)
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    """Get todos with optional filtering"""
-    todos = list(_TODOS.values())
-    
-    if completed is not None:
-        todos = [todo for todo in todos if todo.completed == completed]
-    
-    if priority:
-        todos = [todo for todo in todos if todo.priority == priority]
-    
-    if category:
-        todos = [todo for todo in todos if todo.category == category]
-    
-    # Sort by priority (high first) then by date
-    priority_order = {"high": 0, "medium": 1, "low": 2}
-    todos.sort(key=lambda x: (priority_order.get(x.priority, 1), x.date))
-    
-    return todos
+    """Get todos with optional filtering (DB)."""
+    try:
+        todos_db = todo_crud.get_todos_by_user(
+            db,
+            user_id=current.id,
+            completed=completed,
+            priority=priority,
+            category=category,
+        )
+        items = [
+            Todo(
+                id=str(t.id),
+                date=t.date,
+                description=t.description,
+                provider=t.created_by,
+                completed=t.completed,
+                priority=t.priority,
+                category=t.category,
+                created_at=t.created_at.isoformat() if t.created_at else None,
+            )
+            for t in todos_db
+        ]
+        return SuccessResponse(data=items, message="Todos retrieved")
+    except Exception as e:
+        print(f"Error fetching todos from database: {e}")
+        # Return empty array instead of failing
+        return SuccessResponse(data=[], message="No todos available")
 
-@router.patch("/todos/{todo_id}", response_model=Todo)
+@router.patch("/todos/{todo_id}", response_model=SuccessResponse[Todo])
 async def toggle_todo(
     todo_id: str = Path(..., description="Todo ID"),
     data: TodoToggle = Body(default_factory=TodoToggle),
-    _: DoctorUser = Depends(get_current_doctor),
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db),
 ):
-    """Toggle todo completion status or update completion manually"""
-    if todo_id not in _TODOS:
+    """Toggle todo completion status or update completion manually (DB)."""
+    updated = todo_crud.toggle_todo(
+        db,
+        todo_id=todo_id,
+        user_id=current.id,
+        completed=data.completed,
+    )
+    if not updated:
         raise HTTPException(status_code=404, detail="Todo not found")
-    
-    todo = _TODOS[todo_id]
-    
-    if data.completed is not None:
-        # Explicit completion status provided
-        new_completed = data.completed
-    else:
-        # Toggle current status
-        new_completed = not todo.completed
-    
-    _TODOS[todo_id] = todo.copy(update={"completed": new_completed})
-    return _TODOS[todo_id]
+    item = Todo(
+        id=str(updated.id),
+        date=updated.date,
+        description=updated.description,
+        provider=updated.created_by,
+        completed=updated.completed,
+        priority=updated.priority,
+        category=updated.category,
+        created_at=updated.created_at.isoformat() if updated.created_at else None,
+    )
+    return SuccessResponse(data=item, message="Todo updated")
 
-@router.post("/todos", response_model=Todo)
+@router.post("/todos", response_model=SuccessResponse[Todo])
 async def create_todo(
     todo_data: Todo,
-    _: DoctorUser = Depends(get_current_doctor)
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    """Create a new todo item"""
-    new_id = f"t{uuid4().hex[:6]}"
-    todo_data.id = new_id
-    todo_data.created_at = datetime.now(timezone.utc).isoformat()
-    
-    _TODOS[new_id] = todo_data
-    return todo_data
+    """Create a new todo item (DB)."""
+    created = todo_crud.create_todo(
+        db,
+        description=todo_data.description,
+        created_by=current.id,
+        assigned_to=current.id,
+        priority=todo_data.priority,
+        category=todo_data.category,
+    )
+    item = Todo(
+        id=str(created.id),
+        date=created.date,
+        description=created.description,
+        provider=created.created_by,
+        completed=created.completed,
+        priority=created.priority,
+        category=created.category,
+        created_at=created.created_at.isoformat() if created.created_at else None,
+    )
+    return SuccessResponse(data=item, message="Todo created")
 
-@router.delete("/todos/{todo_id}")
+@router.delete("/todos/{todo_id}", response_model=SuccessResponse[Dict[str, str]])
 async def delete_todo(
     todo_id: str = Path(..., description="Todo ID"),
-    _: DoctorUser = Depends(get_current_doctor)
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    """Delete a todo item"""
-    if todo_id not in _TODOS:
+    """Delete a todo item (DB)."""
+    ok = todo_crud.delete_todo(db, todo_id=todo_id, user_id=current.id)
+    if not ok:
         raise HTTPException(status_code=404, detail="Todo not found")
-    
-    del _TODOS[todo_id]
-    return {"message": "Todo deleted successfully"}
+    return SuccessResponse(data={"status": "deleted"}, message="Todo deleted")
 
-@router.get("/appointments/{appt_date}", response_model=List[Appointment])
+@router.get("/appointments/{appt_date}", response_model=SuccessResponse[List[Appointment]])
 async def list_appointments_for_date(
     appt_date: str = Path(..., description="Date in YYYY-MM-DD format"),
     status: Optional[str] = Query(None, description="Filter by status"),
@@ -337,9 +411,9 @@ async def list_appointments_for_date(
     
     # Sort by time
     appointments.sort(key=lambda x: x.time)
-    return appointments
+    return SuccessResponse(data=appointments, message="Appointments retrieved")
 
-@router.get("/appointments/range/{start_date}/{end_date}", response_model=List[Appointment])
+@router.get("/appointments/range/{start_date}/{end_date}", response_model=SuccessResponse[List[Appointment]])
 async def list_appointments_for_range(
     start_date: str = Path(..., description="Start date in YYYY-MM-DD format"),
     end_date: str = Path(..., description="End date in YYYY-MM-DD format"),
@@ -352,9 +426,9 @@ async def list_appointments_for_range(
     ]
     
     appointments.sort(key=lambda x: (x.date, x.time))
-    return appointments
+    return SuccessResponse(data=appointments, message="Appointments retrieved")
 
-@router.get("/stats", response_model=DashboardStats)
+@router.get("/stats", response_model=SuccessResponse[DashboardStats])
 async def get_dashboard_stats(_: DoctorUser = Depends(get_current_doctor)):
     """Get dashboard statistics for overview"""
     today = date.today().isoformat()
@@ -371,16 +445,19 @@ async def get_dashboard_stats(_: DoctorUser = Depends(get_current_doctor)):
     # Count messages
     unread_messages = len([m for m in _MESSAGES if m.unread])
     
-    return DashboardStats(
-        total_appointments=total_appointments,
-        pending_todos=pending_todos,
-        unread_messages=unread_messages,
-        today_appointments=today_appointments,
-        completed_todos=completed_todos,
-        upcoming_appointments=upcoming_appointments
+    return SuccessResponse(
+        data=DashboardStats(
+            total_appointments=total_appointments,
+            pending_todos=pending_todos,
+            unread_messages=unread_messages,
+            today_appointments=today_appointments,
+            completed_todos=completed_todos,
+            upcoming_appointments=upcoming_appointments
+        ),
+        message="Stats retrieved"
     )
 
-@router.get("/overview")
+@router.get("/overview", response_model=SuccessResponse[Dict[str, object]])
 async def get_dashboard_overview(_: DoctorUser = Depends(get_current_doctor)):
     """Get complete dashboard overview with recent data"""
     today = date.today().isoformat()
@@ -407,24 +484,28 @@ async def get_dashboard_overview(_: DoctorUser = Depends(get_current_doctor)):
         "completed_todos": len([t for t in _TODOS.values() if t.completed])
     }
     
-    return {
-        "stats": stats,
-        "today_appointments": today_appointments[:5],  # Limit to 5 most recent
-        "pending_todos": pending_todos[:5],  # Limit to 5 highest priority
-        "recent_messages": unread_messages[:3],  # Limit to 3 most recent
-        "last_updated": datetime.now(timezone.utc).isoformat()
-    }
+    return SuccessResponse(
+        data={
+            "stats": stats,
+            "today_appointments": today_appointments[:5],
+            "pending_todos": pending_todos[:5],
+            "recent_messages": unread_messages[:3],
+            "last_updated": datetime.now(timezone.utc).isoformat()
+        },
+        message="Overview retrieved"
+    )
 
-@router.get("/health")
-async def dashboard_health_check():
-    """Health check endpoint specifically for dashboard"""
-    return {
-        "status": "healthy",
-        "service": "dashboard",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "data_counts": {
-            "appointments": len(_APPOINTMENTS),
-            "todos": len(_TODOS),
-            "messages": len(_MESSAGES)
-        }
-    }
+@router.get("/health", response_model=SuccessResponse[Dict[str, object]])
+async def dashboard_health_check(db: Session = Depends(get_db)):
+    """Health check endpoint specifically for dashboard using system health."""
+    system_health = admin_crud.get_system_health(db)
+    return SuccessResponse(
+        data={
+            "status": system_health.get("overall_status", "healthy"),
+            "service": "dashboard",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "components": system_health.get("components", {}),
+            "metrics": system_health.get("metrics", {}),
+        },
+        message="OK"
+    )

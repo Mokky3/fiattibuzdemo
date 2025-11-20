@@ -1,6 +1,6 @@
 # app/common/models/appointment.py
 """Consolidated appointment and encounter models for the EHR system."""
-from sqlalchemy import Column, String, Boolean, DateTime, Date, Time, Integer, Text, ForeignKey, Enum, JSON, Float
+from sqlalchemy import Column, String, Boolean, DateTime, Date, Time, Integer, Text, ForeignKey, Enum, JSON, Float, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy import String
 from sqlalchemy.sql import func
@@ -8,6 +8,7 @@ import uuid
 import enum
 
 from app.db.base_class import Base
+from app.common.utils.types import GUID
 
 
 class AppointmentStatus(str, enum.Enum):
@@ -28,8 +29,10 @@ class AppointmentType(str, enum.Enum):
     GENERAL_CONSULTATION = "general_consultation"
     FOLLOW_UP = "follow_up"
     ANNUAL_CHECK_UP = "annual_check_up"
+    ROUTINE_CHECKUP = "routine_checkup"
     EMERGENCY = "emergency"
     SPECIALIST = "specialist"
+    SPECIALIST_CONSULTATION = "specialist_consultation"
     THERAPY = "therapy"
     DIAGNOSTIC = "diagnostic"
     PROCEDURE = "procedure"
@@ -44,6 +47,7 @@ class AppointmentPriority(str, enum.Enum):
     URGENT = "urgent"
     ASAP = "asap"
     EMERGENCY = "emergency"
+    STAT = "stat"
 
 
 class EncounterStatus(str, enum.Enum):
@@ -78,149 +82,56 @@ class ParticipantType(str, enum.Enum):
 
 
 class Appointment(Base):
-    """Enhanced appointment model merged with FHIR Appointment concept."""
+    """Appointment model matching actual database schema."""
     __tablename__ = "appointments"
+    __table_args__ = {"schema": "ehr"}
     
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
+    # Primary key
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
     
-    # FHIR references
-    fhir_appointment_id = Column(String(255), unique=True, nullable=True)
-    identifiers = Column(JSON, nullable=True)  # Array of identifiers
+    # Core relationships - matching actual database schema
+    patient_id = Column(UUID(as_uuid=True), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    doctor_id = Column(UUID(as_uuid=True), ForeignKey("ehr.doctors.id"), nullable=False)
+    hospital_id = Column(UUID(as_uuid=True), ForeignKey("ref.hospitals.id"), nullable=False)
     
-    # Core relationships
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
-    doctor_id = Column(String(36), ForeignKey("doctors.id"), nullable=False)
-    hospital_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
-    department_id = Column(String(36), ForeignKey("hospital_departments.id"), nullable=True)
+    # Scheduling - matching actual database schema
+    appointment_date = Column(DateTime(timezone=True), nullable=False, index=True)
+    duration_minutes = Column(Integer, nullable=False)
     
-    # Scheduling
-    appointment_date = Column(Date, nullable=False, index=True)
-    start_time = Column(DateTime(timezone=True), nullable=False)
-    end_time = Column(DateTime(timezone=True), nullable=True)
-    minutes_duration = Column(Integer, default=30)
+    # Type and status - matching actual database schema
+    status = Column(String(50), nullable=False)
+    appointment_type = Column(String(50), nullable=False)
     
-    # Type and status
-    appointment_type = Column(Enum(AppointmentType), nullable=False)
-    status = Column(Enum(AppointmentStatus), default=AppointmentStatus.PENDING, index=True)
-    priority = Column(Enum(AppointmentPriority), default=AppointmentPriority.ROUTINE)
-    priority_order = Column(Integer, nullable=True)  # Numeric priority for sorting
+    # Clinical information - matching actual database schema
+    reason = Column(Text, nullable=True)
+    notes = Column(Text, nullable=True)
     
-    # Service information
-    service_category = Column(JSON, nullable=True)  # CodeableConcept
-    service_type = Column(JSON, nullable=True)  # Array of CodeableConcept
-    specialty = Column(JSON, nullable=True)  # Array of CodeableConcept
+    # Timestamps - matching actual database schema
+    created_at = Column(DateTime(timezone=True), nullable=True)
+    updated_at = Column(DateTime(timezone=True), nullable=True)
     
-    # Clinical information
-    reason_codes = Column(JSON, nullable=True)  # Array of CodeableConcept
-    reason_references = Column(JSON, nullable=True)  # References to conditions
-    chief_complaint = Column(Text, nullable=True)
-    description = Column(Text, nullable=True)
-    
-    # Location
-    room_number = Column(String(20), nullable=True)
-    floor = Column(String(10), nullable=True)
-    building = Column(String(50), nullable=True)
-    
-    # Instructions
-    patient_instruction = Column(Text, nullable=True)
-    provider_instruction = Column(Text, nullable=True)
-    
-    # Check-in/out
-    checked_in_at = Column(DateTime(timezone=True), nullable=True)
-    checked_in_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    checked_out_at = Column(DateTime(timezone=True), nullable=True)
-    
-    # Waitlist
-    is_waitlist = Column(Boolean, default=False)
-    waitlist_priority = Column(Integer, nullable=True)
-    requested_periods = Column(JSON, nullable=True)  # Array of preferred time periods
-    
-    # Walk-in
-    is_walk_in = Column(Boolean, default=False)
-    
-    # Video consultation
-    is_video_consultation = Column(Boolean, default=False)
-    video_link = Column(String(500), nullable=True)
-    video_password = Column(String(100), nullable=True)
-    
-    # Cancellation
-    cancelled_at = Column(DateTime(timezone=True), nullable=True)
-    cancelled_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    cancellation_reason = Column(JSON, nullable=True)  # CodeableConcept
-    
-    # Rescheduling
-    rescheduled_from = Column(String(36), ForeignKey("appointments.id"), nullable=True)
-    reschedule_count = Column(Integer, default=0)
-    
-    # Supporting information
-    supporting_information = Column(JSON, nullable=True)  # References to other resources
-    based_on = Column(JSON, nullable=True)  # Service requests that initiated this
-    
-    # Insurance
-    insurance_verified = Column(Boolean, default=False)
-    insurance_policy_ids = Column(JSON, nullable=True)  # Array of insurance policy IDs
-    authorization_required = Column(Boolean, default=False)
-    authorization_number = Column(String(50), nullable=True)
-    
-    # Financial
-    estimated_cost = Column(Float, nullable=True)
-    copay_amount = Column(Float, nullable=True)
-    copay_collected = Column(Boolean, default=False)
-    
-    # Notes
-    comment = Column(Text, nullable=True)
-    internal_notes = Column(Text, nullable=True)
-    
-    # Notifications
-    reminder_sent = Column(Boolean, default=False)
-    reminder_sent_at = Column(DateTime(timezone=True), nullable=True)
-    confirmation_sent = Column(Boolean, default=False)
-    confirmation_sent_at = Column(DateTime(timezone=True), nullable=True)
-    
-    # Slot reference (for scheduled appointments)
-    slot_id = Column(String(36), nullable=True)
-    
-    # Metadata
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
-    updated_by = Column(String(36), ForeignKey("users.id"), nullable=True)
-    
-    # Relationships
+    # Relationships - only those that exist in actual database
     patient = relationship("Patient", back_populates="appointments")
     doctor = relationship("Doctor", back_populates="appointments")
-    hospital = relationship("Hospital", back_populates="appointments")
-    department = relationship("HospitalDepartment")
-    
-    # Staff relationships
-    creator = relationship("User", foreign_keys=[created_by])
-    checker = relationship("User", foreign_keys=[checked_in_by])
-    canceller = relationship("User", foreign_keys=[cancelled_by])
-    
-    # Related appointments
-    rescheduled_from_appointment = relationship("Appointment", remote_side=[id], foreign_keys=[rescheduled_from])
-    
-    # Clinical relationships
-    encounter = relationship("Encounter", back_populates="appointment", uselist=False)
+    hospital = relationship("Hospital", foreign_keys=[hospital_id])
     medical_record = relationship("MedicalRecord", back_populates="appointment", uselist=False)
-    
-    # Participants
     participants = relationship("AppointmentParticipant", back_populates="appointment", cascade="all, delete-orphan")
-    
-    # Reminders
+    encounter = relationship("Encounter", back_populates="appointment", uselist=False)
+    general_reports = relationship("GeneralReport", back_populates="encounter", cascade="all, delete-orphan")
     reminders = relationship("AppointmentReminder", back_populates="appointment", cascade="all, delete-orphan")
 
 
 class AppointmentParticipant(Base):
     """Participants in an appointment beyond patient and primary doctor."""
     __tablename__ = "appointment_participants"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    appointment_id = Column(String(36), ForeignKey("appointments.id"), nullable=False)
+    appointment_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=False)
     
     # Participant
-    participant_type = Column(Enum(ParticipantType), nullable=False)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    participant_type = Column(Enum(ParticipantType, native_enum=False), nullable=False)
+    user_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     external_participant_name = Column(String(200), nullable=True)  # For non-system users
     external_participant_contact = Column(String(100), nullable=True)
     
@@ -243,6 +154,7 @@ class AppointmentParticipant(Base):
 class Encounter(Base):
     """Patient encounter/visit - converted from FHIR Encounter."""
     __tablename__ = "encounters"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
@@ -251,15 +163,15 @@ class Encounter(Base):
     identifiers = Column(JSON, nullable=True)  # Array of identifiers
     
     # Core relationships
-    appointment_id = Column(String(36), ForeignKey("appointments.id"), nullable=True)
-    patient_id = Column(String(36), ForeignKey("patients.id"), nullable=False)
+    appointment_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=True)
+    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
     
     # Status
-    status = Column(Enum(EncounterStatus), nullable=False)
+    status = Column(Enum(EncounterStatus, native_enum=False), nullable=False)
     status_history = Column(JSON, nullable=True)  # Array of {status, period}
     
     # Classification
-    encounter_class = Column(Enum(EncounterClass), nullable=False)
+    encounter_class = Column(Enum(EncounterClass, native_enum=False), nullable=False)
     class_history = Column(JSON, nullable=True)  # Array of {class, period}
     
     # Type and priority
@@ -283,13 +195,13 @@ class Encounter(Base):
     based_on = Column(JSON, nullable=True)  # Service requests
     
     # Service provider
-    service_provider_id = Column(String(36), ForeignKey("hospitals.id"), nullable=False)
+    service_provider_id = Column(String(36), ForeignKey("ref.hospitals.id"), nullable=False)
     
     # Account
     account_ids = Column(JSON, nullable=True)  # Billing accounts
     
     # Part of
-    part_of_encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=True)
+    part_of_encounter_id = Column(String(36), ForeignKey("ehr.encounters.id"), nullable=True)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -311,9 +223,10 @@ class Encounter(Base):
 class EncounterDiagnosis(Base):
     """Diagnoses relevant to this encounter."""
     __tablename__ = "encounter_diagnoses"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.encounters.id"), nullable=False)
     
     # Diagnosis
     condition_reference = Column(String(255), nullable=True)  # Reference to condition
@@ -335,12 +248,13 @@ class EncounterDiagnosis(Base):
 class EncounterLocation(Base):
     """Locations where the patient has been during encounter."""
     __tablename__ = "encounter_locations"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.encounters.id"), nullable=False)
     
     # Location
-    location_id = Column(String(36), ForeignKey("hospital_departments.id"), nullable=False)
+    location_id = Column(String(36), ForeignKey("ref.hospital_departments.id"), nullable=False)
     
     # Status
     status = Column(String(20), nullable=True)  # planned, active, reserved, completed
@@ -363,13 +277,14 @@ class EncounterLocation(Base):
 class EncounterParticipant(Base):
     """Participants involved in the encounter."""
     __tablename__ = "encounter_participants"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    encounter_id = Column(String(36), ForeignKey("encounters.id"), nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.encounters.id"), nullable=False)
     
     # Participant
     participant_type = Column(JSON, nullable=True)  # Array of CodeableConcept
-    individual_id = Column(String(36), ForeignKey("users.id"), nullable=True)
+    individual_id = Column(String(36), ForeignKey("core.users.id"), nullable=True)
     
     # Period
     period_start = Column(DateTime(timezone=True), nullable=True)
@@ -386,9 +301,10 @@ class EncounterParticipant(Base):
 class Hospitalization(Base):
     """Hospitalization details for inpatient encounters."""
     __tablename__ = "hospitalizations"
+    __table_args__ = {"schema": "ref"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    encounter_id = Column(String(36), ForeignKey("encounters.id"), unique=True, nullable=False)
+    encounter_id = Column(String(36), ForeignKey("ehr.encounters.id"), unique=True, nullable=False)
     
     # Pre-admission
     pre_admission_identifier = Column(JSON, nullable=True)  # Identifier
@@ -416,9 +332,10 @@ class Hospitalization(Base):
 class AppointmentReminder(Base):
     """Appointment reminder tracking."""
     __tablename__ = "appointment_reminders"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    appointment_id = Column(String(36), ForeignKey("appointments.id"), nullable=False)
+    appointment_id = Column(String(36), ForeignKey("ehr.appointments.id"), nullable=False)
     
     # Reminder details
     reminder_type = Column(String(20), nullable=False)  # email, sms, push, call
@@ -453,9 +370,10 @@ class AppointmentReminder(Base):
 class DoctorSchedule(Base):
     """Doctor availability schedule."""
     __tablename__ = "doctor_schedules"
+    __table_args__ = {"schema": "ehr"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    doctor_id = Column(String(36), ForeignKey("doctors.id"), nullable=False)
+    doctor_id = Column(String(36), ForeignKey("ehr.doctors.id"), nullable=False)
     
     # Schedule type
     is_recurring = Column(Boolean, default=True)
@@ -475,7 +393,7 @@ class DoctorSchedule(Base):
     break_end = Column(Time, nullable=True)
     
     # Location
-    location_id = Column(String(36), ForeignKey("hospital_departments.id"), nullable=True)
+    location_id = Column(String(36), ForeignKey("ref.hospital_departments.id"), nullable=True)
     room_number = Column(String(20), nullable=True)
     
     # Consultation settings
@@ -506,10 +424,11 @@ class DoctorSchedule(Base):
 class BlockedTimeSlot(Base):
     """Blocked time slots for doctors."""
     __tablename__ = "blocked_time_slots"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    doctor_id = Column(String(36), ForeignKey("doctors.id"), nullable=False)
-    schedule_id = Column(String(36), ForeignKey("doctor_schedules.id"), nullable=True)
+    doctor_id = Column(String(36), ForeignKey("ehr.doctors.id"), nullable=False)
+    schedule_id = Column(String(36), ForeignKey("ehr.doctor_schedules.id"), nullable=True)
     
     # Time range
     start_datetime = Column(DateTime(timezone=True), nullable=False)
@@ -529,7 +448,7 @@ class BlockedTimeSlot(Base):
     is_active = Column(Boolean, default=True)
     
     # Metadata
-    created_by = Column(String(36), ForeignKey("users.id"), nullable=False)
+    created_by = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

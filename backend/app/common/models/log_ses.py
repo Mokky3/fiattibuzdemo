@@ -12,9 +12,10 @@ from app.db.base_class import Base
 class LoginSession(Base):
     """Enhanced login session tracking with device fingerprinting."""
     __tablename__ = "login_sessions"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Session token (hashed)
     session_token_hash = Column(String(255), unique=True, nullable=False, index=True)

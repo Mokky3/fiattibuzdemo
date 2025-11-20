@@ -46,12 +46,7 @@ const CalendarSidebar = ({
   const pendingToday = totalToday - confirmedToday;
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-3 sm:p-4 mb-4">
-      <div className="flex items-center space-x-2 mb-4 p-2">
-        <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-[#5ACCC3]" />
-        <h3 className="text-base sm:text-lg font-semibold text-gray-900">Calendar</h3>
-      </div>
-      
+    <div className="bg-transparent">
       <div className="mb-4">
         <div className="flex justify-between items-center p-2">
           <button 

@@ -1,453 +1,541 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+"""Admin portal - user management router
+Advanced user management operations connected to models and CRUD
+"""
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException, Body, Query, status, Request
+from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import datetime, timedelta
-import uuid
-import random
 
-# TODO: Import these when created
-# from app.db.session import get_db
-# from app.common.auth.auth_utils import get_current_admin_user
-# from app.common.schemas.user import (
-#     UserList,
-#     UserInvite,
-#     UserStatusUpdate,
-#     UserDelete,
-#     InvitationResponse
-# )
-# from app.crud.user import user as user_crud
+from app.db.session import get_db
+from app.common.models.user import User, UserRole, UserStatus, UserProfile, Permission, RolePermission
+from app.common.models.admin import AdminActivity, ActivityType, BulkOperation
+from app.crud.user import user as user_crud
+from app.crud.admin import admin as admin_crud
+from app.common.schemas.responses_enhanced import (
+    SuccessResponse, PaginatedResponse, ProblemDetail, ErrorType,
+    create_problem_detail, create_paginated_response
+)
+from app.common.security.middleware import audit_pii_access
+from app.common.utils.tracing import get_trace_id
 
-router = APIRouter()
+router = APIRouter(tags=["Admin · User Management"])
 
-# Mock data for development
-MOCK_USERS = [
-    {
-        "id": "user-001",
-        "name": "Dr. Ahmad Karimov",
-        "email": "ahmad.karimov@mainhospital.uz",
-        "phone": "+998 90 123 4567",
-        "role": "Doctor",
-        "clinic": "Main Hospital",
-        "status": "Active",
-        "note": "Senior Cardiologist with 15 years experience",
-        "provider": "Main Hospital",
-        "createdAt": "2023-06-15T10:30:00Z",
-        "lastLogin": "2025-01-10T14:30:00Z"
-    },
-    {
-        "id": "user-002",
-        "name": "Nurse Madina Yakubova",
-        "email": "madina.yakubova@mainhospital.uz",
-        "phone": "+998 91 234 5678",
-        "role": "Nurse",
-        "clinic": "Main Hospital",
-        "status": "Active",
-        "note": "ICU specialist nurse",
-        "provider": "Main Hospital",
-        "createdAt": "2023-08-20T09:15:00Z",
-        "lastLogin": "2025-01-10T08:45:00Z"
-    },
-    {
-        "id": "user-003",
-        "name": "Aziza Nazarova",
-        "email": "aziza.nazarova@mainhospital.uz",
-        "phone": "+998 93 345 6789",
-        "role": "Receptionist",
-        "clinic": "Main Hospital",
-        "status": "Active",
-        "note": "Front desk coordinator",
-        "provider": "Main Hospital",
-        "createdAt": "2024-01-10T11:20:00Z",
-        "lastLogin": "2025-01-10T16:20:00Z"
-    },
-    {
-        "id": "user-004",
-        "name": "Dr. Rustam Aliyev",
-        "email": "rustam.aliyev@cityclinic.uz",
-        "phone": "+998 94 456 7890",
-        "role": "Doctor",
-        "clinic": "City Clinic",
-        "status": "Active",
-        "note": "Pediatrics department head",
-        "provider": "City Clinic",
-        "createdAt": "2023-05-12T14:00:00Z",
-        "lastLogin": "2025-01-09T17:30:00Z"
-    },
-    {
-        "id": "user-005",
-        "name": "Botir Saidov",
-        "email": "botir.saidov@mainhospital.uz",
-        "phone": "+998 95 567 8901",
-        "role": "Lab",
-        "clinic": "Main Hospital",
-        "status": "Active",
-        "note": "Senior lab technician",
-        "provider": "Main Hospital",
-        "createdAt": "2024-03-25T10:45:00Z",
-        "lastLogin": "2025-01-10T12:15:00Z"
-    },
-    {
-        "id": "user-006",
-        "name": "Shahlo Rahimova",
-        "email": "shahlo.rahimova@mainhospital.uz",
-        "phone": "+998 97 678 9012",
-        "role": "Admin",
-        "clinic": "Main Hospital",
-        "status": "Active",
-        "note": "System administrator",
-        "provider": "Main Hospital",
-        "createdAt": "2023-04-18T08:30:00Z",
-        "lastLogin": "2025-01-10T09:00:00Z"
-    },
-    {
-        "id": "user-007",
-        "name": "Jamshid Tursunov",
-        "email": "jamshid.patient@gmail.com",
-        "phone": "+998 98 789 0123",
-        "role": "Patient",
-        "clinic": "Main Hospital",
-        "status": "Active",
-        "note": "Regular patient - Cardiology",
-        "provider": "Main Hospital",
-        "createdAt": "2024-05-20T15:30:00Z",
-        "lastLogin": "2025-01-08T11:45:00Z"
-    },
-    {
-        "id": "user-008",
-        "name": "Dr. Gulnara Mirzayeva",
-        "email": "gulnara.mirzayeva@cityclinic.uz",
-        "phone": "+998 99 890 1234",
-        "role": "Doctor",
-        "clinic": "City Clinic",
-        "status": "Inactive",
-        "note": "Orthopedic surgeon - on leave",
-        "provider": "City Clinic",
-        "createdAt": "2023-09-05T13:20:00Z",
-        "lastLogin": "2024-12-15T14:30:00Z"
-    },
-    {
-        "id": "user-009",
-        "name": "Nurse Dilnoza Karimova",
-        "email": "dilnoza.karimova@westclinic.uz",
-        "phone": "+998 90 901 2345",
-        "role": "Nurse",
-        "clinic": "West Clinic",
-        "status": "Active",
-        "note": "Emergency department nurse",
-        "provider": "West Clinic",
-        "createdAt": "2024-02-14T10:00:00Z",
-        "lastLogin": "2025-01-10T15:45:00Z"
-    },
-    {
-        "id": "user-010",
-        "name": "Sardor Umarov",
-        "email": "sardor.patient@mail.ru",
-        "phone": "+998 91 012 3456",
-        "role": "Patient",
-        "clinic": "City Clinic",
-        "status": "Active",
-        "note": "Pediatric patient",
-        "provider": "City Clinic",
-        "createdAt": "2024-07-30T16:20:00Z",
-        "lastLogin": "2025-01-05T10:30:00Z"
-    },
-    {
-        "id": "user-011",
-        "name": "Dr. Farrukh Khodjaev",
-        "email": "farrukh.khodjaev@mainhospital.uz",
-        "phone": "+998 93 123 4567",
-        "role": "Doctor",
-        "clinic": "Main Hospital",
-        "status": "Suspended",
-        "note": "General practitioner - license renewal pending",
-        "provider": "Main Hospital",
-        "createdAt": "2023-11-22T09:45:00Z",
-        "lastLogin": "2024-12-20T11:00:00Z"
-    },
-    {
-        "id": "user-012",
-        "name": "Malika Ibragimova",
-        "email": "malika.ibragimova@westclinic.uz",
-        "phone": "+998 94 234 5678",
-        "role": "Receptionist",
-        "clinic": "West Clinic",
-        "status": "Active",
-        "note": "Night shift coordinator",
-        "provider": "West Clinic",
-        "createdAt": "2024-04-05T14:30:00Z",
-        "lastLogin": "2025-01-10T07:20:00Z"
-    }
-]
+# ──────────────────────────────────────────────────────────────────────────────
+# Enhanced Data Models
+# ──────────────────────────────────────────────────────────────────────────────
 
-@router.get("/admin/users")
-async def get_users(
-    search: Optional[str] = Query(None, description="Search term"),
+class BulkUserOperationRequest(BaseModel):
+    user_ids: List[str] = Field(..., description="List of user IDs")
+    operation: str = Field(..., description="Operation to perform")
+    reason: Optional[str] = Field(None, description="Reason for bulk operation")
+
+class UserRoleAssignmentRequest(BaseModel):
+    user_id: str = Field(..., description="User ID")
+    role: str = Field(..., description="New role")
+    permissions: Optional[List[str]] = Field(None, description="Additional permissions")
+
+class PermissionResponse(BaseModel):
+    id: str = Field(..., description="Permission ID")
+    name: str = Field(..., description="Permission name")
+    description: str = Field(..., description="Permission description")
+    resource: str = Field(..., description="Resource type")
+    action: str = Field(..., description="Action type")
+
+class RolePermissionResponse(BaseModel):
+    role: str = Field(..., description="Role name")
+    permissions: List[PermissionResponse] = Field(..., description="Role permissions")
+
+class BulkOperationResponse(BaseModel):
+    operation_id: str = Field(..., description="Operation ID")
+    status: str = Field(..., description="Operation status")
+    total_users: int = Field(..., description="Total users affected")
+    successful: int = Field(..., description="Successful operations")
+    failed: int = Field(..., description="Failed operations")
+    created_at: str = Field(..., description="Created timestamp")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Bulk Operations Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/bulk-operations", response_model=SuccessResponse[BulkOperationResponse])
+@audit_pii_access("write", "bulk_operation", "bulk_operation_create")
+async def create_bulk_operation(
+    request: Request,
+    payload: BulkUserOperationRequest = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Create a bulk user operation."""
+    try:
+        # Validate operation type
+        valid_operations = ["activate", "deactivate", "delete", "change_role", "reset_password"]
+        if payload.operation not in valid_operations:
+            problem = create_problem_detail(
+                error_type=ErrorType.VALIDATION_ERROR,
+                title="Invalid Operation",
+                status=400,
+                detail=f"Operation '{payload.operation}' is not valid. Valid operations: {valid_operations}",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=400, detail=problem.dict())
+        
+        # Create bulk operation record
+        operation_id = str(uuid4())
+        bulk_operation = admin_crud.create_bulk_operation(
+            db=db,
+            operation_id=operation_id,
+            operation_type=payload.operation,
+            user_ids=payload.user_ids,
+            reason=payload.reason,
+            created_by=uuid4()  # TODO: Get from auth context
+        )
+        
+        # Execute bulk operation
+        result = await _execute_bulk_operation(db, payload.operation, payload.user_ids, operation_id)
+        
+        bulk_response = BulkOperationResponse(
+            operation_id=operation_id,
+            status=result["status"],
+            total_users=len(payload.user_ids),
+            successful=result["successful"],
+            failed=result["failed"],
+            created_at=bulk_operation.created_at.isoformat() if bulk_operation.created_at else ""
+        )
+        
+        return SuccessResponse(
+            data=bulk_response,
+            message="Bulk operation completed successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Bulk Operation Failed",
+            status=500,
+            detail=f"Failed to execute bulk operation: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.get("/bulk-operations/{operation_id}", response_model=SuccessResponse[BulkOperationResponse])
+@audit_pii_access("read", "bulk_operation", "bulk_operation_detail")
+async def get_bulk_operation(
+    request: Request,
+    operation_id: str,
+    db: Session = Depends(get_db)
+):
+    """Get bulk operation details."""
+    try:
+        operation = admin_crud.get_bulk_operation(db=db, operation_id=operation_id)
+        
+        if not operation:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="Operation Not Found",
+                status=404,
+                detail=f"Bulk operation '{operation_id}' not found",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        bulk_response = BulkOperationResponse(
+            operation_id=str(operation.id),
+            status=operation.status,
+            total_users=operation.total_users,
+            successful=operation.successful_count,
+            failed=operation.failed_count,
+            created_at=operation.created_at.isoformat() if operation.created_at else ""
+        )
+        
+        return SuccessResponse(
+            data=bulk_response,
+            message="Bulk operation retrieved successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Bulk Operation Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve bulk operation: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Role and Permission Management
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/roles", response_model=SuccessResponse[List[str]])
+@audit_pii_access("read", "user_role", "roles_list")
+async def get_user_roles(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get all available user roles."""
+    try:
+        roles = [role.value for role in UserRole]
+        
+        return SuccessResponse(
+            data=roles,
+            message="User roles retrieved successfully"
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Roles Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve user roles: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.get("/permissions", response_model=PaginatedResponse[PermissionResponse])
+@audit_pii_access("read", "permission", "permissions_list")
+async def get_permissions(
+    request: Request,
+    role: Optional[str] = Query(None, description="Filter by role"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(50, ge=1, le=100, description="Page size"),
+    db: Session = Depends(get_db)
+):
+    """Get permissions with optional role filtering."""
+    try:
+        # Get permissions using CRUD
+        permissions = admin_crud.get_permissions(
+            db=db,
+            role=role,
+            skip=(page - 1) * size,
+            limit=size
+        )
+        
+        # Transform to response format
+        permission_responses = []
+        for permission in permissions:
+            permission_responses.append(PermissionResponse(
+                id=str(permission.id),
+                name=permission.name,
+                description=permission.description,
+                resource=permission.resource,
+                action=permission.action
+            ))
+        
+        # Get total count
+        total = admin_crud.count_permissions(db=db, role=role)
+        
+        return create_paginated_response(
+            data=permission_responses,
+            page=page,
+            size=size,
+            total=total
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Permissions Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve permissions: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.get("/role-permissions", response_model=SuccessResponse[List[RolePermissionResponse]])
+@audit_pii_access("read", "role_permission", "role_permissions_list")
+async def get_role_permissions(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get role-permission mappings."""
+    try:
+        # Get role permissions using CRUD
+        role_permissions = admin_crud.get_role_permissions(db=db)
+        
+        # Transform to response format
+        role_permission_responses = []
+        for role, permissions in role_permissions.items():
+            permission_responses = []
+            for permission in permissions:
+                permission_responses.append(PermissionResponse(
+                    id=str(permission.id),
+                    name=permission.name,
+                    description=permission.description,
+                    resource=permission.resource,
+                    action=permission.action
+                ))
+            
+            role_permission_responses.append(RolePermissionResponse(
+                role=role,
+                permissions=permission_responses
+            ))
+        
+        return SuccessResponse(
+            data=role_permission_responses,
+            message="Role permissions retrieved successfully"
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Role Permissions Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve role permissions: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.post("/assign-role", response_model=SuccessResponse[Dict[str, str]])
+@audit_pii_access("write", "user_role", "role_assignment")
+async def assign_user_role(
+    request: Request,
+    payload: UserRoleAssignmentRequest = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Assign role and permissions to a user."""
+    try:
+        # Validate user exists
+        user = user_crud.get(db=db, id=payload.user_id)
+        if not user:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="User Not Found",
+                status=404,
+                detail=f"User '{payload.user_id}' not found",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        # Validate role
+        try:
+            role = UserRole(payload.role)
+        except ValueError:
+            problem = create_problem_detail(
+                error_type=ErrorType.VALIDATION_ERROR,
+                title="Invalid Role",
+                status=400,
+                detail=f"Role '{payload.role}' is not valid",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=400, detail=problem.dict())
+        
+        # Update user role
+        user_crud.update(db=db, db_obj=user, obj_in={"role": role})
+        
+        # Assign additional permissions if provided
+        if payload.permissions:
+            admin_crud.assign_user_permissions(
+                db=db,
+                user_id=payload.user_id,
+                permissions=payload.permissions
+            )
+        
+        # Log admin activity
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=uuid4(),  # TODO: Get from auth context
+            activity_type=ActivityType.ROLE_ASSIGNED,
+            description=f"Assigned role '{payload.role}' to user: {user.email}",
+            affected_resource_id=str(user.id)
+        )
+        
+        return SuccessResponse(
+            data={"status": "role_assigned"},
+            message="Role assigned successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Role Assignment Failed",
+            status=500,
+            detail=f"Failed to assign role: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+# ──────────────────────────────────────────────────────────────────────────────
+# User Import/Export Operations
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/import", response_model=SuccessResponse[Dict[str, Any]])
+@audit_pii_access("write", "user_import", "users_import")
+async def import_users(
+    request: Request,
+    csv_data: str = Body(..., description="CSV data as string"),
+    db: Session = Depends(get_db)
+):
+    """Import users from CSV data."""
+    try:
+        # Parse CSV data and create users
+        result = await _import_users_from_csv(db, csv_data)
+        
+        # Log admin activity
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=uuid4(),  # TODO: Get from auth context
+            activity_type=ActivityType.BULK_IMPORT,
+            description=f"Imported {result['successful']} users from CSV",
+            affected_resource_id=None
+        )
+        
+        return SuccessResponse(
+            data=result,
+            message="Users imported successfully"
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="User Import Failed",
+            status=500,
+            detail=f"Failed to import users: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.get("/export", response_model=SuccessResponse[Dict[str, str]])
+@audit_pii_access("read", "user_export", "users_export")
+async def export_users(
+    request: Request,
+    format: str = Query("csv", description="Export format"),
     role: Optional[str] = Query(None, description="Filter by role"),
     status: Optional[str] = Query(None, description="Filter by status"),
-    clinic: Optional[str] = Query(None, description="Filter by clinic"),
-    # current_admin: dict = Depends(get_current_admin_user),
-    # db: Session = Depends(get_db)
+    db: Session = Depends(get_db)
 ):
-    """Get list of all users with filtering"""
-    # TODO: Replace with actual implementation
-    
-    users = MOCK_USERS.copy()
-    
-    # Apply filters
-    if search:
-        search_lower = search.lower()
-        users = [
-            u for u in users
-            if search_lower in u["name"].lower() or
-               search_lower in u["role"].lower() or
-               search_lower in u["clinic"].lower()
-        ]
-    
-    if role:
-        users = [u for u in users if u["role"] == role]
-    
-    if status:
-        users = [u for u in users if u["status"] == status]
-    
-    if clinic:
-        users = [u for u in users if u["clinic"] == clinic]
-    
-    return users
-
-@router.post("/admin/users/invite")
-async def send_user_invitation(
-    invitation_data: dict,  # TODO: Replace with UserInvite schema
-    # current_admin: dict = Depends(get_current_admin_user),
-    # db: Session = Depends(get_db)
-):
-    """Send invitation to new user"""
-    # TODO: Replace with actual implementation
-    
-    # Validate invitation data
-    contact_email = invitation_data.get("email")
-    contact_phone = invitation_data.get("phone")
-    
-    if not contact_email and not contact_phone:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Either email or phone number is required"
+    """Export users to CSV or JSON format."""
+    try:
+        # Export users using CRUD
+        export_data = user_crud.export_users(
+            db=db,
+            format=format,
+            role=role,
+            status=status
         )
-    
-    # Generate invitation token
-    invitation_token = f"invite-{uuid.uuid4().hex[:16]}"
-    
-    # Mock sending invitation
-    new_user_id = f"user-{uuid.uuid4().hex[:8]}"
-    
-    return {
-        "message": "Invitation sent successfully",
-        "userId": new_user_id,
-        "invitationToken": invitation_token,
-        "sentTo": contact_email or contact_phone,
-        "role": invitation_data.get("role", "Doctor"),
-        "clinic": invitation_data.get("clinic", "Main Hospital"),
-        "expiresAt": (datetime.now() + timedelta(days=7)).isoformat()
-    }
-
-@router.delete("/admin/users/{user_id}")
-async def delete_user(
-    user_id: str,
-    # current_admin: dict = Depends(get_current_admin_user),
-    # db: Session = Depends(get_db)
-):
-    """Delete a user"""
-    # TODO: Replace with actual implementation
-    
-    # Find user
-    user_index = next((i for i, u in enumerate(MOCK_USERS) if u["id"] == user_id), None)
-    if user_index is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
+        
+        # Log admin activity
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=uuid4(),  # TODO: Get from auth context
+            activity_type=ActivityType.DATA_EXPORT,
+            description=f"Exported users in {format.upper()} format",
+            affected_resource_id=None
         )
-    
-    # Remove user from mock data
-    deleted_user = MOCK_USERS.pop(user_index)
-    
-    return {
-        "message": "User deleted successfully",
-        "deletedUser": {
-            "id": deleted_user["id"],
-            "name": deleted_user["name"],
-            "email": deleted_user["email"]
-        }
-    }
+        
+        return SuccessResponse(
+            data=export_data,
+            message="Users exported successfully"
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="User Export Failed",
+            status=500,
+            detail=f"Failed to export users: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
 
-@router.patch("/admin/users/{user_id}/status")
-async def update_user_status(
-    user_id: str,
-    status_data: dict,  # {"status": "Active" | "Inactive" | "Suspended"}
-    # current_admin: dict = Depends(get_current_admin_user),
-    # db: Session = Depends(get_db)
-):
-    """Update user status"""
-    # TODO: Replace with actual implementation
+# ──────────────────────────────────────────────────────────────────────────────
+# Helper Functions
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def _execute_bulk_operation(db: Session, operation: str, user_ids: List[str], operation_id: str) -> Dict[str, Any]:
+    """Execute bulk operation on users."""
+    successful = 0
+    failed = 0
     
-    # Find and update user status
-    for user in MOCK_USERS:
-        if user["id"] == user_id:
-            user["status"] = status_data["status"]
-            return {
-                "message": "User status updated successfully",
-                "userId": user_id,
-                "newStatus": status_data["status"],
-                "updatedAt": datetime.now().isoformat()
-            }
+    for user_id in user_ids:
+        try:
+            user = user_crud.get(db=db, id=user_id)
+            if not user:
+                failed += 1
+                continue
+            
+            if operation == "activate":
+                user_crud.update(db=db, db_obj=user, obj_in={"is_active": True, "status": UserStatus.ACTIVE})
+            elif operation == "deactivate":
+                user_crud.update(db=db, db_obj=user, obj_in={"is_active": False, "status": UserStatus.INACTIVE})
+            elif operation == "delete":
+                user_crud.soft_delete(db=db, id=user_id)
+            elif operation == "reset_password":
+                # TODO: Implement password reset
+                pass
+            
+            successful += 1
+            
+        except Exception:
+            failed += 1
     
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail="User not found"
+    # Update bulk operation status
+    admin_crud.update_bulk_operation(
+        db=db,
+        operation_id=operation_id,
+        successful_count=successful,
+        failed_count=failed,
+        status="completed" if failed == 0 else "partial"
     )
-
-@router.get("/admin/users/stats/summary")
-async def get_users_summary_stats(
-    # current_admin: dict = Depends(get_current_admin_user),
-    # db: Session = Depends(get_db)
-):
-    """Get summary statistics for users"""
-    # TODO: Replace with actual implementation
-    
-    total_users = len(MOCK_USERS)
-    active_users = len([u for u in MOCK_USERS if u["status"] == "Active"])
-    patients = len([u for u in MOCK_USERS if u["role"] == "Patient"])
-    staff = total_users - patients
-    
-    # Count by role
-    role_counts = {}
-    for user in MOCK_USERS:
-        role = user["role"]
-        role_counts[role] = role_counts.get(role, 0) + 1
-    
-    # Count by clinic
-    clinic_counts = {}
-    for user in MOCK_USERS:
-        clinic = user["clinic"]
-        clinic_counts[clinic] = clinic_counts.get(clinic, 0) + 1
     
     return {
-        "totalUsers": total_users,
-        "activeUsers": active_users,
-        "inactiveUsers": len([u for u in MOCK_USERS if u["status"] == "Inactive"]),
-        "suspendedUsers": len([u for u in MOCK_USERS if u["status"] == "Suspended"]),
-        "patients": patients,
-        "staff": staff,
-        "roleBreakdown": role_counts,
-        "clinicBreakdown": clinic_counts,
-        "recentlyAdded": len([u for u in MOCK_USERS if datetime.fromisoformat(u["createdAt"].replace('Z', '+00:00')) > datetime.now(datetime.UTC) - timedelta(days=30)]),
-        "lastUpdated": datetime.now().isoformat()
+        "status": "completed" if failed == 0 else "partial",
+        "successful": successful,
+        "failed": failed
     }
 
-@router.get("/admin/users/roles")
-async def get_available_roles(
-    # current_admin: dict = Depends(get_current_admin_user),
-    # db: Session = Depends(get_db)
-):
-    """Get list of available user roles"""
-    # TODO: Replace with actual implementation
+async def _import_users_from_csv(db: Session, csv_data: str) -> Dict[str, Any]:
+    """Import users from CSV data."""
+    import csv
+    import io
     
-    return [
-        {
-            "role": "Doctor",
-            "description": "Medical doctor with patient care responsibilities",
-            "permissions": ["viewPatients", "prescribe", "editMedical", "accessAnalytics"]
-        },
-        {
-            "role": "Nurse",
-            "description": "Nursing staff with patient care support",
-            "permissions": ["viewPatients", "editMedical"]
-        },
-        {
-            "role": "Receptionist",
-            "description": "Front desk and administrative support",
-            "permissions": ["viewPatients", "scheduleAppointments"]
-        },
-        {
-            "role": "Lab",
-            "description": "Laboratory technician",
-            "permissions": ["viewPatients", "accessAnalytics", "uploadResults"]
-        },
-        {
-            "role": "Admin",
-            "description": "System administrator",
-            "permissions": ["viewPatients", "editMedical", "accessAnalytics", "manageUsers"]
-        },
-        {
-            "role": "Patient",
-            "description": "Patient user with limited access",
-            "permissions": ["viewOwnRecords"]
-        }
-    ]
-
-@router.get("/admin/users/clinics")
-async def get_clinics_for_users(
-    # current_admin: dict = Depends(get_current_admin_user),
-    # db: Session = Depends(get_db)
-):
-    """Get list of clinics for user assignment"""
-    # TODO: Replace with actual implementation
+    successful = 0
+    failed = 0
+    errors = []
     
-    # Extract unique clinics from users
-    clinics = list(set(u["clinic"] for u in MOCK_USERS))
+    csv_reader = csv.DictReader(io.StringIO(csv_data))
     
-    return [
-        {
-            "id": f"clinic-{i+1}",
-            "name": clinic,
-            "userCount": len([u for u in MOCK_USERS if u["clinic"] == clinic])
-        }
-        for i, clinic in enumerate(sorted(clinics))
-    ]
-
-@router.post("/admin/users/{user_id}/resend-invitation")
-async def resend_invitation(
-    user_id: str,
-    # current_admin: dict = Depends(get_current_admin_user),
-    # db: Session = Depends(get_db)
-):
-    """Resend invitation to user"""
-    # TODO: Replace with actual implementation
-    
-    # Find user
-    user = next((u for u in MOCK_USERS if u["id"] == user_id), None)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found"
-        )
-    
-    # Generate new invitation token
-    invitation_token = f"invite-{uuid.uuid4().hex[:16]}"
+    for row_num, row in enumerate(csv_reader, start=2):  # Start at 2 for header
+        try:
+            # Validate required fields
+            required_fields = ["email", "first_name", "last_name", "role"]
+            for field in required_fields:
+                if not row.get(field):
+                    raise ValueError(f"Missing required field: {field}")
+            
+            # Check if user already exists
+            existing_user = user_crud.get_by_field(db=db, field_name="email", field_value=row["email"])
+            if existing_user:
+                raise ValueError("User already exists")
+            
+            # Create user
+            user_data = {
+                "email": row["email"],
+                "password": row.get("password", "temporary123"),
+                "confirm_password": row.get("password", "temporary123"),
+                "first_name": row["first_name"],
+                "last_name": row["last_name"],
+                "phone": row.get("phone"),
+                "role": UserRole(row["role"]),
+                "organization_id": row.get("organization_id")
+            }
+            
+            user_crud.create(db=db, obj_in=user_data)
+            successful += 1
+            
+        except Exception as e:
+            failed += 1
+            errors.append(f"Row {row_num}: {str(e)}")
     
     return {
-        "message": "Invitation resent successfully",
-        "userId": user_id,
-        "sentTo": user["email"],
-        "invitationToken": invitation_token,
-        "expiresAt": (datetime.now() + timedelta(days=7)).isoformat()
-    }
-
-@router.get("/admin/users/export")
-async def export_users(
-    format: str = Query("csv", description="Export format: csv or xlsx"),
-    # current_admin: dict = Depends(get_current_admin_user),
-    # db: Session = Depends(get_db)
-):
-    """Export users list"""
-    # TODO: Replace with actual implementation
-    
-    # Mock export URL
-    export_id = f"export-{uuid.uuid4().hex[:8]}"
-    
-    return {
-        "message": "Export generated successfully",
-        "exportId": export_id,
-        "format": format,
-        "downloadUrl": f"/api/admin/exports/{export_id}/download",
-        "expiresAt": (datetime.now() + timedelta(hours=24)).isoformat(),
-        "recordCount": len(MOCK_USERS)
+        "successful": successful,
+        "failed": failed,
+        "errors": errors
     }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Navbar from './Navbar';
 import {
   MapPin,
@@ -12,107 +12,50 @@ import {
   Search
 } from 'lucide-react';
 
+import { patientPrescriptionsAPI } from '../../services/apiService';
+
 const Prescription = () => {
   const [medicineSearch, setMedicineSearch] = useState('');
   const [activeTab, setActiveTab] = useState('Active');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [list, setList] = useState([]);
 
   const tabs = ['Active', 'Expired', 'All prescriptions'];
 
-  const nearbyPharmacies = [
-    {
-      id: 1,
-      name: 'Pharmacy A',
-      address: '123 Tashkent Street, Yunusobod District',
-      distance: '0.5 km',
-      price: '$12.50',
-      rating: 4.8,
-      isOpen: true
-    },
-    {
-      id: 2,
-      name: 'Pharmacy B', 
-      address: '456 Chilonzor Avenue, Chilonzor District',
-      distance: '1.2 km',
-      price: '$11.80',
-      rating: 4.6,
-      isOpen: true
-    },
-    {
-      id: 3,
-      name: 'Dorixona Medline',
-      address: '789 Amir Temur Street, Shaykhontokhur',
-      distance: '2.1 km',
-      price: '$13.20',
-      rating: 4.9,
-      isOpen: false
-    }
-  ];
+  // TODO: Wire pharmacies to API; mock data removed
+  const nearbyPharmacies = [];
 
-  const prescriptions = [
-    {
-      id: 1,
-      medicineName: 'Lisinopril',
-      knownAs: 'ACE Inhibitor',
-      description: 'Take one tablet daily with water, preferably in the morning. Do not skip doses.',
-      prescribedDate: '27.06.2025',
-      endDate: '27.08.2025',
-      prescribedBy: 'Dr. Abdulla Karimov',
-      hospital: 'Akfa Medline',
-      refillInfo: '4 times/30 tablets',
-      remainingRefills: 3,
-      totalRefills: 4,
-      dosage: '10mg',
-      frequency: 'Once daily',
-      purpose: 'This medicine was prescribed to lower your blood pressure and protect your heart.',
-      status: 'active',
-      price: '$15.50'
-    },
-    {
-      id: 2,
-      medicineName: 'Metformin',
-      knownAs: 'Antidiabetic medication',
-      description: 'Take with meals twice daily. Monitor blood sugar levels regularly.',
-      prescribedDate: '15.06.2025',
-      endDate: '15.09.2025',
-      prescribedBy: 'Dr. Mavluda Sharipova',
-      hospital: 'Tashkent Medical City',
-      refillInfo: '3 times/60 tablets',
-      remainingRefills: 2,
-      totalRefills: 3,
-      dosage: '500mg',
-      frequency: 'Twice daily',
-      purpose: 'Prescribed to help control blood sugar levels in type 2 diabetes.',
-      status: 'active',
-      price: '$8.75'
-    },
-    {
-      id: 3,
-      medicineName: 'Amoxicillin',
-      knownAs: 'Antibiotic',
-      description: 'Complete the full course even if you feel better. Take every 8 hours.',
-      prescribedDate: '01.05.2025',
-      endDate: '15.05.2025',
-      prescribedBy: 'Dr. Nodir Azizov',
-      hospital: 'International Clinic Tashkent',
-      refillInfo: '0 times/21 tablets',
-      remainingRefills: 0,
-      totalRefills: 0,
-      dosage: '500mg',
-      frequency: 'Three times daily',
-      purpose: 'Antibiotic treatment for bacterial infection.',
-      status: 'expired',
-      price: '$12.30'
+  const loadList = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const scope = activeTab === 'All prescriptions' ? 'all' : activeTab.toLowerCase();
+      const { items } = await patientPrescriptionsAPI.list({ scope, page: 1, size: 50 });
+      setList(items);
+    } catch (e) {
+      // Handle authentication errors and redirect if needed
+      if (handlePatientAuthError(e)) {
+        return; // Redirected, exit early
+      }
+      
+      setError(e?.message || 'Failed to load prescriptions');
+      setList([]);
+    } finally {
+      setLoading(false);
     }
-  ];
-
-  const getFilteredPrescriptions = () => {
-    if (activeTab === 'Active') {
-      return prescriptions.filter(p => p.status === 'active');
-    } else if (activeTab === 'Expired') {
-      return prescriptions.filter(p => p.status === 'expired');
-    }
-    return prescriptions;
   };
+
+  useEffect(() => {
+    loadList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
+
+  const getFilteredPrescriptions = () => list.filter(p => {
+    if (activeTab === 'Active') return (p.status || 'active') === 'active';
+    if (activeTab === 'Expired') return (p.status || '') !== 'active';
+    return true;
+  }).filter(p => !medicineSearch || (p.medicineName || '').toLowerCase().includes(medicineSearch.toLowerCase()));
 
   const getStatusColor = (status) => {
     return status === 'active' ? 'text-green-600' : 'text-red-600';
@@ -126,15 +69,27 @@ const Prescription = () => {
     return diffDays <= 7 && diffDays > 0;
   };
 
+  const requestRefill = async (prescriptionId) => {
+    try {
+      setLoading(true);
+      await patientPrescriptionsAPI.requestRefill({ prescriptionId, reason: 'Refill via portal', urgent: false });
+      await loadList();
+    } catch (e) {
+      setError(e?.message || 'Failed to request refill');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
       {/* Navigation Bar */}
       <Navbar />
 
-      <div className="max-w-7xl mx-auto px-2 sm:px-4 py-4 sm:py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
+      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
+        <div className="flex gap-6">
           {/* Left Sidebar */}
-          <div className="lg:col-span-1 space-y-4 sm:space-y-6">
+          <div className="w-80 flex-shrink-0 space-y-6">
             {/* Medicine Search */}
             <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
               <h3 className="text-base sm:text-lg font-semibold text-emerald-400 mb-3 sm:mb-4">Search for medicine</h3>
@@ -165,6 +120,12 @@ const Prescription = () => {
 
               {/* Pharmacy List */}
               <div className="space-y-3 sm:space-y-4">
+                {nearbyPharmacies.length === 0 && (
+                  <div className="text-center py-6 text-gray-500">
+                    <MapPin className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                    <p className="text-sm">No nearby pharmacies found</p>
+                  </div>
+                )}
                 {nearbyPharmacies.map((pharmacy) => (
                   <div key={pharmacy.id} className="border border-gray-200 rounded-lg p-3 sm:p-4 hover:shadow-md transition-shadow">
                     <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-2 space-y-2 sm:space-y-0">
@@ -200,8 +161,8 @@ const Prescription = () => {
             </div>
           </div>
 
-          {/* Right Content - Prescriptions */}
-          <div className="lg:col-span-2">
+          {/* Main Content Area - Prescriptions */}
+          <div className="flex-1 min-w-0">
             {/* Tab Navigation */}
             <div className="bg-white rounded-xl shadow-lg mb-4 sm:mb-6">
               <div className="flex">
@@ -223,7 +184,24 @@ const Prescription = () => {
 
             {/* Prescription Cards */}
             <div className="space-y-4 sm:space-y-6">
-              {getFilteredPrescriptions().map((prescription) => (
+              {error && (
+                <div className="p-3 bg-red-100 border border-red-200 text-red-700 rounded-lg">{error}</div>
+              )}
+              {loading && (
+                <div className="p-3 text-sm text-gray-600 text-center py-8">Loading prescriptions...</div>
+              )}
+              {!loading && getFilteredPrescriptions().length === 0 && (
+                <div className="bg-white rounded-xl shadow-lg p-8 text-center">
+                  <Pill className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                  <p className="text-gray-500 text-lg">No prescriptions found</p>
+                  <p className="text-gray-400 text-sm mt-2">
+                    {activeTab === 'Active' ? 'You have no active prescriptions' : 
+                     activeTab === 'Expired' ? 'You have no expired prescriptions' : 
+                     'You have no prescriptions'}
+                  </p>
+                </div>
+              )}
+              {!loading && getFilteredPrescriptions().map((prescription) => (
                 <div key={prescription.id} className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
                   <div className="flex flex-col lg:flex-row lg:justify-between lg:items-start mb-3 sm:mb-4 space-y-3 lg:space-y-0">
                     <div className="flex-1">
@@ -299,7 +277,7 @@ const Prescription = () => {
                       <span>look up...</span>
                     </button>
                     {prescription.status === 'active' && prescription.remainingRefills > 0 && (
-                      <button className="bg-gray-400 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-gray-500 transition-colors font-medium flex items-center justify-center sm:justify-start space-x-2 text-xs sm:text-sm">
+                      <button onClick={() => requestRefill(prescription.id)} className="bg-gray-400 text-white px-4 sm:px-6 py-2 rounded-lg hover:bg-gray-500 transition-colors font-medium flex items-center justify-center sm:justify-start space-x-2 text-xs sm:text-sm">
                         <RefreshCw className="h-3 w-3 sm:h-4 sm:w-4" />
                         <span>refill</span>
                       </button>

@@ -1,29 +1,101 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, User, Pill, CheckCircle } from 'lucide-react';
 import NurseHeader from './header';
+import { 
+  getDashboardSummary, 
+  getDashboardPatients, 
+  getDashboardMedications, 
+  getDashboardTasks,
+  getDashboardMessages,
+  administerMedication
+} from '../../services/nurseService';
 
 const NursePortalDashboard = () => {
-  const [selectedDate, setSelectedDate] = useState(28);
+  const navigate = useNavigate();
+  const [selectedDate, setSelectedDate] = useState(new Date().getDate());
+  const [currentDate] = useState(new Date());
   
-  // Sample data
-  const patients = [
-    { id: 1, name: "Sarah Johnson", room: "101A", condition: "Post-surgery", time: "08:00", provider: "Dr. Smith", status: "vitals-due" },
-    { id: 2, name: "Robert Chen", room: "102B", condition: "Diabetes", time: "08:30", provider: "Dr. Williams", status: "medication-due" },
-    { id: 3, name: "Maria Garcia", room: "103A", condition: "Hypertension", time: "09:00", provider: "Dr. Johnson", status: "completed" },
-    { id: 4, name: "James Wilson", room: "104B", condition: "Cardiac care", time: "09:30", provider: "Dr. Brown", status: "medication-due" }
-  ];
+  // State for real data
+  const [patients, setPatients] = useState([]);
+  const [medications, setMedications] = useState([]);
+  const [tasks, setTasks] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [summary, setSummary] = useState({ totalPatients: 0, medsDue: 0, vitalsPending: 0, completedTasks: 0 });
+  const [loading, setLoading] = useState(true);
+  const [administering, setAdministering] = useState({});
+  const [medicationsTotal, setMedicationsTotal] = useState(0);
 
-  const medications = [
-    { patient: "Sarah Johnson", medication: "Morphine 5mg", time: "08:15", status: "pending" },
-    { patient: "Robert Chen", medication: "Insulin 10 units", time: "08:45", status: "pending" },
-    { patient: "Maria Garcia", medication: "Lisinopril 10mg", time: "12:00", status: "given" }
-  ];
+  const fetchDashboardData = async (targetDate = null) => {
+    try {
+      setLoading(true);
+      
+      // Format date for API if provided
+      const dateParam = targetDate ? targetDate.toISOString().split('T')[0] : null;
+      
+      // Fetch all dashboard data in parallel
+      const [summaryRes, patientsRes, medicationsRes, tasksRes, messagesRes] = await Promise.all([
+        getDashboardSummary(),
+        getDashboardPatients(dateParam),
+        getDashboardMedications(dateParam),
+        getDashboardTasks(dateParam),
+        getDashboardMessages()
+      ]);
+      
+      // Set summary data
+      const summaryData = summaryRes.data || summaryRes;
+      setSummary({
+        totalPatients: summaryData.totalPatients ?? summaryData.patients_total ?? 0,
+        medsDue: summaryData.medsDue ?? summaryData.medications_due ?? 0,
+        vitalsPending: summaryData.vitalsPending ?? summaryData.vitals_pending ?? 0,
+        completedTasks: summaryData.completedTasks ?? summaryData.tasks_completed ?? 0,
+      });
+      
+      // Set patients data
+      const patientsData = patientsRes.data || patientsRes;
+      setPatients(Array.isArray(patientsData) ? patientsData : []);
+      
+      // Set medications data - handle both array and object with items/total
+      const medicationsData = medicationsRes.data || medicationsRes;
+      if (medicationsData && medicationsData.items) {
+        setMedications(medicationsData.items || []);
+        setMedicationsTotal(medicationsData.total || 0);
+      } else if (Array.isArray(medicationsData)) {
+        setMedications(medicationsData);
+        setMedicationsTotal(medicationsData.length);
+      } else {
+        setMedications([]);
+        setMedicationsTotal(0);
+      }
+      
+      // Set tasks data
+      const tasksData = tasksRes.data || tasksRes;
+      setTasks(Array.isArray(tasksData) ? tasksData : []);
+      
+      // Set messages data
+      const messagesData = messagesRes.data || messagesRes;
+      setMessages(Array.isArray(messagesData) ? messagesData : []);
+      
+    } catch (e) {
+      console.error('Error loading dashboard data:', e);
+      // Fallback to empty data on error
+      setSummary({ totalPatients: 0, medsDue: 0, vitalsPending: 0, completedTasks: 0 });
+      setPatients([]);
+      setMedications([]);
+      setTasks([]);
+      setMessages([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const messages = [
-    { name: "Dr. Smith", message: "Patient in 101A needs extra monitoring", time: "5 min ago", online: true },
-    { name: "Supervisor Jane", message: "Shift handover notes ready", time: "15 min ago", online: true },
-    { name: "Dr. Williams", message: "Update on Room 102B medication", time: "1 hour ago", online: false }
-  ];
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      await fetchDashboardData();
+    })()
+    return () => { active = false }
+  }, [])
 
   const getStatusColor = (status) => {
     switch(status) {
@@ -43,13 +115,46 @@ const NursePortalDashboard = () => {
     }
   };
 
+  const handleAdministerMedication = async (medication) => {
+    if (!medication.id) {
+      console.error('Medication ID is missing');
+      return;
+    }
+
+    try {
+      setAdministering({ ...administering, [medication.id]: true });
+      await administerMedication(medication.id, {});
+      
+      // Refresh dashboard data
+      const selectedDateObj = new Date(currentDate.getFullYear(), currentDate.getMonth(), selectedDate);
+      await fetchDashboardData(selectedDateObj);
+    } catch (e) {
+      console.error('Error administering medication:', e);
+      alert('Error administering medication: ' + (e.message || 'Unknown error'));
+    } finally {
+      setAdministering({ ...administering, [medication.id]: false });
+    }
+  };
+
   const generateCalendarDays = () => {
     const days = [];
-    for (let i = 1; i <= 30; i++) {
+    const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+    for (let i = 1; i <= daysInMonth; i++) {
       days.push(i);
     }
     return days;
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <NurseHeader />
+        <div className="flex items-center justify-center h-64">
+          <div className="text-lg text-gray-600">Loading dashboard data...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -70,18 +175,23 @@ const NursePortalDashboard = () => {
             <div className="text-center mb-4">
               <div className="flex items-center justify-between">
                 <button>&lt;</button>
-                <span className="font-semibold">JUNE</span>
+                <span className="font-semibold">{currentDate.toLocaleString('default', { month: 'long' }).toUpperCase()}</span>
                 <button>&gt;</button>
               </div>
             </div>
             <div className="grid grid-cols-7 gap-1 text-center text-sm">
-              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map(day => (
-                <div key={day} className="p-2 font-medium text-gray-600">{day}</div>
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => (
+                <div key={`day-header-${index}`} className="p-2 font-medium text-gray-600">{day}</div>
               ))}
               {generateCalendarDays().map(day => (
                 <button
-                  key={day}
-                  onClick={() => setSelectedDate(day)}
+                  key={`calendar-day-${day}`}
+                  onClick={() => {
+                    setSelectedDate(day);
+                    // Create a new date for the selected day
+                    const selectedDateObj = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+                    fetchDashboardData(selectedDateObj);
+                  }}
                   className={`p-2 rounded ${
                     day === selectedDate 
                       ? 'bg-teal-500 text-white' 
@@ -100,19 +210,19 @@ const NursePortalDashboard = () => {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span>Total Patients:</span>
-                <span className="font-semibold text-teal-600">12</span>
+                <span className="font-semibold text-teal-600">{summary.totalPatients}</span>
               </div>
               <div className="flex justify-between">
                 <span>Medications Due:</span>
-                <span className="font-semibold text-red-600">8</span>
+                <span className="font-semibold text-red-600">{summary.medsDue}</span>
               </div>
               <div className="flex justify-between">
                 <span>Vitals Pending:</span>
-                <span className="font-semibold text-orange-600">5</span>
+                <span className="font-semibold text-orange-600">{summary.vitalsPending}</span>
               </div>
               <div className="flex justify-between">
                 <span>Completed Tasks:</span>
-                <span className="font-semibold text-green-600">15</span>
+                <span className="font-semibold text-green-600">{summary.completedTasks}</span>
               </div>
             </div>
           </div>
@@ -121,25 +231,31 @@ const NursePortalDashboard = () => {
           <div>
             <h4 className="font-semibold mb-3 text-teal-600">Messages</h4>
             <div className="space-y-3">
-              {messages.map((msg, index) => (
-                <div key={index} className="flex items-start space-x-3">
-                  <div className="relative">
-                    <div className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center">
-                      <span className="text-white text-xs font-bold">
-                        {msg.name.split(' ').map(n => n[0]).join('')}
-                      </span>
-                    </div>
-                    {msg.online && (
-                      <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-sm">{msg.name}</div>
-                    <div className="text-xs text-gray-600 truncate">{msg.message}</div>
-                    <div className="text-xs text-gray-400">{msg.time}</div>
-                  </div>
+              {messages.length === 0 ? (
+                <div className="text-center text-gray-500 text-sm py-4">
+                  No recent messages
                 </div>
-              ))}
+              ) : (
+                messages.map((msg, index) => (
+                  <div key={msg.id || index} className="flex items-start space-x-3">
+                    <div className="relative">
+                      <div className="w-8 h-8 bg-teal-500 rounded-full flex items-center justify-center">
+                        <span className="text-white text-xs font-bold">
+                          {msg.name.split(' ').map(n => n[0]).join('')}
+                        </span>
+                      </div>
+                      {msg.online && (
+                        <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-white"></div>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-sm">{msg.name}</div>
+                      <div className="text-xs text-gray-600 truncate">{msg.message}</div>
+                      <div className="text-xs text-gray-400">{msg.time}</div>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -151,43 +267,60 @@ const NursePortalDashboard = () => {
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-xl font-semibold text-teal-600 flex items-center">
                 <User className="mr-2 h-5 w-5" />
-                Patient Assignments for June 28, 2025
+                Patient Assignments for {new Date(currentDate.getFullYear(), currentDate.getMonth(), selectedDate).toLocaleDateString('en-US', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
               </h2>
               <div className="text-sm text-gray-600">
                 <span className="inline-flex items-center">
                   <div className="w-3 h-3 bg-green-400 rounded-full mr-2"></div>
-                  12 patients assigned
+                  {patients.length} patients assigned
                 </span>
               </div>
             </div>
             
             <div className="space-y-3">
-              {patients.map(patient => (
-                <div key={patient.id} className="bg-white p-4 rounded-lg shadow border-l-4 border-teal-500">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className="bg-teal-500 text-white px-3 py-1 rounded text-sm font-medium">
-                        {patient.time}
+              {patients.length === 0 ? (
+                <div className="bg-white p-4 rounded-lg shadow text-center text-gray-500">
+                  No patients assigned for today
+                </div>
+              ) : (
+                patients.map(patient => (
+                  <div key={patient.id} className="bg-white p-4 rounded-lg shadow border-l-4 border-teal-500">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="bg-teal-500 text-white px-3 py-1 rounded text-sm font-medium">
+                          {patient.time}
+                        </div>
+                        <div>
+                          <div className="font-semibold">{patient.name}</div>
+                          <div className="text-sm text-gray-600">{patient.room}</div>
+                          <div className="text-xs text-gray-500">
+                            {patient.age} years old, {patient.gender}
+                          </div>
+                        </div>
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(patient.status)}`}>
+                          {getStatusText(patient.status)}
+                        </span>
                       </div>
-                      <div>
-                        <div className="font-semibold">{patient.name}</div>
-                        <div className="text-sm text-gray-600">Room {patient.room}</div>
+                      <div className="flex items-center space-x-4">
+                        <div className="text-sm text-gray-600">
+                          Provider: {patient.provider}
+                        </div>
+                        <button 
+                          onClick={() => navigate(`/nurse/patients/${patient.id}/profile`)}
+                          className="bg-teal-500 text-white px-4 py-2 rounded hover:bg-teal-600"
+                        >
+                          View
+                        </button>
                       </div>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(patient.status)}`}>
-                        {getStatusText(patient.status)}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="text-sm text-gray-600">
-                        Provider: {patient.provider}
-                      </div>
-                      <button className="bg-teal-500 text-white px-4 py-2 rounded hover:bg-teal-600">
-                        View
-                      </button>
                     </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
 
@@ -201,43 +334,54 @@ const NursePortalDashboard = () => {
               <div className="text-sm text-gray-600">
                 <span className="inline-flex items-center">
                   <div className="w-3 h-3 bg-red-400 rounded-full mr-2"></div>
-                  2 pending
+                  {medicationsTotal} pending
                 </span>
               </div>
             </div>
             
             <div className="space-y-3">
-              {medications.map((med, index) => (
-                <div key={index} className="bg-white p-4 rounded-lg shadow">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className={`px-3 py-1 rounded text-sm font-medium ${
-                        med.status === 'pending' ? 'bg-red-500 text-white' : 'bg-green-500 text-white'
-                      }`}>
-                        {med.time}
-                      </div>
-                      <div>
-                        <div className="font-semibold">{med.patient}</div>
-                        <div className="text-sm text-gray-600">{med.medication}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      {med.status === 'pending' ? (
-                        <button className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center">
-                          <Pill className="mr-1 h-4 w-4" />
-                          Administer
-                        </button>
-                      ) : (
-                        <span className="flex items-center text-green-600">
-                          <CheckCircle className="mr-1 h-4 w-4" />
-                          Given
-                        </span>
-                      )}
-                      <input type="checkbox" className="ml-2" />
-                    </div>
-                  </div>
+              {medications.length === 0 ? (
+                <div className="bg-white p-4 rounded-lg shadow text-center text-gray-500">
+                  No pending medications for today
                 </div>
-              ))}
+              ) : (
+                <>
+                  {medications.map((med, index) => (
+                    <div key={med.id || index} className="bg-white p-4 rounded-lg shadow">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-4">
+                          <div className="px-3 py-1 rounded text-sm font-medium bg-red-500 text-white">
+                            {med.time}
+                          </div>
+                          <div>
+                            <div className="font-semibold">{med.patient}</div>
+                            <div className="text-sm text-gray-600">{med.medication}</div>
+                            <div className="text-xs text-gray-500">{med.dosage} - {med.route}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <button 
+                            onClick={() => handleAdministerMedication(med)}
+                            disabled={administering[med.id]}
+                            className="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            <Pill className="mr-1 h-4 w-4" />
+                            {administering[med.id] ? 'Administering...' : 'Administer'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="text-center mt-4">
+                    <button
+                      onClick={() => navigate('/nurse/medications')}
+                      className="bg-teal-500 text-white px-6 py-2 rounded hover:bg-teal-600"
+                    >
+                      Show All
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

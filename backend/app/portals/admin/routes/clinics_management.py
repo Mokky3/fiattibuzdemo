@@ -1,385 +1,571 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+"""Admin portal - clinics management router
+Advanced clinic management operations connected to models and CRUD
+"""
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional
+from uuid import uuid4
+
+from fastapi import APIRouter, Depends, HTTPException, Body, Query, status, Request
+from pydantic import BaseModel, Field, EmailStr
 from sqlalchemy.orm import Session
-from typing import List, Optional
-from datetime import datetime
-import uuid
 
-# TODO: Import these when created
-# from app.db.session import get_db
-# from app.common.auth.auth_utils import get_current_user, check_super_admin, check_clinic_admin
-# from app.common.schemas.clinic import (
-#     ClinicList,
-#     ClinicCreate,
-#     ClinicUpdate,
-#     ClinicStatusUpdate,
-#     ClinicStats
-# )
-# from app.crud.clinic import clinic as clinic_crud
+from app.db.session import get_db
+from app.common.models.hospital import (
+    Hospital, HospitalType, HospitalStatus, HospitalDepartment,
+    DepartmentType, Location
+)
+from app.common.models.admin import AdminActivity, ActivityType, BulkOperation
+from app.crud.hospital import hospital as hospital_crud
+from app.crud.admin import admin as admin_crud
+from app.common.schemas.responses_enhanced import (
+    SuccessResponse, PaginatedResponse, ProblemDetail, ErrorType,
+    create_problem_detail, create_paginated_response
+)
+from app.common.security.middleware import audit_pii_access
+from app.common.utils.tracing import get_trace_id
 
-router = APIRouter()
+router = APIRouter(tags=["Admin · Clinics Management"])
 
-# Mock data for development
-MOCK_USERS = {
-    "superadmin": {
-        "id": "user-001",
-        "email": "superadmin@healthcare.com",
-        "full_name": "Super Administrator",
-        "role": "superadmin",
-        "clinicId": None
-    },
-    "clinicadmin": {
-        "id": "user-002",
-        "email": "admin@mainhospital.uz",
-        "full_name": "Clinic Administrator",
-        "role": "clinic_admin",
-        "clinicId": "clinic-001"
-    }
-}
+# ──────────────────────────────────────────────────────────────────────────────
+# Enhanced Data Models
+# ──────────────────────────────────────────────────────────────────────────────
 
-MOCK_CLINICS = [
-    {
-        "id": "clinic-001",
-        "name": "Main General Hospital",
-        "city": "Tashkent",
-        "address": "123 Healthcare Boulevard, Medical District",
-        "founded": "2010",
-        "status": "Active",
-        "departments": ["Cardiology", "Pediatrics", "Emergency", "Radiology", "General Medicine"],
-        "doctors": 125,
-        "patients": 3847,
-        "created_at": "2023-01-15T00:00:00Z",
-        "updated_at": "2025-01-10T14:30:00Z"
-    },
-    {
-        "id": "clinic-002",
-        "name": "City Medical Center",
-        "city": "Tashkent",
-        "address": "456 Medical Avenue, Central District",
-        "founded": "2015",
-        "status": "Active",
-        "departments": ["Dermatology", "Neurology", "Orthopedics", "General Medicine"],
-        "doctors": 89,
-        "patients": 2156,
-        "created_at": "2023-02-20T00:00:00Z",
-        "updated_at": "2025-01-09T10:15:00Z"
-    },
-    {
-        "id": "clinic-003",
-        "name": "Regional Healthcare Complex",
-        "city": "Samarkand",
-        "address": "789 Health Street, Old City",
-        "founded": "2008",
-        "status": "Active",
-        "departments": ["Physical Therapy", "Surgery", "ICU", "Emergency", "Pediatrics"],
-        "doctors": 156,
-        "patients": 4523,
-        "created_at": "2023-01-01T00:00:00Z",
-        "updated_at": "2025-01-08T16:45:00Z"
-    },
-    {
-        "id": "clinic-004",
-        "name": "Children's Specialized Hospital",
-        "city": "Bukhara",
-        "address": "321 Pediatric Lane, Family District",
-        "founded": "2018",
-        "status": "Active",
-        "departments": ["Pediatrics", "Emergency", "Surgery"],
-        "doctors": 67,
-        "patients": 1892,
-        "created_at": "2023-03-10T00:00:00Z",
-        "updated_at": "2025-01-07T09:20:00Z"
-    },
-    {
-        "id": "clinic-005",
-        "name": "Modern Diagnostic Center",
-        "city": "Tashkent",
-        "address": "555 Innovation Park, Tech District",
-        "founded": "2020",
-        "status": "Inactive",
-        "departments": ["Radiology", "Laboratory", "Cardiology"],
-        "doctors": 45,
-        "patients": 892,
-        "created_at": "2023-04-05T00:00:00Z",
-        "updated_at": "2024-12-15T11:30:00Z"
-    }
-]
+class BulkHospitalOperationRequest(BaseModel):
+    hospital_ids: List[str] = Field(..., description="List of hospital IDs")
+    operation: str = Field(..., description="Operation to perform")
+    reason: Optional[str] = Field(None, description="Reason for bulk operation")
 
-# Mock current user - in production this would come from auth
-MOCK_CURRENT_USER = MOCK_USERS["superadmin"]
+class HospitalCapacityRequest(BaseModel):
+    hospital_id: str = Field(..., description="Hospital ID")
+    new_capacity: int = Field(..., ge=1, description="New capacity (maps to total_beds)")
+    reason: str = Field(..., description="Reason for capacity change")
 
-@router.get("/auth/me")
-async def get_current_user_info(
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db)
+class HospitalAccreditationRequest(BaseModel):
+    hospital_id: str = Field(..., description="Hospital ID")
+    accreditation_body: str = Field(..., description="Accreditation body")
+    accreditation_level: str = Field(..., description="Accreditation level")
+    valid_until: str = Field(..., description="Accreditation valid until date")
+    certificate_number: Optional[str] = Field(None, description="Certificate number")
+
+class DepartmentAssignmentRequest(BaseModel):
+    department_id: str = Field(..., description="Department ID")
+    head_doctor_id: str = Field(..., description="Head doctor ID")
+    assignment_date: str = Field(..., description="Assignment date")
+
+class HospitalLocationRequest(BaseModel):
+    hospital_id: str = Field(..., description="Hospital ID")
+    latitude: float = Field(..., description="Latitude")
+    longitude: float = Field(..., description="Longitude")
+    address: str = Field(..., description="Full address")
+    city: str = Field(..., description="City")
+    state: str = Field(..., description="State/Province")
+    country: str = Field(..., description="Country")
+    postal_code: Optional[str] = Field(None, description="Postal code")
+
+class BulkOperationResponse(BaseModel):
+    operation_id: str = Field(..., description="Operation ID")
+    status: str = Field(..., description="Operation status")
+    total_hospitals: int = Field(..., description="Total hospitals affected")
+    successful: int = Field(..., description="Successful operations")
+    failed: int = Field(..., description="Failed operations")
+    created_at: str = Field(..., description="Created timestamp")
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Bulk Operations Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/bulk-operations", response_model=SuccessResponse[BulkOperationResponse])
+@audit_pii_access("write", "bulk_hospital_operation", "bulk_operation_create")
+async def create_bulk_hospital_operation(
+    request: Request,
+    payload: BulkHospitalOperationRequest = Body(...),
+    db: Session = Depends(get_db)
 ):
-    """Get current user information"""
-    # TODO: Replace with actual implementation
-    return MOCK_CURRENT_USER
+    """Create a bulk hospital operation."""
+    try:
+        # Validate operation type
+        valid_operations = ["activate", "deactivate", "suspend", "update_type", "update_status"]
+        if payload.operation not in valid_operations:
+            problem = create_problem_detail(
+                error_type=ErrorType.VALIDATION_ERROR,
+                title="Invalid Operation",
+                status=400,
+                detail=f"Operation '{payload.operation}' is not valid. Valid operations: {valid_operations}",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=400, detail=problem.dict())
+        
+        # Create bulk operation record
+        operation_id = str(uuid4())
+        bulk_operation = admin_crud.create_bulk_operation(
+            db=db,
+            operation_id=operation_id,
+            operation_type=f"hospital_{payload.operation}",
+            resource_ids=payload.hospital_ids,
+            reason=payload.reason,
+            created_by=uuid4()  # TODO: Get from auth context
+        )
+        
+        # Execute bulk operation
+        result = await _execute_bulk_hospital_operation(db, payload.operation, payload.hospital_ids, operation_id)
+        
+        bulk_response = BulkOperationResponse(
+            operation_id=operation_id,
+            status=result["status"],
+            total_hospitals=len(payload.hospital_ids),
+            successful=result["successful"],
+            failed=result["failed"],
+            created_at=bulk_operation.created_at.isoformat() if bulk_operation.created_at else ""
+        )
+        
+        return SuccessResponse(
+            data=bulk_response,
+            message="Bulk hospital operation completed successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Bulk Hospital Operation Failed",
+            status=500,
+            detail=f"Failed to execute bulk hospital operation: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
 
-@router.post("/dev/switch-role")
-async def switch_user_role(
-    role_data: dict,  # {"role": "superadmin" | "clinicadmin"}
-    # db: Session = Depends(get_db)
-):
-    """Development endpoint to switch user roles"""
-    # TODO: Remove in production
-    role = role_data.get("role")
-    if role == "superadmin":
-        MOCK_CURRENT_USER.update(MOCK_USERS["superadmin"])
-    elif role == "clinicadmin":
-        MOCK_CURRENT_USER.update(MOCK_USERS["clinicadmin"])
-    else:
-        raise HTTPException(status_code=400, detail="Invalid role")
-    
-    return MOCK_CURRENT_USER
+# ──────────────────────────────────────────────────────────────────────────────
+# Capacity Management Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
 
-@router.get("/clinics")
-async def get_clinics(
-    search: Optional[str] = Query(None, description="Search term"),
-    status: Optional[str] = Query(None, description="Filter by status"),
-    city: Optional[str] = Query(None, description="Filter by city"),
-    sort_by: Optional[str] = Query("name", description="Sort field"),
-    sort_order: Optional[str] = Query("asc", description="Sort order"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1, le=100),
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db)
+@router.put("/capacity", response_model=SuccessResponse[Dict[str, str]])
+@audit_pii_access("write", "hospital_capacity", "capacity_update")
+async def update_hospital_capacity(
+    request: Request,
+    payload: HospitalCapacityRequest = Body(...),
+    db: Session = Depends(get_db)
 ):
-    """Get list of clinics with filtering and pagination"""
-    # TODO: Replace with actual implementation
+    """Update hospital capacity."""
+    try:
+        # Verify hospital exists
+        hospital = hospital_crud.get(db=db, id=payload.hospital_id)
+        if not hospital:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="Hospital Not Found",
+                status=404,
+                detail=f"Hospital '{payload.hospital_id}' not found",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        # Update capacity -> map to total_beds
+        hospital_crud.update(db=db, db_obj=hospital, obj_in={"total_beds": payload.new_capacity})
+        
+        # Log admin activity
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=uuid4(),  # TODO: Get from auth context
+            activity_type=ActivityType.HOSPITAL_CAPACITY_UPDATED,
+            description=f"Updated capacity for '{hospital.name}' to {payload.new_capacity}. Reason: {payload.reason}",
+            affected_resource_id=str(hospital.id)
+        )
+        
+        return SuccessResponse(
+            data={"status": "capacity_updated"},
+            message="Hospital capacity updated successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Capacity Update Failed",
+            status=500,
+            detail=f"Failed to update hospital capacity: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.get("/capacity/summary", response_model=SuccessResponse[Dict[str, Any]])
+@audit_pii_access("read", "hospital_capacity", "capacity_summary")
+async def get_capacity_summary(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get hospital capacity summary."""
+    try:
+        # Get capacity summary using CRUD
+        capacity_data = hospital_crud.get_capacity_summary(db=db)
+        
+        return SuccessResponse(
+            data=capacity_data,
+            message="Hospital capacity summary retrieved successfully"
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Capacity Summary Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve capacity summary: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Accreditation Management Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/accreditation", response_model=SuccessResponse[Dict[str, str]])
+@audit_pii_access("write", "hospital_accreditation", "accreditation_update")
+async def update_hospital_accreditation(
+    request: Request,
+    payload: HospitalAccreditationRequest = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Update hospital accreditation."""
+    try:
+        # Verify hospital exists
+        hospital = hospital_crud.get(db=db, id=payload.hospital_id)
+        if not hospital:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="Hospital Not Found",
+                status=404,
+                detail=f"Hospital '{payload.hospital_id}' not found",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        # Update accreditation (map to available model fields)
+        accreditation_data = {
+            "accreditation_date": datetime.fromisoformat(payload.valid_until)
+        }
+        
+        hospital_crud.update(db=db, db_obj=hospital, obj_in=accreditation_data)
+        
+        # Log admin activity
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=uuid4(),  # TODO: Get from auth context
+            activity_type=ActivityType.HOSPITAL_ACCREDITATION_UPDATED,
+            description=f"Updated accreditation for '{hospital.name}' to {payload.accreditation_level}",
+            affected_resource_id=str(hospital.id)
+        )
+        
+        return SuccessResponse(
+            data={"status": "accreditation_updated"},
+            message="Hospital accreditation updated successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Accreditation Update Failed",
+            status=500,
+            detail=f"Failed to update hospital accreditation: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.get("/accreditation/expiring", response_model=SuccessResponse[List[Dict[str, Any]]])
+@audit_pii_access("read", "hospital_accreditation", "expiring_accreditations")
+async def get_expiring_accreditations(
+    request: Request,
+    days: int = Query(90, ge=1, le=365, description="Days ahead to check"),
+    db: Session = Depends(get_db)
+):
+    """Get hospitals with expiring accreditations."""
+    try:
+        # Get expiring accreditations using CRUD
+        expiring_data = hospital_crud.get_expiring_accreditations(db=db, days=days)
+        
+        return SuccessResponse(
+            data=expiring_data,
+            message="Expiring accreditations retrieved successfully"
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Expiring Accreditations Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve expiring accreditations: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Department Management Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/departments/assign-head", response_model=SuccessResponse[Dict[str, str]])
+@audit_pii_access("write", "department_assignment", "head_doctor_assignment")
+async def assign_department_head(
+    request: Request,
+    payload: DepartmentAssignmentRequest = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Assign head doctor to a department."""
+    try:
+        # Verify department exists
+        department = hospital_crud.get_department(db=db, id=payload.department_id)
+        if not department:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="Department Not Found",
+                status=404,
+                detail=f"Department '{payload.department_id}' not found",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        # Update department head
+        hospital_crud.update_department_head(
+            db=db,
+            department_id=payload.department_id,
+            head_doctor_id=payload.head_doctor_id,
+            assignment_date=datetime.fromisoformat(payload.assignment_date)
+        )
+        
+        # Log admin activity
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=uuid4(),  # TODO: Get from auth context
+            activity_type=ActivityType.DEPARTMENT_HEAD_ASSIGNED,
+            description=f"Assigned head doctor to department '{department.name}'",
+            affected_resource_id=str(department.id)
+        )
+        
+        return SuccessResponse(
+            data={"status": "head_assigned"},
+            message="Department head assigned successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Department Head Assignment Failed",
+            status=500,
+            detail=f"Failed to assign department head: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.get("/departments/unassigned", response_model=SuccessResponse[List[Dict[str, Any]]])
+@audit_pii_access("read", "department", "unassigned_departments")
+async def get_unassigned_departments(
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """Get departments without head doctors."""
+    try:
+        # Get unassigned departments using CRUD
+        unassigned_data = hospital_crud.get_unassigned_departments(db=db)
+        
+        return SuccessResponse(
+            data=unassigned_data,
+            message="Unassigned departments retrieved successfully"
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Unassigned Departments Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve unassigned departments: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Location Management Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.post("/location", response_model=SuccessResponse[Dict[str, str]])
+@audit_pii_access("write", "hospital_location", "location_update")
+async def update_hospital_location(
+    request: Request,
+    payload: HospitalLocationRequest = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Update hospital location information."""
+    try:
+        # Verify hospital exists
+        hospital = hospital_crud.get(db=db, id=payload.hospital_id)
+        if not hospital:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="Hospital Not Found",
+                status=404,
+                detail=f"Hospital '{payload.hospital_id}' not found",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        # Create or update location
+        location_data = {
+            "hospital_id": payload.hospital_id,
+            "latitude": payload.latitude,
+            "longitude": payload.longitude,
+            "address": payload.address,
+            "city": payload.city,
+            "state": payload.state,
+            "country": payload.country,
+            "postal_code": payload.postal_code
+        }
+        
+        hospital_crud.update_hospital_location(db=db, location_data=location_data)
+        
+        # Log admin activity
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=uuid4(),  # TODO: Get from auth context
+            activity_type=ActivityType.HOSPITAL_LOCATION_UPDATED,
+            description=f"Updated location for '{hospital.name}'",
+            affected_resource_id=str(hospital.id)
+        )
+        
+        return SuccessResponse(
+            data={"status": "location_updated"},
+            message="Hospital location updated successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Location Update Failed",
+            status=500,
+            detail=f"Failed to update hospital location: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.get("/location/nearby", response_model=SuccessResponse[List[Dict[str, Any]]])
+@audit_pii_access("read", "hospital_location", "nearby_hospitals")
+async def get_nearby_hospitals(
+    request: Request,
+    latitude: float = Query(..., description="Latitude"),
+    longitude: float = Query(..., description="Longitude"),
+    radius: float = Query(10.0, ge=0.1, le=100.0, description="Radius in kilometers"),
+    db: Session = Depends(get_db)
+):
+    """Get hospitals within a specified radius."""
+    try:
+        # Get nearby hospitals using CRUD
+        nearby_data = hospital_crud.get_nearby_hospitals(
+            db=db,
+            latitude=latitude,
+            longitude=longitude,
+            radius=radius
+        )
+        
+        return SuccessResponse(
+            data=nearby_data,
+            message="Nearby hospitals retrieved successfully"
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Nearby Hospitals Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve nearby hospitals: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Reporting Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+@router.get("/report/compliance", response_model=SuccessResponse[Dict[str, Any]])
+@audit_pii_access("read", "hospital_compliance", "compliance_report")
+async def get_compliance_report(
+    request: Request,
+    report_type: str = Query("accreditation", description="Report type"),
+    db: Session = Depends(get_db)
+):
+    """Generate hospital compliance report."""
+    try:
+        # Generate compliance report using CRUD
+        compliance_data = hospital_crud.generate_compliance_report(
+            db=db,
+            report_type=report_type
+        )
+        
+        # Log admin activity
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=uuid4(),  # TODO: Get from auth context
+            activity_type=ActivityType.COMPLIANCE_REPORT_GENERATED,
+            description=f"Generated {report_type} compliance report",
+            affected_resource_id=None
+        )
+        
+        return SuccessResponse(
+            data=compliance_data,
+            message="Compliance report generated successfully"
+        )
+        
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Compliance Report Generation Failed",
+            status=500,
+            detail=f"Failed to generate compliance report: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Helper Functions
+# ──────────────────────────────────────────────────────────────────────────────
+
+async def _execute_bulk_hospital_operation(db: Session, operation: str, hospital_ids: List[str], operation_id: str) -> Dict[str, Any]:
+    """Execute bulk operation on hospitals."""
+    successful = 0
+    failed = 0
     
-    # Filter based on user role
-    clinics = MOCK_CLINICS.copy()
-    if MOCK_CURRENT_USER["role"] == "clinic_admin" and MOCK_CURRENT_USER["clinicId"]:
-        clinics = [c for c in clinics if c["id"] == MOCK_CURRENT_USER["clinicId"]]
+    for hospital_id in hospital_ids:
+        try:
+            hospital = hospital_crud.get(db=db, id=hospital_id)
+            if not hospital:
+                failed += 1
+                continue
+            
+            if operation == "activate":
+                hospital_crud.update(db=db, db_obj=hospital, obj_in={"status": HospitalStatus.ACTIVE})
+            elif operation == "deactivate":
+                hospital_crud.update(db=db, db_obj=hospital, obj_in={"status": HospitalStatus.INACTIVE})
+            elif operation == "suspend":
+                hospital_crud.update(db=db, db_obj=hospital, obj_in={"status": HospitalStatus.SUSPENDED})
+            
+            successful += 1
+            
+        except Exception:
+            failed += 1
     
-    # Apply filters
-    if search:
-        search_lower = search.lower()
-        clinics = [
-            c for c in clinics
-            if search_lower in c["name"].lower() or
-               search_lower in c["city"].lower() or
-               any(search_lower in dept.lower() for dept in c["departments"])
-        ]
-    
-    if status and status != "All":
-        clinics = [c for c in clinics if c["status"] == status]
-    
-    if city and city != "All":
-        clinics = [c for c in clinics if c["city"] == city]
-    
-    # Sort
-    reverse = sort_order == "desc"
-    if sort_by == "name":
-        clinics.sort(key=lambda x: x["name"].lower(), reverse=reverse)
-    elif sort_by == "city":
-        clinics.sort(key=lambda x: x["city"].lower(), reverse=reverse)
-    elif sort_by == "doctors":
-        clinics.sort(key=lambda x: x["doctors"], reverse=reverse)
-    elif sort_by == "patients":
-        clinics.sort(key=lambda x: x["patients"], reverse=reverse)
-    elif sort_by == "status":
-        clinics.sort(key=lambda x: x["status"], reverse=reverse)
-    
-    # Paginate
-    total = len(clinics)
-    clinics = clinics[skip:skip + limit]
+    # Update bulk operation status
+    admin_crud.update_bulk_operation(
+        db=db,
+        operation_id=operation_id,
+        successful_count=successful,
+        failed_count=failed,
+        status="completed" if failed == 0 else "partial"
+    )
     
     return {
-        "total": total,
-        "skip": skip,
-        "limit": limit,
-        "data": clinics
+        "status": "completed" if failed == 0 else "partial",
+        "successful": successful,
+        "failed": failed
     }
-
-@router.post("/clinics")
-async def create_clinic(
-    clinic_data: dict,  # TODO: Replace with ClinicCreate schema
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db)
-):
-    """Create a new clinic (Super Admin only)"""
-    # TODO: Replace with actual implementation
-    
-    # Check if user is super admin
-    if MOCK_CURRENT_USER["role"] != "superadmin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only super admins can create clinics"
-        )
-    
-    new_clinic = {
-        "id": f"clinic-{uuid.uuid4().hex[:8]}",
-        "doctors": 0,
-        "patients": 0,
-        "created_at": datetime.now().isoformat(),
-        "updated_at": datetime.now().isoformat(),
-        **clinic_data
-    }
-    
-    MOCK_CLINICS.append(new_clinic)
-    return new_clinic
-
-@router.get("/clinics/{clinic_id}")
-async def get_clinic_detail(
-    clinic_id: str,
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db)
-):
-    """Get detailed clinic information"""
-    # TODO: Replace with actual implementation
-    
-    # Find clinic
-    clinic = next((c for c in MOCK_CLINICS if c["id"] == clinic_id), None)
-    if not clinic:
-        raise HTTPException(status_code=404, detail="Clinic not found")
-    
-    # Check access
-    if (MOCK_CURRENT_USER["role"] == "clinic_admin" and 
-        MOCK_CURRENT_USER["clinicId"] != clinic_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only access your assigned clinic"
-        )
-    
-    return clinic
-
-@router.put("/clinics/{clinic_id}")
-async def update_clinic(
-    clinic_id: str,
-    clinic_data: dict,  # TODO: Replace with ClinicUpdate schema
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db)
-):
-    """Update clinic information"""
-    # TODO: Replace with actual implementation
-    
-    # Check access
-    if (MOCK_CURRENT_USER["role"] == "clinic_admin" and 
-        MOCK_CURRENT_USER["clinicId"] != clinic_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only update your assigned clinic"
-        )
-    
-    # Find and update clinic
-    for i, clinic in enumerate(MOCK_CLINICS):
-        if clinic["id"] == clinic_id:
-            MOCK_CLINICS[i].update({
-                **clinic_data,
-                "updated_at": datetime.now().isoformat()
-            })
-            return MOCK_CLINICS[i]
-    
-    raise HTTPException(status_code=404, detail="Clinic not found")
-
-@router.patch("/clinics/{clinic_id}/status")
-async def toggle_clinic_status(
-    clinic_id: str,
-    status_data: dict,  # {"status": "Active" | "Inactive"}
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db)
-):
-    """Toggle clinic status"""
-    # TODO: Replace with actual implementation
-    
-    # Check access
-    if (MOCK_CURRENT_USER["role"] == "clinic_admin" and 
-        MOCK_CURRENT_USER["clinicId"] != clinic_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only update your assigned clinic"
-        )
-    
-    # Find and update clinic status
-    for clinic in MOCK_CLINICS:
-        if clinic["id"] == clinic_id:
-            clinic["status"] = status_data["status"]
-            clinic["updated_at"] = datetime.now().isoformat()
-            return {"message": "Status updated successfully", "status": clinic["status"]}
-    
-    raise HTTPException(status_code=404, detail="Clinic not found")
-
-@router.delete("/clinics/{clinic_id}")
-async def delete_clinic(
-    clinic_id: str,
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db)
-):
-    """Delete a clinic (Super Admin only)"""
-    # TODO: Replace with actual implementation
-    
-    # Check if user is super admin
-    if MOCK_CURRENT_USER["role"] != "superadmin":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Only super admins can delete clinics"
-        )
-    
-    # Find and remove clinic
-    for i, clinic in enumerate(MOCK_CLINICS):
-        if clinic["id"] == clinic_id:
-            MOCK_CLINICS.pop(i)
-            return {"message": "Clinic deleted successfully"}
-    
-    raise HTTPException(status_code=404, detail="Clinic not found")
-
-@router.get("/clinics/stats/summary")
-async def get_clinics_summary_stats(
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db)
-):
-    """Get summary statistics for all accessible clinics"""
-    # TODO: Replace with actual implementation
-    
-    # Filter based on user role
-    clinics = MOCK_CLINICS
-    if MOCK_CURRENT_USER["role"] == "clinic_admin" and MOCK_CURRENT_USER["clinicId"]:
-        clinics = [c for c in clinics if c["id"] == MOCK_CURRENT_USER["clinicId"]]
-    
-    return {
-        "totalClinics": len(clinics),
-        "activeClinics": len([c for c in clinics if c["status"] == "Active"]),
-        "inactiveClinics": len([c for c in clinics if c["status"] == "Inactive"]),
-        "totalDoctors": sum(c["doctors"] for c in clinics),
-        "totalPatients": sum(c["patients"] for c in clinics),
-        "citiesCount": len(set(c["city"] for c in clinics)),
-        "cities": list(set(c["city"] for c in clinics))
-    }
-
-@router.get("/clinics/{clinic_id}/departments")
-async def get_clinic_departments(
-    clinic_id: str,
-    # current_user: dict = Depends(get_current_user),
-    # db: Session = Depends(get_db)
-):
-    """Get departments for a specific clinic"""
-    # TODO: Replace with actual implementation
-    
-    # Check access
-    if (MOCK_CURRENT_USER["role"] == "clinic_admin" and 
-        MOCK_CURRENT_USER["clinicId"] != clinic_id):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="You can only access your assigned clinic"
-        )
-    
-    # Find clinic
-    clinic = next((c for c in MOCK_CLINICS if c["id"] == clinic_id), None)
-    if not clinic:
-        raise HTTPException(status_code=404, detail="Clinic not found")
-    
-    # Return departments with mock details
-    departments_detail = []
-    for dept in clinic["departments"]:
-        departments_detail.append({
-            "id": f"dept-{uuid.uuid4().hex[:8]}",
-            "name": dept,
-            "clinicId": clinic_id,
-            "staff": 10 + len(dept),  # Mock calculation
-            "patients": 50 + len(dept) * 10,  # Mock calculation
-            "status": "Active"
-        })
-    
-    return departments_detail

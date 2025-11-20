@@ -2,7 +2,23 @@ import React, { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, X, Search, User, Settings, LogOut } from 'lucide-react'
 
-const getUserInitials = () => "SR" // or any dummy initials
+const getUserInitials = () => {
+  // Try to get user info from localStorage
+  const userInfo = localStorage.getItem('user')
+  if (userInfo) {
+    try {
+      const user = JSON.parse(userInfo)
+      const firstName = user.firstName || user.first_name || ''
+      const lastName = user.lastName || user.last_name || ''
+      if (firstName && lastName) {
+        return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
+      }
+    } catch (e) {
+      console.error('Failed to parse user info:', e)
+    }
+  }
+  return "SR" // fallback
+}
 
 export const ReceptionistHeader = () => {
   const location = useLocation()
@@ -44,13 +60,13 @@ export const ReceptionistHeader = () => {
           </Link>
         </div>
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex space-x-4 lg:space-x-6">
+        {/* Navigation */}
+        <nav className="flex overflow-x-auto whitespace-nowrap space-x-4 lg:space-x-6">
           {navigationItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`text-white font-medium py-1 hover:border-b-2 hover:border-white transition-all text-sm lg:text-base ${isActive(item.path)}`}
+              className={`shrink-0 text-white font-medium py-1 px-2 hover:border-b-2 hover:border-white transition-all text-sm lg:text-base ${isActive(item.path)}`}
             >
               {item.name}
             </Link>

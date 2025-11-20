@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from './Header';
+import { doctorsAPI, doctorSettingsAPI } from '../../services/apiService';
 import {
   FiUser, FiBell, FiLock, FiCalendar, FiCamera,
   FiMail, FiSmartphone, FiToggleRight, FiToggleLeft,
@@ -34,12 +35,14 @@ const DoctorSettings = () => {
   });
 
   const [security, setSecurity] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: '',
     twoFactorEnabled: false,
     loginAlerts: true,
-    sessionTimeout: '30'
+    sessionTimeout: '30',
+    passwordExpiryDays: 90,
+    maxFailedAttempts: 5,
+    lockoutDurationMinutes: 15,
+    requireStrongPassword: true,
+    sessionConcurrencyLimit: 3
   });
 
   const [availability, setAvailability] = useState({
@@ -65,33 +68,52 @@ const DoctorSettings = () => {
   ];
 
   useEffect(() => {
-    const fetchProfile = async () => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        const res = await fetch('/api/doctor/profile');
-        if (!res.ok) throw new Error('Failed to fetch profile');
-        const data = await res.json();
-        setProfile(data);
-      } catch (err) {
-        console.error('Error fetching profile:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
+        const [prof, settings] = await Promise.all([
+          doctorsAPI.getProfile().catch(() => null),
+          doctorSettingsAPI.getSettings().catch(() => null)
+        ])
 
-    fetchProfile();
-  }, []);
+        if (prof) {
+          // Extract data from wrapped response
+          const profileData = prof.data || prof
+          setProfile({
+            fullName: profileData.fullName || '',
+            email: profileData.email || '',
+            phone: profileData.phone || '',
+            specialty: profileData.specialty || '',
+            licenseNumber: profileData.licenseNumber || '',
+            organization: profileData.organization || '',
+            bio: profileData.bio || '',
+            address: profileData.address || '',
+            profileImage: profileData.profileImage || null,
+          })
+        }
+
+        if (settings) {
+          setNotifications(settings.notifications || notifications)
+          // Remove password fields from security settings
+          const { currentPassword, newPassword, confirmPassword, ...cleanSecurity } = settings.security || security
+          setSecurity(cleanSecurity)
+          setAvailability(settings.availability || availability)
+        }
+      } catch (err) {
+        console.error('Error fetching settings:', err)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchData()
+  }, [])
 
   const handleSaveProfile = async () => {
     setLoading(true);
     setSaveStatus('');
     try {
-      const res = await fetch('/api/doctor/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(profile)
-      });
-      if (!res.ok) throw new Error('Save failed');
+      await doctorsAPI.updateProfile(profile)
       setSaveStatus('success');
       setTimeout(() => setSaveStatus(''), 3000);
     } catch (err) {
@@ -101,6 +123,51 @@ const DoctorSettings = () => {
       setLoading(false);
     }
   };
+
+  const handleSaveNotifications = async () => {
+    setLoading(true)
+    setSaveStatus('')
+    try {
+      await doctorSettingsAPI.saveNotifications(notifications)
+      setSaveStatus('success')
+      setTimeout(() => setSaveStatus(''), 3000)
+    } catch (err) {
+      console.error('Error saving notifications:', err)
+      setSaveStatus('error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSaveSecurity = async () => {
+    setLoading(true)
+    setSaveStatus('')
+    try {
+      await doctorSettingsAPI.saveSecurity(security)
+      setSaveStatus('success')
+      setTimeout(() => setSaveStatus(''), 3000)
+    } catch (err) {
+      console.error('Error saving security:', err)
+      setSaveStatus('error')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleSaveAvailability = async () => {
+    setLoading(true)
+    setSaveStatus('')
+    try {
+      await doctorSettingsAPI.saveAvailability(availability)
+      setSaveStatus('success')
+      setTimeout(() => setSaveStatus(''), 3000)
+    } catch (err) {
+      console.error('Error saving availability:', err)
+      setSaveStatus('error')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -326,52 +393,21 @@ const DoctorSettings = () => {
             </select>
           </div>
         </div>
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={handleSaveNotifications}
+            disabled={loading}
+            className="px-6 py-2 bg-[#5ACCC3] text-white rounded-lg font-medium hover:bg-[#4BB5AC] transition disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : 'Save Preferences'}
+          </button>
+        </div>
       </div>
     </div>
   )
 
   const renderSecuritySettings = () => (
     <div className="space-y-6">
-      <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Change Password</h3>
-        
-        <div className="space-y-4 max-w-md">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
-            <input
-              type="password"
-              value={security.currentPassword}
-              onChange={(e) => setSecurity({ ...security, currentPassword: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
-            <input
-              type="password"
-              value={security.newPassword}
-              onChange={(e) => setSecurity({ ...security, newPassword: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
-            <input
-              type="password"
-              value={security.confirmPassword}
-              onChange={(e) => setSecurity({ ...security, confirmPassword: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
-            />
-          </div>
-          
-          <button className="px-6 py-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition">
-            Update Password
-          </button>
-        </div>
-      </div>
-      
       <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
         <h3 className="text-lg font-semibold text-gray-800 mb-4">Security Settings</h3>
         
@@ -422,6 +458,79 @@ const DoctorSettings = () => {
               <option value="0">Never</option>
             </select>
           </div>
+          
+          <div className="py-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Password Expiry (Days)</label>
+            <input
+              type="number"
+              value={security.passwordExpiryDays}
+              onChange={(e) => setSecurity({ ...security, passwordExpiryDays: parseInt(e.target.value) })}
+              min="30"
+              max="365"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+            />
+          </div>
+          
+          <div className="py-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Max Failed Login Attempts</label>
+            <input
+              type="number"
+              value={security.maxFailedAttempts}
+              onChange={(e) => setSecurity({ ...security, maxFailedAttempts: parseInt(e.target.value) })}
+              min="3"
+              max="10"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+            />
+          </div>
+          
+          <div className="py-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Lockout Duration (Minutes)</label>
+            <input
+              type="number"
+              value={security.lockoutDurationMinutes}
+              onChange={(e) => setSecurity({ ...security, lockoutDurationMinutes: parseInt(e.target.value) })}
+              min="5"
+              max="60"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+            />
+          </div>
+          
+          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+            <div>
+              <p className="font-medium text-gray-700">Require Strong Password</p>
+              <p className="text-sm text-gray-500">Enforce complex password requirements</p>
+            </div>
+            <button
+              onClick={() => setSecurity({ ...security, requireStrongPassword: !security.requireStrongPassword })}
+              className="text-4xl"
+            >
+              {security.requireStrongPassword ? 
+                <FiToggleRight className="text-[#5ACCC3]" /> : 
+                <FiToggleLeft className="text-gray-400" />
+              }
+            </button>
+          </div>
+          
+          <div className="py-3">
+            <label className="block text-sm font-medium text-gray-700 mb-2">Session Concurrency Limit</label>
+            <input
+              type="number"
+              value={security.sessionConcurrencyLimit}
+              onChange={(e) => setSecurity({ ...security, sessionConcurrencyLimit: parseInt(e.target.value) })}
+              min="1"
+              max="10"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+            />
+          </div>
+        </div>
+        <div className="mt-6 flex justify-end">
+          <button
+            onClick={handleSaveAvailability}
+            disabled={loading}
+            className="px-6 py-2 bg-[#5ACCC3] text-white rounded-lg font-medium hover:bg-[#4BB5AC] transition disabled:opacity-50"
+          >
+            {loading ? 'Saving...' : 'Save Availability'}
+          </button>
         </div>
       </div>
     </div>
@@ -633,7 +742,12 @@ const DoctorSettings = () => {
           </div>
           
           <button
-            onClick={handleSaveProfile}
+            onClick={() => {
+              if (activeTab === 'profile') return handleSaveProfile()
+              if (activeTab === 'notifications') return handleSaveNotifications()
+              if (activeTab === 'security') return handleSaveSecurity()
+              if (activeTab === 'availability') return handleSaveAvailability()
+            }}
             disabled={loading}
             className="flex items-center px-6 py-3 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >

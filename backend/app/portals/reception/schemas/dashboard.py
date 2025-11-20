@@ -4,7 +4,7 @@ from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field
 
-from app.common.schemas.base import Priority, NotificationType
+from app.common.schemas.base_enhanced import Priority, NotificationType
 
 
 # ============================= Dashboard Components =============================
@@ -27,6 +27,9 @@ class UpcomingAppointment(BaseModel):
     doctor: str
     type: str
     status: str
+    patient_id: Optional[str] = None
+    appointment_id: Optional[str] = None
+    date: Optional[str] = None  # Formatted date string (e.g., "15 Jan 2025")
     
     class Config:
         from_attributes = True

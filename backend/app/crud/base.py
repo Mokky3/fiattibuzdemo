@@ -198,7 +198,7 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         
         # Handle UUID generation if needed
         if hasattr(self.model, 'id') and 'id' not in obj_in_data:
-            obj_in_data['id'] = uuid.uuid4()
+            obj_in_data['id'] = str(uuid.uuid4())  # Convert UUID to string for SQLite compatibility
         
         # Set created_at if exists and not provided
         if hasattr(self.model, 'created_at') and 'created_at' not in obj_in_data:

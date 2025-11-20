@@ -1,40 +1,38 @@
 import React, { useState, useEffect } from 'react'
 import { ReceptionistHeader } from './ReceptionHeader'
-import { FiUser, FiSettings, FiBell, FiLock, FiSave, FiEdit3, FiMail, FiPhone, FiMapPin, FiCalendar, FiClock, FiEye, FiEyeOff, FiCamera, FiDownload, FiUpload, FiShield, FiMonitor, FiVolume2 } from 'react-icons/fi'
+import { FiUser, FiSettings, FiBell, FiSave, FiEdit3, FiMail, FiPhone, FiMapPin, FiCalendar, FiClock, FiCamera, FiDownload, FiUpload, FiVolume2 } from 'react-icons/fi'
+import { receptionAPI } from '../../services/apiService'
 
 const ReceptionProfile = () => {
   const [isLoaded, setIsLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState('personal')
-  const [showPassword, setShowPassword] = useState(false)
-  const [showCurrentPassword, setShowCurrentPassword] = useState(false)
-  const [showNewPassword, setShowNewPassword] = useState(false)
   const [profileImage, setProfileImage] = useState(null)
   const [unsavedChanges, setUnsavedChanges] = useState(false)
+  const [saveLoading, setSaveLoading] = useState(false)
+  const [saveMessage, setSaveMessage] = useState('')
+  
+  // Recent Activities State
+  const [recentActivities, setRecentActivities] = useState([])
+  const [activitiesLoading, setActivitiesLoading] = useState(false)
 
   // Personal Information State
   const [personalInfo, setPersonalInfo] = useState({
-    firstName: 'Sarah',
-    lastName: 'Roberts',
-    email: 'sarah.roberts@fiattib.com',
-    phone: '+1 (555) 123-4567',
-    address: '123 Medical Center Drive',
-    city: 'Healthcare City',
-    state: 'HC',
-    zipCode: '12345',
-    birthDate: '1985-06-15',
-    employeeId: 'REC001',
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    address: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    birthDate: '',
+    employeeId: '',
     department: 'Reception',
-    startDate: '2020-03-15',
-    emergencyContact: 'John Roberts',
-    emergencyPhone: '+1 (555) 987-6543'
+    startDate: '',
+    emergencyContact: '',
+    emergencyPhone: ''
   })
 
-  // Password Change State
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  })
 
   // Notification Preferences
   const [notifications, setNotifications] = useState({
@@ -61,17 +59,81 @@ const ReceptionProfile = () => {
   })
 
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoaded(true), 100)
-    return () => clearTimeout(timer)
+    const load = async () => {
+      try {
+        console.log('🔄 Loading reception profile...')
+        const token = localStorage.getItem('token')
+        console.log('🔑 Token exists:', !!token)
+        
+        const dto = await receptionAPI.getProfile('default-clinic')
+        console.log('📊 Profile data received:', dto)
+        
+        // Handle both nested and direct profile data structures
+        const profileData = dto?.personalInfo || dto
+        if (profileData) {
+          console.log('✅ Setting personal info from API:', profileData)
+          setPersonalInfo({
+            firstName: profileData.firstName || '',
+            lastName: profileData.lastName || '',
+            email: profileData.email || '',
+            phone: profileData.phone || '',
+            address: profileData.address || '',
+            city: profileData.city || '',
+            state: profileData.state || '',
+            zipCode: profileData.zipCode || '',
+            birthDate: profileData.birthDate || '',
+            employeeId: profileData.employeeId || '',
+            department: profileData.department || 'Reception',
+            startDate: profileData.startDate || '',
+            emergencyContact: profileData.emergencyContact || '',
+            emergencyPhone: profileData.emergencyPhone || ''
+          })
+        } else {
+          console.log('⚠️ No personal info in response, keeping empty state')
+        }
+        
+        // Handle notifications from API
+        if (dto?.notifications) {
+          console.log('🔔 Setting notifications from API:', dto.notifications)
+          setNotifications(dto.notifications)
+        } else {
+          console.log('🔔 No notifications data from API, keeping defaults')
+        }
+        
+        // Handle system preferences from API
+        if (dto?.systemPrefs || (dto && (dto.timezone || dto.language))) {
+          console.log('⚙️ Setting system preferences from API')
+          const systemData = dto?.systemPrefs || {
+            timezone: dto.timezone,
+            language: dto.language
+          }
+          console.log('⚙️ System preferences data:', systemData)
+          setSystemPrefs(systemData)
+        } else {
+          console.log('⚙️ No system preferences data from API, keeping defaults')
+        }
+        if (dto?.profileImage || dto?.profileImageUrl) {
+          console.log('🖼️ Setting profile image from API')
+          setProfileImage(dto.profileImage || dto.profileImageUrl)
+        }
+        
+        // Load recent activities
+        await loadRecentActivities()
+      } catch (e) {
+        console.error('❌ Failed to load reception profile:', e)
+        console.error('Error details:', e.message)
+        // Show error message to user
+        setSaveMessage('Failed to load profile data. Please check your authentication.')
+      } finally {
+        setIsLoaded(true)
+      }
+    }
+    load()
   }, [])
 
   const handlePersonalInfoChange = (field, value) => {
     setPersonalInfo(prev => ({ ...prev, [field]: value }))
     setUnsavedChanges(true)
-  }
-
-  const handlePasswordChange = (field, value) => {
-    setPasswordData(prev => ({ ...prev, [field]: value }))
   }
 
   const handleNotificationChange = (field, value) => {
@@ -96,26 +158,81 @@ const ReceptionProfile = () => {
     }
   }
 
-  const handleSaveChanges = () => {
-    // API call to save changes
-    console.log('Saving changes...')
-    setUnsavedChanges(false)
-    // Show success message
+  const handleSaveChanges = async () => {
+    setSaveMessage('')
+    setSaveLoading(true)
+    
+    // Send all personal info fields to the backend
+    const dto = {
+      firstName: personalInfo.firstName,
+      lastName: personalInfo.lastName,
+      middleName: personalInfo.middleName || null,
+      phone: personalInfo.phone,
+      email: personalInfo.email || null,
+      address: personalInfo.address || null,
+      city: personalInfo.city || null,
+      state: personalInfo.state || null,
+      zipCode: personalInfo.zipCode || null,
+      birthDate: personalInfo.birthDate || null,
+      employeeId: personalInfo.employeeId || null,
+      department: personalInfo.department || null,
+      startDate: personalInfo.startDate || null,
+      emergencyContact: personalInfo.emergencyContact || null,
+      emergencyPhone: personalInfo.emergencyPhone || null,
+      timezone: systemPrefs.timezone || null,
+      language: systemPrefs.language || null,
+      notifications: notifications,
+      systemPrefs: systemPrefs
+    }
+    
+        try {
+          await receptionAPI.updateProfile(dto, 'default-clinic')
+          setUnsavedChanges(false)
+          setSaveMessage('Changes saved')
+        } catch (e) {
+          console.error('Failed to save profile', e)
+          setSaveMessage('Failed to save changes')
+        }
+    setSaveLoading(false)
   }
 
-  const handlePasswordUpdate = () => {
-    if (passwordData.newPassword !== passwordData.confirmPassword) {
-      alert('New passwords do not match')
-      return
+
+  // Load recent activities
+  const loadRecentActivities = async () => {
+    try {
+      setActivitiesLoading(true)
+      const activities = await receptionAPI.getRecentActivities(10, 168) // Last 7 days
+      setRecentActivities(activities || [])
+    } catch (error) {
+      console.error('Failed to load recent activities:', error)
+      setRecentActivities([])
+    } finally {
+      setActivitiesLoading(false)
     }
-    // API call to update password
-    console.log('Updating password...')
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' })
+  }
+
+  // Format activity time
+  const formatActivityTime = (timeString) => {
+    if (!timeString) return 'Recently'
+    
+    try {
+      const time = new Date(timeString)
+      const now = new Date()
+      const diffMs = now - time
+      const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+      const diffDays = Math.floor(diffHours / 24)
+      
+      if (diffHours < 1) return 'Just now'
+      if (diffHours < 24) return `${diffHours}h ago`
+      if (diffDays < 7) return `${diffDays}d ago`
+      return time.toLocaleDateString()
+    } catch (error) {
+      return 'Recently'
+    }
   }
 
   const tabs = [
     { id: 'personal', label: 'Personal Info', icon: <FiUser /> },
-    { id: 'security', label: 'Security', icon: <FiLock /> },
     { id: 'notifications', label: 'Notifications', icon: <FiBell /> },
     { id: 'preferences', label: 'Preferences', icon: <FiSettings /> }
   ]
@@ -124,37 +241,25 @@ const ReceptionProfile = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
       <ReceptionistHeader />
 
-      <div className={`max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-8 transition-all duration-700 transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}>
+      <div className={`max-w-screen-2xl mx-auto px-2 sm:px-4 py-6 sm:py-10 transition-all duration-700 transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}>
         
-        {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
-          <h2 className="text-2xl font-bold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">Profile Settings</h2>
-          
-          {unsavedChanges && (
-            <div className="flex items-center space-x-4">
-              <span className="text-orange-600 text-sm">You have unsaved changes</span>
-              <button 
-                onClick={handleSaveChanges}
-                className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
-              >
-                <FiSave className="text-sm" />
-                <span>Save Changes</span>
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-col lg:flex-row gap-8">
-          {/* Profile Summary Card */}
-          <div className="lg:w-1/4">
-            <div className="bg-white p-6 rounded-xl shadow border border-gray-100 sticky top-24">
-              <div className="text-center">
+        <div className="flex flex-row gap-4 sm:gap-6">
+          {/* Fixed Width Left Sidebar - Reception Information */}
+          <div className="w-80 flex-shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 h-fit sticky top-6">
+            <div className="p-4 sm:p-6">
+              <div className="text-center mb-6">
                 <div className="relative inline-block mb-4">
                   <div className="w-24 h-24 rounded-full bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] flex items-center justify-center text-white text-2xl font-bold overflow-hidden">
                     {profileImage ? (
                       <img src={profileImage} alt="Profile" className="w-full h-full object-cover" />
                     ) : (
-                      `${personalInfo.firstName[0]}${personalInfo.lastName[0]}`
+                      <span>
+                        {(() => {
+                          const first = personalInfo.firstName?.[0] || '';
+                          const last = personalInfo.lastName?.[0] || '';
+                          return first + last || 'R';
+                        })()}
+                      </span>
                     )}
                   </div>
                   <label className="absolute bottom-0 right-0 bg-white p-1 rounded-full shadow-lg cursor-pointer hover:bg-gray-50">
@@ -162,30 +267,81 @@ const ReceptionProfile = () => {
                     <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                   </label>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800">{personalInfo.firstName} {personalInfo.lastName}</h3>
-                <p className="text-sm text-gray-600 mb-1">{personalInfo.department}</p>
-                <p className="text-xs text-gray-500">Employee ID: {personalInfo.employeeId}</p>
-                
-                <div className="mt-4 pt-4 border-t border-gray-200">
-                  <div className="text-xs text-gray-500 space-y-2">
+                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                  {personalInfo.firstName || personalInfo.lastName 
+                    ? `${personalInfo.firstName || ''} ${personalInfo.lastName || ''}`.trim()
+                    : 'Receptionist'}
+                </h3>
+                <p className="text-sm text-gray-600 mb-1">{personalInfo.department || 'Reception'}</p>
+                {personalInfo.employeeId && (
+                  <p className="text-xs text-gray-500">Employee ID: {personalInfo.employeeId}</p>
+                )}
+              </div>
+              
+              {/* Information Box */}
+              <div className="border-t border-gray-200 pt-6">
+                <h4 className="text-sm font-semibold text-gray-800 mb-4">Information</h4>
+                <div className="space-y-3 text-sm">
+                  {personalInfo.startDate && (
                     <div className="flex items-center justify-between">
-                      <span>Start Date:</span>
-                      <span className="font-medium">{new Date(personalInfo.startDate).toLocaleDateString()}</span>
+                      <span className="text-gray-600">Start Date:</span>
+                      <span className="font-medium text-gray-800">
+                        {new Date(personalInfo.startDate).toLocaleDateString()}
+                      </span>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span>Status:</span>
-                      <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs">Active</span>
-                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span className="text-gray-600">Status:</span>
+                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">Active</span>
                   </div>
+                  {personalInfo.email && (
+                    <div className="flex items-center space-x-2 pt-2 border-t border-gray-100">
+                      <FiMail className="text-gray-400 text-xs" />
+                      <span className="text-xs text-gray-600 truncate">{personalInfo.email}</span>
+                    </div>
+                  )}
+                  {personalInfo.phone && (
+                    <div className="flex items-center space-x-2">
+                      <FiPhone className="text-gray-400 text-xs" />
+                      <span className="text-xs text-gray-600">{personalInfo.phone}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Main Content */}
-          <div className="lg:w-3/4">
+          {/* Main Content Area */}
+          <div className="flex-1 min-w-0 w-full">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
+              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">Profile Settings</h2>
+              
+              {!isLoaded && (
+                <div className="flex items-center space-x-2 text-blue-600">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span className="text-sm">Loading profile...</span>
+                </div>
+              )}
+              
+              {(unsavedChanges || saveMessage) && (
+                <div className="flex items-center space-x-4">
+                  {unsavedChanges && <span className="text-orange-600 text-sm">You have unsaved changes</span>}
+                  {saveMessage && <span className={`text-sm ${saveMessage.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>{saveMessage}</span>}
+                  <button 
+                    onClick={handleSaveChanges}
+                    disabled={saveLoading}
+                    className="bg-[#4DB6B0] hover:bg-[#5ACCC3] disabled:bg-[#4DB6B0]/60 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                  >
+                    <FiSave className="text-sm" />
+                    <span>{saveLoading ? 'Saving...' : 'Save Changes'}</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* Tabs */}
-            <div className="bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="border-b border-gray-200">
                 <nav className="flex space-x-8 px-6">
                   {tabs.map((tab) => (
@@ -320,95 +476,6 @@ const ReceptionProfile = () => {
                   </div>
                 )}
 
-                {/* Security Tab */}
-                {activeTab === 'security' && (
-                  <div className="space-y-6">
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                        <FiLock className="text-[#4DB6B0]" />
-                        <span>Password & Security</span>
-                      </h3>
-                      
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-                        <div className="flex items-center space-x-2">
-                          <FiShield className="text-blue-600" />
-                          <span className="text-sm text-blue-800 font-medium">Security Status: Strong</span>
-                        </div>
-                        <p className="text-xs text-blue-600 mt-1">Last password change: 30 days ago</p>
-                      </div>
-
-                      <div className="space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
-                          <div className="relative">
-                            <input
-                              type={showCurrentPassword ? "text" : "password"}
-                              value={passwordData.currentPassword}
-                              onChange={(e) => handlePasswordChange('currentPassword', e.target.value)}
-                              className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowCurrentPassword(!showCurrentPassword)}
-                              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                              {showCurrentPassword ? <FiEyeOff /> : <FiEye />}
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
-                          <div className="relative">
-                            <input
-                              type={showNewPassword ? "text" : "password"}
-                              value={passwordData.newPassword}
-                              onChange={(e) => handlePasswordChange('newPassword', e.target.value)}
-                              className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => setShowNewPassword(!showNewPassword)}
-                              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                            >
-                              {showNewPassword ? <FiEyeOff /> : <FiEye />}
-                            </button>
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
-                          <input
-                            type="password"
-                            value={passwordData.confirmPassword}
-                            onChange={(e) => handlePasswordChange('confirmPassword', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-                          />
-                        </div>
-                        <button
-                          onClick={handlePasswordUpdate}
-                          className="bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white px-6 py-2 rounded-lg transition-colors"
-                        >
-                          Update Password
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="border-t border-gray-200 pt-6">
-                      <h4 className="text-md font-semibold text-gray-800 mb-4">Login Activity</h4>
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                          <div className="flex items-center space-x-3">
-                            <FiMonitor className="text-gray-600" />
-                            <div>
-                              <p className="text-sm font-medium text-gray-800">Desktop - Chrome</p>
-                              <p className="text-xs text-gray-500">Current session</p>
-                            </div>
-                          </div>
-                          <span className="text-xs text-green-600 bg-green-100 px-2 py-1 rounded-full">Active</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {/* Notifications Tab */}
                 {activeTab === 'notifications' && (
@@ -455,7 +522,7 @@ const ReceptionProfile = () => {
                                 <div className="flex items-center space-x-3">
                                   {key === 'emailNotifications' && <FiMail className="text-gray-600" />}
                                   {key === 'smsNotifications' && <FiPhone className="text-gray-600" />}
-                                  {key === 'desktopNotifications' && <FiMonitor className="text-gray-600" />}
+                                  {key === 'desktopNotifications' && <FiBell className="text-gray-600" />}
                                   {key === 'soundAlerts' && <FiVolume2 className="text-gray-600" />}
                                   <span className="text-sm text-gray-700">{label}</span>
                                 </div>
@@ -601,92 +668,6 @@ const ReceptionProfile = () => {
                     </button>
                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Activity Log Card */}
-        <div className="mt-8 bg-white rounded-xl shadow border border-gray-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-800">Recent Activity</h3>
-          </div>
-          <div className="divide-y divide-gray-200">
-            {[
-              { action: 'Profile updated', time: '2 hours ago', details: 'Phone number changed' },
-              { action: 'Password changed', time: '1 week ago', details: 'Security update completed' },
-              { action: 'Notification settings modified', time: '2 weeks ago', details: 'Email preferences updated' },
-              { action: 'Profile photo uploaded', time: '1 month ago', details: 'New profile image added' }
-            ].map((activity, index) => (
-              <div key={index} className="px-6 py-4 hover:bg-gray-50 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-2 h-2 bg-[#4DB6B0] rounded-full"></div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{activity.action}</p>
-                      <p className="text-xs text-gray-500">{activity.details}</p>
-                    </div>
-                  </div>
-                  <span className="text-xs text-gray-400">{activity.time}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="px-6 py-3 bg-gray-50 text-center">
-            <button className="text-sm text-[#4DB6B0] hover:text-[#5ACCC3] font-medium">
-              View All Activity
-            </button>
-          </div>
-        </div>
-
-        {/* Help & Support Section */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Need Help?</h3>
-            <div className="space-y-3">
-              <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-[#4DB6B0] hover:bg-gray-50 transition-colors">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center">
-                    📚
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">User Guide</p>
-                    <p className="text-xs text-gray-500">Learn how to use the system</p>
-                  </div>
-                </div>
-              </button>
-              <button className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-[#4DB6B0] hover:bg-gray-50 transition-colors">
-                <div className="flex items-center space-x-3">
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    💬
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-800">Contact Support</p>
-                    <p className="text-xs text-gray-500">Get help from our team</p>
-                  </div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">System Information</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Version</span>
-                <span className="text-sm font-medium text-gray-800">FIATTIB v2.1.0</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Last Update</span>
-                <span className="text-sm font-medium text-gray-800">March 15, 2024</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">License</span>
-                <span className="text-sm font-medium text-gray-800">Professional</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Support Until</span>
-                <span className="text-sm font-medium text-gray-800">March 2025</span>
               </div>
             </div>
           </div>

@@ -29,14 +29,14 @@ class UserStatisticsService:
         appointments_this_month = self.db.query(UserActivity).filter(
             UserActivity.user_id == user_id,
             UserActivity.activity_type == "appointment",
-            UserActivity.timestamp >= start_of_month
+            UserActivity.created_at >= start_of_month
         ).count()
         
         appointments_last_month = self.db.query(UserActivity).filter(
             UserActivity.user_id == user_id,
             UserActivity.activity_type == "appointment",
-            UserActivity.timestamp >= start_of_last_month,
-            UserActivity.timestamp < start_of_month
+            UserActivity.created_at >= start_of_last_month,
+            UserActivity.created_at < start_of_month
         ).count()
         
         appointments_trend = self._calculate_trend(appointments_this_month, appointments_last_month)
@@ -50,14 +50,14 @@ class UserStatisticsService:
         prescriptions_this_month = self.db.query(UserActivity).filter(
             UserActivity.user_id == user_id,
             UserActivity.activity_type == "prescription",
-            UserActivity.timestamp >= start_of_month
+            UserActivity.created_at >= start_of_month
         ).count()
         
         prescriptions_last_month = self.db.query(UserActivity).filter(
             UserActivity.user_id == user_id,
             UserActivity.activity_type == "prescription",
-            UserActivity.timestamp >= start_of_last_month,
-            UserActivity.timestamp < start_of_month
+            UserActivity.created_at >= start_of_last_month,
+            UserActivity.created_at < start_of_month
         ).count()
         
         prescriptions_trend = self._calculate_trend(prescriptions_this_month, prescriptions_last_month)

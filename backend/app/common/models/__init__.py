@@ -10,7 +10,7 @@ from .user import (
 # Healthcare provider models
 from .doctor import (
     Doctor, ConsultationType, DoctorScheduleTemplate, 
-    DoctorScheduleException, ClinicalNote
+    DoctorScheduleException, ClinicalNote, GeneralReport
 )
 from .nurse import (
     Nurse, NurseSpecialty, NurseRole, NurseShiftAssignment, 
@@ -53,7 +53,7 @@ from .clinical import (
 from .medical import (
     MedicalRecord, RecordType, RecordStatus, DocumentReference,
     DocumentStatus, DocumentType, ClinicalImpression, ClinicalImpressionStatus,
-    CarePlan, VitalSign
+    CarePlan, VitalSign, MedicationAdministration
 )
 
 # Appointment and encounter models
@@ -74,11 +74,27 @@ from .prescription import (
 
 # Laboratory and insurance models
 from .lab_insurance import (
-    LabOrder, ServiceRequestStatus, ServiceRequestIntent, ServiceRequestPriority,
-    LabResult, LabResultStatus, AbnormalityType, SpecimenType,
+    LabOrder as InsuranceLabOrder,
+    ServiceRequestStatus, ServiceRequestIntent, ServiceRequestPriority,
+    LabResult as InsuranceLabResult,
+    LabResultStatus, AbnormalityType, SpecimenType,
+    LabReport as InsuranceLabReport,
     LabResultNotification,
     Insurance, InsuranceStatus, CoverageType, InsuranceClaim, ClaimStatus,
     ClaimLineItem, InsuranceAuthorization
+)
+
+# Lab settings models
+from .lab_settings import (
+    LabSettings, LabEquipmentInstrument
+)
+
+# Medication reference models
+from .medication_ref import (
+    Unit, Route, DosageForm, Manufacturer, MNN, CategoryTag,
+    MedicationProduct, MedicationProductSynonym, MedicationProductCategory,
+    MedicationPresentation, MedicationPrice,
+    DrugCatalogRaw, PriceRaw,
 )
 
 
@@ -96,6 +112,11 @@ from .notification import (
 )
 from .log_ses import LoginSession
 
+# Messaging models
+from .messaging import (
+    Message, MessageAttachment, MessageTemplate, SystemNotification, Todo, MessagePriority
+)
+
 # Association tables
 from .doctor import doctor_hospitals, doctor_departments
 
@@ -108,8 +129,8 @@ __all__ = [
     "UserActivity", "UserSettings", "Permission", "RolePermission",
     
     # Healthcare providers
-    "Doctor", "ConsultationType", "DoctorScheduleTemplate",
-    "DoctorScheduleException", "ClinicalNote",
+    "Doctor", "ConsultationType", "DoctorScheduleTemplate", 
+    "DoctorScheduleException", "ClinicalNote", "GeneralReport",
     "Nurse", "NurseSpecialty", "NurseRole", "NurseShiftAssignment",
     "NursePatientAssignment",
     "Practitioner", "PractitionerStatus", "PractitionerRole", "Specialty",
@@ -138,7 +159,7 @@ __all__ = [
     "FamilyMemberHistory", "FamilyMemberCondition",
     "MedicalRecord", "RecordType", "RecordStatus", "DocumentReference",
     "DocumentStatus", "DocumentType", "ClinicalImpression", "ClinicalImpressionStatus",
-    "CarePlan", "VitalSign",
+    "CarePlan", "VitalSign", "MedicationAdministration",
     
     # Appointments
     "Appointment", "AppointmentStatus", "AppointmentType", "AppointmentPriority",
@@ -153,11 +174,14 @@ __all__ = [
     "Pharmacy", "PharmacyPrescriptionPrice",
     
     # Laboratory and Insurance
-    "LabOrder", "ServiceRequestStatus", "ServiceRequestIntent", "ServiceRequestPriority",
-    "LabResult", "LabResultStatus", "AbnormalityType", "SpecimenType",
+    "InsuranceLabOrder", "ServiceRequestStatus", "ServiceRequestIntent", "ServiceRequestPriority",
+    "InsuranceLabResult", "LabResultStatus", "AbnormalityType", "SpecimenType", "InsuranceLabReport",
     "LabResultNotification", 
     "Insurance", "InsuranceStatus", "CoverageType", "InsuranceClaim", "ClaimStatus",
     "ClaimLineItem", "InsuranceAuthorization",
+    
+    # Lab Settings
+    "LabSettings", "LabEquipmentInstrument",
     
     # Financial
     "ChargeItem", "ChargeItemStatus", "ChargeItemModifier", "DiscountType",
@@ -165,10 +189,13 @@ __all__ = [
     "PaymentMethod", "FinancialTransaction",
     
     # Support
-    \
+    
     "Notification", "NotificationType", "NotificationChannel", "NotificationPriority",
     "NotificationStatus", "NotificationTemplate", "NotificationPreference",
     "LoginSession",
+    
+    # Messaging
+    "Message", "MessageAttachment", "MessageTemplate", "SystemNotification", "Todo", "MessagePriority",
     
     # Association tables
     "doctor_hospitals", "doctor_departments",

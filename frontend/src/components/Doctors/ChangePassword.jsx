@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { Header } from './Header' // adjust if needed
-import axios from 'axios'
+import { doctorSettingsAPI } from '../../services/apiService'
 
 const ChangePassword = () => {
   const [oldPassword, setOldPassword] = useState('')
@@ -17,19 +17,11 @@ const ChangePassword = () => {
     }
 
     try {
-      const token = localStorage.getItem('token')
-      const response = await axios.post(
-        '/api/doctor/change-password',
-        {
-          old_password: oldPassword,
-          new_password: newPassword
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      )
+      await doctorSettingsAPI.changePassword({
+        currentPassword: oldPassword,
+        newPassword: newPassword,
+        confirmPassword: confirmPassword
+      })
       setMessage({ type: 'success', text: 'Password updated successfully.' })
       setOldPassword('')
       setNewPassword('')

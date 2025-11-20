@@ -1,235 +1,183 @@
 from fastapi import APIRouter, Depends, Body, HTTPException
 from pydantic import BaseModel
-from typing import List
+from typing import List, Dict
 from .auth import get_current_doctor, DoctorUser
-
-router = APIRouter(prefix="/api/doctor/settings", tags=["Doctor · Settings"])
-
-# ─── Models matching frontend exactly ──────────────────────────
-class Notifications(BaseModel):
-    emailNotifications: bool
-    smsNotifications: bool
-    appointmentReminders: bool
-    patientMessages: bool
-    systemUpdates: bool
-    marketingEmails: bool
-    reminderTiming: str         # e.g. "1hour"
-
-class Security(BaseModel):
-    currentPassword: str = ""
-    newPassword: str = ""
-    confirmPassword: str = ""
-    twoFactorEnabled: bool
-    loginAlerts: bool
-    sessionTimeout: str         # minutes as string: "15" | "30" | …
-
-class WorkingHours(BaseModel):
-    start: str                  # "09:00"
-    end: str                    # "17:00"
-
-class LunchBreak(BaseModel):
-    enabled: bool
-    start: str
-    end: str
-
-class Availability(BaseModel):
-    workingDays: List[str]      # ["monday", "tuesday", …]
-    workingHours: WorkingHours
-    lunchBreak: LunchBreak
-    consultationDuration: str   # "30"
-    bufferTime: str             # "10"
-
-class PasswordChange(BaseModel):
-    currentPassword: str
-    newPassword: str
-    confirmPassword: str
-
-class AllSettings(BaseModel):
-    """Combined settings model for bulk save"""
-    notifications: Notifications
-    security: Security
-    availability: Availability
-
-# ─── In-memory store (swap for DB later) ────────────────────────
-_NOTIF = Notifications(
-    emailNotifications=True, 
-    smsNotifications=False,
-    appointmentReminders=True, 
-    patientMessages=True,
-    systemUpdates=True, 
-    marketingEmails=False,
-    reminderTiming="1hour",
+from app.common.schemas.responses_enhanced import SuccessResponse
+from app.common.schemas.user_enhanced import (
+    NotificationSettings,
+    SecuritySettings,
+    WorkingHours,
+    LunchBreak,
+    AvailabilitySettings,
+    AllSettings,
+    PasswordChange,
 )
+from sqlalchemy.orm import Session
+from app.db.session import get_db
+from app.crud.admin import admin as admin_crud
 
-_SEC = Security(
-    twoFactorEnabled=False, 
-    loginAlerts=True, 
-    sessionTimeout="30"
-)
+router = APIRouter(prefix="/settings", tags=["Doctor · Settings"])
 
-_AVAIL = Availability(
-    workingDays=["monday", "tuesday", "wednesday", "thursday", "friday"],
-    workingHours=WorkingHours(start="09:00", end="17:00"),
-    lunchBreak=LunchBreak(enabled=True, start="12:00", end="13:00"),
-    consultationDuration="30",
-    bufferTime="10",
-)
+# Storage keys per user
+_DEF_KEY = lambda user_id: f"doctor.settings.{user_id}"
 
 # ─── All Settings (for frontend bulk operations) ───────────────
-@router.get("", response_model=AllSettings)
-async def get_all_settings(_: DoctorUser = Depends(get_current_doctor)):
-    """Get all settings at once"""
-    return AllSettings(
-        notifications=_NOTIF,
-        security=_SEC,
-        availability=_AVAIL
+@router.get("", response_model=SuccessResponse[AllSettings])
+async def get_all_settings(current: DoctorUser = Depends(get_current_doctor), db: Session = Depends(get_db)):
+    """Get all settings at once from SystemConfig JSON."""
+    bundle = admin_crud.get_config_json(db=db, key=_DEF_KEY(current.id)) or {}
+    data = AllSettings(
+        notifications=NotificationSettings(**bundle.get("notifications", {})),
+        security=SecuritySettings(**bundle.get("security", {})),
+        availability=AvailabilitySettings(**bundle.get("availability", {}))
     )
+    return SuccessResponse(data=data, message="Settings retrieved")
 
-@router.put("", response_model=AllSettings)
+@router.put("", response_model=SuccessResponse[AllSettings])
 async def update_all_settings(
     data: AllSettings = Body(...),
-    _: DoctorUser = Depends(get_current_doctor),
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    """Update all settings at once"""
-    global _NOTIF, _SEC, _AVAIL
-    _NOTIF = data.notifications
-    _SEC = data.security
-    _AVAIL = data.availability
-    return data
+    """Update all settings at once to SystemConfig JSON."""
+    bundle = {
+        "notifications": data.notifications.dict(),
+        "security": data.security.dict(),
+        "availability": data.availability.dict(),
+    }
+    admin_crud.set_config_json(db=db, key=_DEF_KEY(current.id), value=bundle)
+    return SuccessResponse(data=data, message="Settings updated")
 
 # ─── Notification prefs ─────────────────────────────────────────
-@router.get("/notifications", response_model=Notifications)
-async def get_notifications(_: DoctorUser = Depends(get_current_doctor)):
-    return _NOTIF
+@router.get("/notifications", response_model=SuccessResponse[NotificationSettings])
+async def get_notifications(current: DoctorUser = Depends(get_current_doctor), db: Session = Depends(get_db)):
+    bundle = admin_crud.get_config_json(db=db, key=_DEF_KEY(current.id)) or {}
+    notif = NotificationSettings(**bundle.get("notifications", {}))
+    return SuccessResponse(data=notif, message="Notifications retrieved")
 
-@router.put("/notifications", response_model=Notifications)
+@router.put("/notifications", response_model=SuccessResponse[NotificationSettings])
 async def update_notifications(
-    data: Notifications = Body(...),
-    _: DoctorUser = Depends(get_current_doctor),
+    data: NotificationSettings = Body(...),
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    global _NOTIF
-    _NOTIF = data
-    return _NOTIF
+    bundle = admin_crud.get_config_json(db=db, key=_DEF_KEY(current.id)) or {}
+    bundle["notifications"] = data.dict()
+    admin_crud.set_config_json(db=db, key=_DEF_KEY(current.id), value=bundle)
+    return SuccessResponse(data=data, message="Notifications updated")
 
 # ─── Security ───────────────────────────────────────────────────
-@router.get("/security", response_model=Security)
-async def get_security(_: DoctorUser = Depends(get_current_doctor)):
-    return _SEC
+@router.get("/security", response_model=SuccessResponse[SecuritySettings])
+async def get_security(current: DoctorUser = Depends(get_current_doctor), db: Session = Depends(get_db)):
+    bundle = admin_crud.get_config_json(db=db, key=_DEF_KEY(current.id)) or {}
+    sec = SecuritySettings(**bundle.get("security", {}))
+    return SuccessResponse(data=sec, message="Security retrieved")
 
-@router.put("/security", response_model=Security)
+@router.put("/security", response_model=SuccessResponse[SecuritySettings])
 async def update_security(
-    data: Security = Body(...),
-    _: DoctorUser = Depends(get_current_doctor),
+    data: SecuritySettings = Body(...),
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    global _SEC
-    _SEC = data
-    return _SEC
+    bundle = admin_crud.get_config_json(db=db, key=_DEF_KEY(current.id)) or {}
+    bundle["security"] = data.dict()
+    admin_crud.set_config_json(db=db, key=_DEF_KEY(current.id), value=bundle)
+    return SuccessResponse(data=data, message="Security updated")
 
-@router.post("/change-password")
+@router.post("/change-password", response_model=SuccessResponse[Dict[str, str]])
 async def change_password(
     data: PasswordChange = Body(...),
     current_user: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    """Change user password"""
+    from app.common.auth.auth_service import AuthService
+    from app.common.models.user import User
     
-    # Validate current password (in real implementation, check against database)
+    # Validate input
     if not data.currentPassword:
         raise HTTPException(status_code=400, detail="Current password is required")
-    
-    # Validate new password
     if len(data.newPassword) < 8:
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters long")
-    
-    # Validate password confirmation
     if data.newPassword != data.confirmPassword:
         raise HTTPException(status_code=400, detail="New password and confirmation do not match")
     
-    # In real implementation:
-    # 1. Verify current password against database
-    # 2. Hash new password
-    # 3. Update database
-    # 4. Possibly invalidate existing sessions
+    # Get the user from database
+    user = db.query(User).filter(User.id == current_user.id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
     
-    return {"message": "Password updated successfully"}
+    # Verify current password
+    if not AuthService.verify_password(data.currentPassword, user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update password
+    user.password_hash = AuthService.get_password_hash(data.newPassword)
+    db.commit()
+    
+    return SuccessResponse(data={"message": "Password updated successfully"}, message="Password updated successfully")
 
-@router.post("/toggle-2fa")
+@router.post("/toggle-2fa", response_model=SuccessResponse[Dict[str, bool]])
 async def toggle_two_factor(
     data: dict = Body(...),
-    _: DoctorUser = Depends(get_current_doctor),
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    """Enable/disable two-factor authentication"""
-    global _SEC
-    
+    bundle = admin_crud.get_config_json(db=db, key=_DEF_KEY(current.id)) or {}
     enabled = data.get("enabled", False)
-    _SEC.twoFactorEnabled = enabled
-    
-    return {
-        "message": f"Two-factor authentication {'enabled' if enabled else 'disabled'}",
-        "twoFactorEnabled": enabled
-    }
+    sec = SecuritySettings(**bundle.get("security", {}))
+    sec.twoFactorEnabled = enabled
+    bundle["security"] = sec.dict()
+    admin_crud.set_config_json(db=db, key=_DEF_KEY(current.id), value=bundle)
+    return SuccessResponse(data={"twoFactorEnabled": enabled}, message="Two-factor updated")
 
 # ─── Availability ───────────────────────────────────────────────
-@router.get("/availability", response_model=Availability)
-async def get_availability(_: DoctorUser = Depends(get_current_doctor)):
-    return _AVAIL
+@router.get("/availability", response_model=SuccessResponse[AvailabilitySettings])
+async def get_availability(current: DoctorUser = Depends(get_current_doctor), db: Session = Depends(get_db)):
+    bundle = admin_crud.get_config_json(db=db, key=_DEF_KEY(current.id)) or {}
+    avail = AvailabilitySettings(**bundle.get("availability", {}))
+    return SuccessResponse(data=avail, message="Availability retrieved")
 
-@router.put("/availability", response_model=Availability)
+@router.put("/availability", response_model=SuccessResponse[AvailabilitySettings])
 async def update_availability(
-    data: Availability = Body(...),
-    _: DoctorUser = Depends(get_current_doctor),
+    data: AvailabilitySettings = Body(...),
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    global _AVAIL
-    _AVAIL = data
-    return _AVAIL
+    bundle = admin_crud.get_config_json(db=db, key=_DEF_KEY(current.id)) or {}
+    bundle["availability"] = data.dict()
+    admin_crud.set_config_json(db=db, key=_DEF_KEY(current.id), value=bundle)
+    return SuccessResponse(data=data, message="Availability updated")
 
 # ─── Utility endpoints ──────────────────────────────────────────
-@router.post("/reset-to-defaults")
+@router.post("/reset-to-defaults", response_model=SuccessResponse[AllSettings])
 async def reset_to_defaults(
-    _: DoctorUser = Depends(get_current_doctor),
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
 ):
-    """Reset all settings to default values"""
-    global _NOTIF, _SEC, _AVAIL
-    
-    _NOTIF = Notifications(
-        emailNotifications=True, 
-        smsNotifications=False,
-        appointmentReminders=True, 
-        patientMessages=True,
-        systemUpdates=True, 
-        marketingEmails=False,
-        reminderTiming="1hour",
-    )
-    
-    _SEC = Security(
-        twoFactorEnabled=False, 
-        loginAlerts=True, 
-        sessionTimeout="30"
-    )
-    
-    _AVAIL = Availability(
-        workingDays=["monday", "tuesday", "wednesday", "thursday", "friday"],
-        workingHours=WorkingHours(start="09:00", end="17:00"),
-        lunchBreak=LunchBreak(enabled=True, start="12:00", end="13:00"),
-        consultationDuration="30",
-        bufferTime="10",
-    )
-    
-    return {"message": "Settings reset to defaults successfully"}
-
-@router.get("/export")
-async def export_settings(
-    _: DoctorUser = Depends(get_current_doctor),
-):
-    """Export all settings as JSON"""
-    return {
-        "export_date": "2024-07-13",
-        "settings": {
-            "notifications": _NOTIF.dict(),
-            "security": {
-                "twoFactorEnabled": _SEC.twoFactorEnabled,
-                "loginAlerts": _SEC.loginAlerts,
-                "sessionTimeout": _SEC.sessionTimeout
-            },
-            "availability": _AVAIL.dict()
-        }
+    bundle = {
+        "notifications": NotificationSettings().dict(),
+        "security": SecuritySettings().dict(),
+        "availability": AvailabilitySettings().dict(),
     }
+    admin_crud.set_config_json(db=db, key=_DEF_KEY(current.id), value=bundle)
+    return SuccessResponse(
+        data=AllSettings(
+            notifications=NotificationSettings(**bundle["notifications"]),
+            security=SecuritySettings(**bundle["security"]),
+            availability=AvailabilitySettings(**bundle["availability"])
+        ),
+        message="Defaults restored"
+    )
+
+@router.get("/export", response_model=SuccessResponse[Dict[str, Dict]])
+async def export_settings(
+    current: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db)
+):
+    bundle = admin_crud.get_config_json(db=db, key=_DEF_KEY(current.id)) or {}
+    return SuccessResponse(
+        data={
+            "settings": bundle
+        },
+        message="Settings exported"
+    )

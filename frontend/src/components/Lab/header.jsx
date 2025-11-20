@@ -85,12 +85,6 @@ export const LabHeader = () => {
                   👤 My Profile
                 </Link>
                 <Link
-                  to="/lab/schedule"
-                  className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  📅 My Schedule
-                </Link>
-                <Link
                   to="/lab/settings"
                   className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
                 >

@@ -111,8 +111,8 @@ class PasswordResetConfirm(BaseModel):
 
 class TwoFactorSetupRequest(BaseModel):
     """Two-factor authentication setup"""
-    method: str = Field(..., regex=r'^(sms|email|authenticator)$')
-    phone_number: Optional[str] = Field(None, regex=r'^\+?[\d\s\-\(\)]{10,20}$')
+    method: str = Field(..., pattern=r'^(sms|email|authenticator)$')
+    phone_number: Optional[str] = Field(None, pattern=r'^\+?[\d\s\-\(\)]{10,20}$')
 
 class TwoFactorSetupResponse(BaseModel):
     """Two-factor authentication setup response"""
@@ -217,8 +217,8 @@ class DoctorProfileBase(BaseModel):
     
     # Contact Information
     email: EmailStr
-    phone: str = Field(..., regex=r'^\+?[\d\s\-\(\)]{10,20}$')
-    secondary_phone: Optional[str] = Field(None, regex=r'^\+?[\d\s\-\(\)]{10,20}$')
+    phone: str = Field(..., pattern=r'^\+?[\d\s\-\(\)]{10,20}$')
+    secondary_phone: Optional[str] = Field(None, pattern=r'^\+?[\d\s\-\(\)]{10,20}$')
     
     # Address
     address_line_1: Optional[str] = Field(None, max_length=200)
@@ -271,8 +271,8 @@ class DoctorProfileUpdate(BaseModel):
     first_name: Optional[str] = Field(None, min_length=2, max_length=50)
     last_name: Optional[str] = Field(None, min_length=2, max_length=50)
     middle_name: Optional[str] = Field(None, max_length=50)
-    phone: Optional[str] = Field(None, regex=r'^\+?[\d\s\-\(\)]{10,20}$')
-    secondary_phone: Optional[str] = Field(None, regex=r'^\+?[\d\s\-\(\)]{10,20}$')
+    phone: Optional[str] = Field(None, pattern=r'^\+?[\d\s\-\(\)]{10,20}$')
+    secondary_phone: Optional[str] = Field(None, pattern=r'^\+?[\d\s\-\(\)]{10,20}$')
     
     address_line_1: Optional[str] = Field(None, max_length=200)
     address_line_2: Optional[str] = Field(None, max_length=200)
@@ -365,7 +365,7 @@ class SecurityLog(BaseModel):
     """Security event log"""
     id: str
     user_id: str
-    event_type: str = Field(..., regex=r'^(login|logout|password_change|failed_login|suspicious_activity)$')
+    event_type: str = Field(..., pattern=r'^(login|logout|password_change|failed_login|suspicious_activity)$')
     description: str = Field(..., min_length=10, max_length=500)
     
     # Context
@@ -375,7 +375,7 @@ class SecurityLog(BaseModel):
     location: Optional[Dict[str, str]] = None
     
     # Severity
-    severity: str = Field(..., regex=r'^(info|warning|error|critical)$')
+    severity: str = Field(..., pattern=r'^(info|warning|error|critical)$')
     
     # Timestamp
     created_at: datetime = Field(default_factory=datetime.now)
@@ -394,7 +394,7 @@ class AccountSecuritySettings(BaseModel):
     
     # Two-factor authentication
     two_factor_enabled: bool = Field(default=False)
-    two_factor_method: Optional[str] = Field(None, regex=r'^(sms|email|authenticator)$')
+    two_factor_method: Optional[str] = Field(None, pattern=r'^(sms|email|authenticator)$')
     backup_codes_generated: bool = Field(default=False)
     
     # Session settings

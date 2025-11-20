@@ -1,0 +1,2 @@
+-- Example RLS for patients (per-tenant/clinic isolation goes here)
+-- ALTER TABLE ehr.patients ENABLE ROW LEVEL SECURITY;

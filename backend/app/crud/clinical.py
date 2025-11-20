@@ -3,7 +3,7 @@
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func, desc
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 import uuid
 import json
 
@@ -191,9 +191,32 @@ class CRUDObservation(CRUDBase[Observation, Dict[str, Any], Dict[str, Any]]):
             value_type = "string"
             value_data = {"value": value_string}
         
+        # Convert category string to ObservationCategory enum if needed
+        from app.common.models.clinical import ObservationCategory
+        if isinstance(category, str):
+            # Try to find matching enum value
+            category_enum = None
+            try:
+                # Try direct match first
+                category_enum = ObservationCategory(category)
+            except ValueError:
+                # Try case-insensitive match
+                category_lower = category.lower()
+                for enum_value in ObservationCategory:
+                    if enum_value.value.lower() == category_lower:
+                        category_enum = enum_value
+                        break
+                # If still not found, default to EXAM
+                if category_enum is None:
+                    category_enum = ObservationCategory.EXAM
+            category = category_enum
+        elif not isinstance(category, ObservationCategory):
+            # If it's not a string or enum, default to EXAM
+            category = ObservationCategory.EXAM
+        
         observation = Observation(
             id=uuid.uuid4(),
-            patient_id=patient_id,
+            patient_id=patient_id if isinstance(patient_id, uuid.UUID) else uuid.UUID(patient_id),
             code=code,
             display_name=display_name,
             category=category,
@@ -356,24 +379,95 @@ class CRUDAllergyIntolerance(CRUDBase[AllergyIntolerance, Dict[str, Any], Dict[s
         **kwargs
     ) -> AllergyIntolerance:
         """Create a new allergy/intolerance record."""
+        # The database column is UUID, but the model uses String(36)
+        # Use raw SQL with proper UUID casting to avoid type mismatch
+        from sqlalchemy import text
+        import json as json_lib
+        
+        # Convert UUIDs to strings for parameter binding
+        patient_id_str = str(patient_id) if isinstance(patient_id, uuid.UUID) else patient_id
+        recorder_id_str = str(recorder_id) if isinstance(recorder_id, uuid.UUID) else recorder_id
+        
+        # Convert encounter_id if provided
+        encounter_id_str = None
+        if kwargs.get('encounter_id'):
+            encounter_id_str = str(kwargs['encounter_id']) if isinstance(kwargs['encounter_id'], uuid.UUID) else kwargs['encounter_id']
+        
+        # Prepare data
+        categories_json = json_lib.dumps(categories) if categories else None
+        code_json = json_lib.dumps(code) if code else None
+        criticality_value = criticality.value if criticality and hasattr(criticality, 'value') else str(criticality) if criticality else None
+        
+        # Use raw SQL with proper UUID casting
+        # Use SQLAlchemy text() parameter style (:param) for named parameters
+        # Use CAST() instead of :: for type casting to avoid syntax issues
+        insert_sql = text("""
+            INSERT INTO ehr.allergy_intolerances 
+            (id, patient_id, encounter_id, clinical_status, verification_status, type, categories, 
+             criticality, code, display_name, recorded_date, recorder_id, asserter_id)
+            VALUES 
+            (gen_random_uuid(), CAST(:patient_id AS uuid), CAST(:encounter_id AS uuid), 
+             :clinical_status, :verification_status, :type, CAST(:categories AS jsonb), 
+             :criticality, CAST(:code AS jsonb), :display_name, :recorded_date, 
+             CAST(:recorder_id AS uuid), CAST(:asserter_id AS uuid))
+            RETURNING id, patient_id, encounter_id, clinical_status, verification_status, type, 
+                      categories, criticality, code, display_name, recorded_date, recorder_id, 
+                      asserter_id, created_at
+        """)
+        
+        params = {
+            'patient_id': patient_id_str,
+            'encounter_id': encounter_id_str if encounter_id_str else None,
+            'clinical_status': ClinicalStatus.ACTIVE.value,
+            'verification_status': VerificationStatus.CONFIRMED.value,
+            'type': allergy_type.value if hasattr(allergy_type, 'value') else str(allergy_type),
+            'categories': categories_json,
+            'criticality': criticality_value,
+            'code': code_json,
+            'display_name': display_name,
+            'recorded_date': datetime.now(timezone.utc),
+            'recorder_id': recorder_id_str,
+            'asserter_id': None
+        }
+        
+        try:
+            result = db.execute(insert_sql, params)
+            db.commit()  # Commit the allergy creation
+            row = result.fetchone()
+        except Exception as e:
+            # Rollback on error to clean up the session
+            db.rollback()
+            raise
+        
+        # Create AllergyIntolerance object from the result
+        # PostgreSQL returns JSONB columns as Python dicts/lists automatically, no need to parse
+        categories_data = row[6] if row[6] else []
+        code_data = row[8] if row[8] else {}
+        
+        # If categories is a string, parse it; otherwise use as-is (already a dict/list)
+        if isinstance(categories_data, str):
+            categories_data = json_lib.loads(categories_data)
+        
+        # If code is a string, parse it; otherwise use as-is (already a dict)
+        if isinstance(code_data, str):
+            code_data = json_lib.loads(code_data)
+        
         allergy = AllergyIntolerance(
-            id=uuid.uuid4(),
-            patient_id=patient_id,
-            code=code,
-            display_name=display_name,
-            type=allergy_type,
-            categories=categories,
-            criticality=criticality,
-            clinical_status=ClinicalStatus.ACTIVE,
-            verification_status=VerificationStatus.CONFIRMED,
-            recorded_date=datetime.utcnow(),
-            recorder_id=recorder_id,
-            **kwargs
+            id=str(row[0]),
+            patient_id=str(row[1]),
+            encounter_id=str(row[2]) if row[2] else None,
+            clinical_status=ClinicalStatus(row[3]) if row[3] else ClinicalStatus.ACTIVE,
+            verification_status=VerificationStatus(row[4]) if row[4] else VerificationStatus.CONFIRMED,
+            type=AllergyType(row[5]) if row[5] else AllergyType.ALLERGY,
+            categories=categories_data,
+            criticality=AllergyCriticality(row[7]) if row[7] else None,
+            code=code_data,
+            display_name=row[9],
+            recorded_date=row[10],
+            recorder_id=str(row[11]) if row[11] else None,
+            asserter_id=str(row[12]) if row[12] else None
         )
         
-        db.add(allergy)
-        db.commit()
-        db.refresh(allergy)
         return allergy
     
     def add_reaction(

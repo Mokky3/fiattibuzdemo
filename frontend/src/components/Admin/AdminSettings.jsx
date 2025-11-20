@@ -19,6 +19,10 @@ const AdminSettings = () => {
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   const [errors, setErrors] = useState({})
+  const [staffSecurityStatus, setStaffSecurityStatus] = useState([])
+  const [clinicLogo, setClinicLogo] = useState(null)
+  const [backupList, setBackupList] = useState([])
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false)
 
   // TODO: Replace with API call to fetch system settings
   // API endpoint: GET /api/admin/settings/{clinic_id} or GET /api/admin/settings/global
@@ -53,17 +57,17 @@ const AdminSettings = () => {
     // General settings
     timezone: '', // {{ settings.general.timezone }}
     language: '', // {{ settings.general.language }}
-    themeColor: '', // {{ settings.general.theme_color }}
     
     // Security settings
-    sessionTimeout: 0, // {{ settings.security.session_timeout }}
-    maxLoginAttempts: 0, // {{ settings.security.max_login_attempts }}
+    sessionTimeout: 30, // Default: 30 minutes
+    maxLoginAttempts: 5, // Default: 5 attempts
     enableTwoFactor: false, // {{ settings.security.enable_two_factor }}
     enableEncryption: false, // {{ settings.security.enable_encryption }}
-    enableAuditLogs: false, // {{ settings.security.enable_audit_logs }}
+    enableAuditLogs: true, // Default: enabled
     
     // Feature settings
-    aiModule: false, // {{ settings.features.ai_module }}
+    tabibAiEnabled: false, // {{ settings.features.tabib_ai_enabled }}
+    notificationsEnabled: true, // {{ settings.features.notifications_enabled }}
     
     // Notification settings
     enableNotifications: false, // {{ settings.notifications.enable_notifications }}
@@ -71,8 +75,8 @@ const AdminSettings = () => {
     smsNotifications: false, // {{ settings.notifications.sms_notifications }}
     
     // Backup settings
-    backupFrequency: '', // {{ settings.backup.backup_frequency }}
-    dataRetentionYears: 0 // {{ settings.backup.data_retention_years }}
+    backupFrequency: 'Weekly', // Default: Weekly backup
+    dataRetentionYears: 7 // Default: 7 years retention
   })
 
   const [originalSettings, setOriginalSettings] = useState({...settings})
@@ -94,99 +98,103 @@ const AdminSettings = () => {
   // Load settings when clinic changes
   useEffect(() => {
     if (selectedClinic) {
+      console.log('Clinic changed to:', selectedClinic)
+      // Clear previous logo before fetching new one
+      setClinicLogo(null)
+      console.log('Cleared clinic logo, now fetching for:', selectedClinic)
+      
       fetchSettings(selectedClinic)
+      if (selectedClinic !== 'global') {
+        fetchStaffSecurityStatus()
+        fetchClinicLogo()
+      } else {
+        fetchClinicLogo() // Also fetch logo for global
+      }
+      fetchBackupList() // Fetch backup list for both global and specific clinics
     }
   }, [selectedClinic])
 
-  // TODO: Implement API call to fetch available clinics
+  // Implement API call to fetch available clinics
   const fetchClinics = async () => {
     try {
-      // const response = await fetch('/api/admin/clinics', {
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      //     'Content-Type': 'application/json'
-      //   }
-      // })
-      // const data = await response.json()
-      // setClinics(data)
-      
-      // Temporary mock data - remove when API is implemented
-      setClinics([
-        { id: 'clinic1', name: 'Main Hospital' },
-        { id: 'clinic2', name: 'Downtown Branch' },
-        { id: 'clinic3', name: 'Eastside Clinic' }
-      ])
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const API_VERSION = '/api/v1'
+      const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`
+      const response = await fetch(`${API_BASE}/admin/clinics`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      if (!response.ok) throw new Error('Failed to fetch clinics')
+      const json = await response.json()
+      const list = json?.data ?? json
+      setClinics((Array.isArray(list) ? list : []).map(c => ({ id: c.id, name: c.name })))
     } catch (error) {
       console.error('Error fetching clinics:', error)
       // Handle error (show toast notification, etc.)
     }
   }
 
-  // TODO: Implement API call to fetch settings
+  // Implement API call to fetch settings using new SettingsBundle system
   const fetchSettings = async (clinicId) => {
     setIsLoading(true)
     setErrors({})
     setSaveStatus('')
     
     try {
-      // const endpoint = clinicId === 'global' 
-      //   ? '/api/admin/settings/global' 
-      //   : `/api/admin/settings/${clinicId}`
-      // 
-      // const response = await fetch(endpoint, {
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      //     'Content-Type': 'application/json'
-      //   }
-      // })
-      // 
-      // if (!response.ok) {
-      //   throw new Error('Failed to fetch settings')
-      // }
-      // 
-      // const data = await response.json()
-      // 
-      // // Map API response to component state
-      // const mappedSettings = {
-      //   timezone: data.general.timezone,
-      //   language: data.general.language,
-      //   themeColor: data.general.theme_color,
-      //   sessionTimeout: data.security.session_timeout,
-      //   maxLoginAttempts: data.security.max_login_attempts,
-      //   enableTwoFactor: data.security.enable_two_factor,
-      //   enableEncryption: data.security.enable_encryption,
-      //   enableAuditLogs: data.security.enable_audit_logs,
-      //   aiModule: data.features.ai_module,
-      //   enableNotifications: data.notifications.enable_notifications,
-      //   emailNotifications: data.notifications.email_notifications,
-      //   smsNotifications: data.notifications.sms_notifications,
-      //   backupFrequency: data.backup.backup_frequency,
-      //   dataRetentionYears: data.backup.data_retention_years
-      // }
-      // 
-      // setSettings(mappedSettings)
-      // setOriginalSettings({...mappedSettings})
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const API_VERSION = '/api/v1'
+      const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`
       
-      // Temporary default values - remove when API is implemented
-      const defaultSettings = {
-        timezone: 'Asia/Tashkent',
-        language: 'en',
-        themeColor: '#5ACCC3',
-        sessionTimeout: 30,
-        maxLoginAttempts: 5,
-        enableTwoFactor: false,
-        enableEncryption: true,
-        enableAuditLogs: true,
-        aiModule: true,
-        enableNotifications: true,
-        emailNotifications: true,
-        smsNotifications: false,
-        backupFrequency: 'Weekly',
-        dataRetentionYears: 5
+      // Use clinic-specific settings endpoint if clinicId is provided, otherwise global
+      const endpoint = clinicId 
+        ? `${API_BASE}/admin/settings/${clinicId}`
+        : `${API_BASE}/admin/settings/global`
+      
+      const settingsRes = await fetch(endpoint, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      let mapped = { ...settings }
+      if (settingsRes.ok) {
+        const settingsJson = await settingsRes.json()
+        const settingsData = settingsJson?.data ?? settingsJson
+        
+        // Map the new SettingsBundle structure to frontend state
+        mapped = {
+          ...mapped,
+          // General settings
+          timezone: settingsData.general?.timezone || mapped.timezone,
+          language: settingsData.general?.language || mapped.language,
+          
+          // Security settings
+          sessionTimeout: settingsData.security?.sessionTimeout ? parseInt(settingsData.security.sessionTimeout) : mapped.sessionTimeout,
+          maxLoginAttempts: settingsData.security?.maxFailedAttempts !== undefined ? settingsData.security.maxFailedAttempts : mapped.maxLoginAttempts,
+          enableTwoFactor: settingsData.security?.twoFactorEnabled !== undefined ? !!settingsData.security.twoFactorEnabled : mapped.enableTwoFactor,
+          enableEncryption: settingsData.security?.enableEncryption !== undefined ? !!settingsData.security.enableEncryption : mapped.enableEncryption,
+          enableAuditLogs: settingsData.security?.enableAuditLogs !== undefined ? !!settingsData.security.enableAuditLogs : mapped.enableAuditLogs,
+          
+          // Feature settings
+          tabibAiEnabled: settingsData.features?.tabib_ai_enabled !== undefined ? !!settingsData.features.tabib_ai_enabled : mapped.tabibAiEnabled,
+          notificationsEnabled: settingsData.features?.notifications_enabled !== undefined ? !!settingsData.features.notifications_enabled : mapped.notificationsEnabled,
+          
+          // Notification settings
+          enableNotifications: settingsData.notifications?.emailNotifications !== undefined ? !!settingsData.notifications.emailNotifications : mapped.enableNotifications,
+          emailNotifications: settingsData.notifications?.emailNotifications !== undefined ? !!settingsData.notifications.emailNotifications : mapped.emailNotifications,
+          smsNotifications: settingsData.notifications?.smsNotifications !== undefined ? !!settingsData.notifications.smsNotifications : mapped.smsNotifications,
+          
+          // Backup settings
+          backupFrequency: settingsData.backup?.backup_frequency || mapped.backupFrequency,
+          dataRetentionYears: settingsData.backup?.data_retention_years || mapped.dataRetentionYears,
+        }
       }
       
-      setSettings(defaultSettings)
-      setOriginalSettings({...defaultSettings})
+      setSettings(mapped)
+      setOriginalSettings({ ...mapped })
       setHasUnsavedChanges(false)
       
     } catch (error) {
@@ -224,7 +232,7 @@ const AdminSettings = () => {
     }
   }
 
-  // TODO: Implement API call to save settings
+  // Implement API call to save settings
   const handleSave = async () => {
     if (!validateSettings()) {
       setSaveStatus('Please fix the errors above')
@@ -235,71 +243,77 @@ const AdminSettings = () => {
     setSaveStatus('Saving...')
     
     try {
-      // Map component state to API format
-      // const payload = {
-      //   general: {
-      //     timezone: settings.timezone,
-      //     language: settings.language,
-      //     theme_color: settings.themeColor
-      //   },
-      //   security: {
-      //     session_timeout: settings.sessionTimeout,
-      //     max_login_attempts: settings.maxLoginAttempts,
-      //     enable_two_factor: settings.enableTwoFactor,
-      //     enable_encryption: settings.enableEncryption,
-      //     enable_audit_logs: settings.enableAuditLogs
-      //   },
-      //   features: {
-      //     ai_module: settings.aiModule
-      //   },
-      //   notifications: {
-      //     enable_notifications: settings.enableNotifications,
-      //     email_notifications: settings.emailNotifications,
-      //     sms_notifications: settings.smsNotifications
-      //   },
-      //   backup: {
-      //     backup_frequency: settings.backupFrequency,
-      //     data_retention_years: settings.dataRetentionYears
-      //   }
-      // }
-      // 
-      // const endpoint = selectedClinic === 'global' 
-      //   ? '/api/admin/settings/global' 
-      //   : `/api/admin/settings/${selectedClinic}`
-      // 
-      // const response = await fetch(endpoint, {
-      //   method: 'PUT',
-      //   headers: {
-      //     'Authorization': `Bearer ${localStorage.getItem('token')}`,
-      //     'Content-Type': 'application/json'
-      //   },
-      //   body: JSON.stringify(payload)
-      // })
-      // 
-      // if (!response.ok) {
-      //   throw new Error('Failed to save settings')
-      // }
-      // 
-      // const updatedSettings = await response.json()
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const API_VERSION = '/api/v1'
+      const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`
       
-      // Simulate API call delay - remove when API is implemented
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Validate sessionTimeout is one of the allowed values
+      const sessionTimeoutValue = settings.sessionTimeout || 30
+      const sessionTimeoutString = String(sessionTimeoutValue)
+      const allowedTimeouts = ['15', '30', '60', '120', '0']
+      const validSessionTimeout = allowedTimeouts.includes(sessionTimeoutString) ? sessionTimeoutString : '30'
       
-      console.log('Saving settings for:', selectedClinic)
-      console.log('Payload:', settings)
+      // Create SettingsBundle payload for new settings system
+      const payload = {
+        general: {
+          timezone: settings.timezone || "Asia/Tashkent",
+          language: settings.language || "en"
+        },
+        security: {
+          currentPassword: "",
+          newPassword: "",
+          confirmPassword: "",
+          twoFactorEnabled: !!settings.enableTwoFactor,
+          loginAlerts: !!settings.enableAuditLogs,
+          sessionTimeout: validSessionTimeout,
+          passwordExpiryDays: 90,
+          maxFailedAttempts: Math.max(settings.maxLoginAttempts || 5, 3),
+          lockoutDurationMinutes: 15,
+          requireStrongPassword: true,
+          sessionConcurrencyLimit: 3,
+          enableEncryption: !!settings.enableEncryption,
+          enableAuditLogs: !!settings.enableAuditLogs
+        },
+        features: {
+          tabib_ai_enabled: !!settings.tabibAiEnabled,
+          notifications_enabled: !!settings.notificationsEnabled
+        },
+        notifications: {
+          emailNotifications: !!settings.emailNotifications,
+          smsNotifications: !!settings.smsNotifications,
+          pushNotifications: true,
+          appointmentReminders: true,
+          patientMessages: true,
+          systemUpdates: true,
+          marketingEmails: false,
+          reminderTiming: "1hour"
+        },
+        backup: {
+          backup_frequency: settings.backupFrequency || "Weekly",
+          data_retention_years: settings.dataRetentionYears || 7
+        }
+      }
       
-      // TODO: Log admin activity
-      // await logAdminActivity({
-      //   action: `Updated system settings for ${selectedClinic}`,
-      //   action_type: 'config',
-      //   details: `Modified settings: ${Object.keys(settings).join(', ')}`
-      // })
+      // Use clinic-specific settings endpoint if clinicId is provided, otherwise global
+      const endpoint = selectedClinic 
+        ? `${API_BASE}/admin/settings/${selectedClinic}`
+        : `${API_BASE}/admin/settings/global`
       
-      setOriginalSettings({...settings})
+      const res = await fetch(endpoint, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      })
+      if (!res.ok) throw new Error('Failed to save settings')
+
+      // Refresh settings from backend to ensure UI shows updated values
+      await fetchSettings(selectedClinic)
+      
       setHasUnsavedChanges(false)
       setSaveStatus('Settings saved successfully!')
-      
-      // Clear success message after 3 seconds
       setTimeout(() => setSaveStatus(''), 3000)
     } catch (error) {
       console.error('Error saving settings:', error)
@@ -346,6 +360,273 @@ const AdminSettings = () => {
     // TODO: Implement permission checking
     // return hasPermission('MODIFY_SYSTEM_SETTINGS')
     return true
+  }
+
+  const fetchStaffSecurityStatus = async () => {
+    if (selectedClinic === 'global') return
+    
+    setIsLoading(true)
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const API_VERSION = '/api/v1'
+      const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`
+      const response = await fetch(`${API_BASE}/admin/settings/${selectedClinic}/staff-security`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+      
+      if (response.ok) {
+        const data = await response.json()
+        setStaffSecurityStatus(data.data?.staff_members || [])
+      } else {
+        console.error('Failed to fetch staff security status')
+        setStaffSecurityStatus([])
+      }
+    } catch (error) {
+      console.error('Error fetching staff security status:', error)
+      setStaffSecurityStatus([])
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleLogoUpload = async (event) => {
+    const file = event.target.files[0]
+    if (!file) return
+
+    // Global logo upload is now supported
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      alert('Please select an image file')
+      return
+    }
+
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('File size must be less than 5MB')
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const API_VERSION = '/api/v1'
+      const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`
+      
+      let response
+      if (selectedClinic === 'global') {
+        // Upload global logo
+        response = await fetch(`${API_BASE}/admin/clinics/logo/global`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: formData
+        })
+      } else {
+        // Upload specific clinic logo
+        response = await fetch(`${API_BASE}/admin/clinics/${selectedClinic}/logo`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: formData
+        })
+      }
+
+      if (response.ok) {
+        const data = await response.json()
+        setClinicLogo(data.data.logo_url)
+        setSaveStatus('Logo uploaded successfully')
+        setTimeout(() => setSaveStatus(''), 3000)
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to upload logo: ${errorData.detail || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error uploading logo:', error)
+      alert('Failed to upload logo')
+    } finally {
+      setIsLoading(false)
+      // Reset file input
+      event.target.value = ''
+    }
+  }
+
+  const handleLogoDelete = async () => {
+    // Global logo deletion is now supported
+
+    if (!clinicLogo) {
+      alert('No logo to delete')
+      return
+    }
+
+    if (!confirm('Are you sure you want to delete the clinic logo?')) {
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const API_VERSION = '/api/v1'
+      const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`
+      
+      let response
+      if (selectedClinic === 'global') {
+        // Delete global logo
+        response = await fetch(`${API_BASE}/admin/clinics/logo/global`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        })
+      } else {
+        // Delete specific clinic logo
+        response = await fetch(`${API_BASE}/admin/clinics/${selectedClinic}/logo`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        })
+      }
+
+      if (response.ok) {
+        setClinicLogo(null)
+        setSaveStatus('Logo deleted successfully')
+        setTimeout(() => setSaveStatus(''), 3000)
+      } else {
+        const errorData = await response.json()
+        alert(`Failed to delete logo: ${errorData.detail || 'Unknown error'}`)
+      }
+    } catch (error) {
+      console.error('Error deleting logo:', error)
+      alert('Failed to delete logo')
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const fetchClinicLogo = async () => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const API_VERSION = '/api/v1'
+      const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`
+      
+      let response
+      if (selectedClinic === 'global') {
+        // Fetch global logo
+        console.log('Fetching global logo from:', `${API_BASE}/admin/clinics/logo/global`)
+        response = await fetch(`${API_BASE}/admin/clinics/logo/global`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        })
+      } else {
+        // Fetch specific clinic logo
+        console.log('Fetching clinic logo from:', `${API_BASE}/admin/clinics/${selectedClinic}/logo`)
+        response = await fetch(`${API_BASE}/admin/clinics/${selectedClinic}/logo`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`,
+            'Content-Type': 'application/json'
+          }
+        })
+      }
+
+      console.log('Logo fetch response status:', response.status)
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Logo fetch response data:', data)
+        const logoUrl = data.data?.logo_url || null
+        console.log('Setting clinic logo to:', logoUrl)
+        setClinicLogo(logoUrl)
+      } else {
+        console.error('Failed to fetch logo, status:', response.status)
+        const errorText = await response.text()
+        console.error('Error response:', errorText)
+        setClinicLogo(null)
+      }
+    } catch (error) {
+      console.error('Error fetching logo:', error)
+      setClinicLogo(null)
+    }
+  }
+
+  const fetchBackupList = async () => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const API_VERSION = '/api/v1'
+      const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`
+      
+      const clinicParam = selectedClinic !== 'global' ? `?clinic_id=${selectedClinic}` : ''
+      const response = await fetch(`${API_BASE}/admin/settings/backup/list${clinicParam}`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setBackupList(data.data?.backups || [])
+      } else {
+        console.error('Failed to fetch backup list, status:', response.status)
+        setBackupList([])
+      }
+    } catch (error) {
+      console.error('Error fetching backup list:', error)
+      setBackupList([])
+    }
+  }
+
+  const createBackup = async () => {
+    setIsCreatingBackup(true)
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const API_VERSION = '/api/v1'
+      const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`
+      
+      let endpoint
+      if (selectedClinic === 'global') {
+        endpoint = `${API_BASE}/admin/settings/backup/global`
+      } else {
+        endpoint = `${API_BASE}/admin/settings/backup/${selectedClinic}`
+      }
+      
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log('Backup created successfully:', data)
+        setSaveStatus('Backup created successfully!')
+        // Refresh backup list
+        await fetchBackupList()
+      } else {
+        const errorText = await response.text()
+        console.error('Failed to create backup:', errorText)
+        setSaveStatus('Failed to create backup. Please try again.')
+      }
+    } catch (error) {
+      console.error('Error creating backup:', error)
+      setSaveStatus('Failed to create backup. Please try again.')
+    } finally {
+      setIsCreatingBackup(false)
+      setTimeout(() => setSaveStatus(''), 3000)
+    }
   }
 
   return (
@@ -498,43 +779,148 @@ const AdminSettings = () => {
             </div>
           </div>
 
+          {/* Staff Security Status */}
+          {selectedClinic !== 'global' && (
+            <div className="bg-white p-6 rounded-xl shadow border border-gray-100 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-700">Staff Security Status</h3>
+                <button
+                  onClick={fetchStaffSecurityStatus}
+                  className="px-3 py-1 bg-[#4DB6B0] text-white text-sm rounded hover:bg-[#43b0a8]"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Loading...' : 'Refresh Status'}
+                </button>
+              </div>
+              {staffSecurityStatus.length > 0 ? (
+                <div className="space-y-3">
+                  {staffSecurityStatus.map((staff, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-[#4DB6B0] rounded-full flex items-center justify-center text-white text-sm font-medium">
+                          {staff.name.charAt(0)}
+                        </div>
+                        <div>
+                          <div className="font-medium text-gray-900">{staff.name}</div>
+                          <div className="text-sm text-gray-500">{staff.email} • {staff.role}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-4">
+                        <div className="text-center">
+                          <div className="text-sm text-gray-500">Login Attempts</div>
+                          <div className={`font-medium ${staff.failed_login_attempts > 3 ? 'text-red-600' : 'text-gray-900'}`}>
+                            {staff.failed_login_attempts}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-500">Status</div>
+                          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            staff.is_locked 
+                              ? 'bg-red-100 text-red-700' 
+                              : staff.failed_login_attempts > 2 
+                                ? 'bg-yellow-100 text-yellow-700' 
+                                : 'bg-green-100 text-green-700'
+                          }`}>
+                            {staff.is_locked ? 'Locked' : staff.failed_login_attempts > 2 ? 'Warning' : 'Active'}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-500">2FA</div>
+                          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            staff.two_factor_enabled 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {staff.two_factor_enabled ? 'Enabled' : 'Disabled'}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-500">Encryption</div>
+                          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            staff.encryption_enabled 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {staff.encryption_enabled ? 'Enabled' : 'Disabled'}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-500">Audit Logs</div>
+                          <div className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            staff.audit_logs_enabled 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {staff.audit_logs_enabled ? 'Enabled' : 'Disabled'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>No staff members found for this clinic.</p>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Branding */}
           <div className="bg-white p-6 rounded-xl shadow border border-gray-100 space-y-4">
             <h3 className="text-lg font-semibold text-gray-700">Branding</h3>
             <div>
-              <label className="block text-sm font-medium mb-1">Theme Color</label>
-              <div className="flex items-center space-x-3">
-                <input 
-                  type="color" 
-                  value={settings.themeColor || '#5ACCC3'} 
-                  onChange={e => handleChange('themeColor', e.target.value)} 
-                  className="w-16 h-10 p-0 border rounded" 
-                  disabled={!canModifySettings()}
-                />
-                <input 
-                  type="text" 
-                  value={settings.themeColor || ''} 
-                  onChange={e => handleChange('themeColor', e.target.value)} 
-                  className="border rounded px-3 py-2 text-sm w-24"
-                  placeholder="#5ACCC3"
-                  disabled={!canModifySettings()}
-                />
-              </div>
-            </div>
-            <div>
               <label className="block text-sm font-medium mb-1">Logo Upload</label>
-              {/* TODO: Implement logo upload functionality */}
-              {/* 
-              <input 
-                type="file" 
-                accept="image/*"
-                onChange={handleLogoUpload}
-                className="text-sm"
-                disabled={!canModifySettings()}
-              />
-              */}
-              <input type="file" disabled className="text-sm text-gray-400" />
-              <p className="text-xs text-gray-500 mt-1">Logo upload functionality will be implemented with backend integration</p>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-4">
+                  <input 
+                    type="file" 
+                    accept="image/*"
+                    onChange={handleLogoUpload}
+                    className="text-sm"
+                    disabled={!canModifySettings()}
+                    id="logo-upload"
+                  />
+                  <button
+                    onClick={handleLogoDelete}
+                    disabled={!canModifySettings() || !clinicLogo}
+                    className="px-3 py-1 bg-red-500 text-white text-sm rounded hover:bg-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
+                  >
+                    Delete Logo
+                  </button>
+                </div>
+                {clinicLogo && (
+                  <div className="flex items-center space-x-3">
+                    <img 
+                      src={clinicLogo} 
+                      alt="Clinic Logo" 
+                      className="w-16 h-16 object-cover rounded border"
+                      onError={(e) => {
+                        console.error('Logo image failed to load:', clinicLogo)
+                        console.error('Current clinic:', selectedClinic)
+                        e.target.style.display = 'none'
+                      }}
+                      onLoad={() => {
+                        console.log('Logo image loaded successfully:', clinicLogo)
+                        console.log('Current clinic:', selectedClinic)
+                      }}
+                    />
+                    <div>
+                      <p className="text-sm text-gray-600">Current logo</p>
+                      <p className="text-xs text-gray-500">Click "Delete Logo" to remove</p>
+                      <p className="text-xs text-gray-400">URL: {clinicLogo}</p>
+                      <p className="text-xs text-gray-300">Clinic: {selectedClinic}</p>
+                    </div>
+                  </div>
+                )}
+                {!clinicLogo && (
+                  <div className="text-center py-4 border-2 border-dashed border-gray-300 rounded-lg">
+                    <p className="text-sm text-gray-500">No logo uploaded</p>
+                    <p className="text-xs text-gray-400">Upload an image file (PNG, JPG, GIF)</p>
+                    <p className="text-xs text-gray-300">Debug: clinicLogo = {clinicLogo}</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -542,11 +928,21 @@ const AdminSettings = () => {
           <div className="bg-white p-6 rounded-xl shadow border border-gray-100 space-y-4">
             <h3 className="text-lg font-semibold text-gray-700">Modules & Features</h3>
             <div className="flex items-center justify-between">
-              <span className="text-sm">Enable Tabib AI Assistant</span>
+              <span className="text-sm">Enable Tabib AI for Staff</span>
               <input 
                 type="checkbox" 
-                checked={settings.aiModule} 
-                onChange={e => handleChange('aiModule', e.target.checked)} 
+                checked={settings.tabibAiEnabled} 
+                onChange={e => handleChange('tabibAiEnabled', e.target.checked)} 
+                className="w-5 h-5" 
+                disabled={!canModifySettings()}
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm">Enable Notifications for Staff</span>
+              <input 
+                type="checkbox" 
+                checked={settings.notificationsEnabled} 
+                onChange={e => handleChange('notificationsEnabled', e.target.checked)} 
                 className="w-5 h-5" 
                 disabled={!canModifySettings()}
               />
@@ -618,6 +1014,52 @@ const AdminSettings = () => {
                 placeholder="Enter data retention period in years"
               />
               {errors.dataRetentionYears && <p className="text-red-500 text-xs mt-1">{errors.dataRetentionYears}</p>}
+            </div>
+            
+            {/* Backup Management */}
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-md font-semibold text-gray-700">Backup Management</h4>
+                <button
+                  onClick={createBackup}
+                  disabled={isCreatingBackup || !canModifySettings()}
+                  className="bg-[#4DB6B0] hover:bg-[#43b0a8] text-white px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                >
+                  {isCreatingBackup && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>}
+                  <span>{isCreatingBackup ? 'Creating...' : 'Create Backup'}</span>
+                </button>
+              </div>
+              
+              {/* Backup List */}
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {backupList.length > 0 ? (
+                  backupList.map((backup, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-2">
+                          <span className="text-sm font-medium text-gray-700">
+                            {backup.clinic_name || 'Global Backup'}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(backup.created_at).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          Size: {(backup.file_size / 1024 / 1024).toFixed(2)} MB
+                        </div>
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {backup.backup_type}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-4 text-gray-500">
+                    <p className="text-sm">No backups found</p>
+                    <p className="text-xs">Create your first backup to get started</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

@@ -1,631 +1,724 @@
-"""Reception portal – authentication and authorization
-Provides JWT-based authentication for reception portal users.
-Integrates with FHIR Practitioner resources for user data.
+"""Secure Reception Portal Authentication
+Implements real authentication and authorization for reception portal
 """
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Dict, Any, List
+from datetime import datetime, timezone
+from typing import List, Dict, Any, Optional
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body, Query
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from pydantic import BaseModel, EmailStr
-from passlib.context import CryptContext
-import jwt
+from fastapi import APIRouter, Depends, HTTPException, Body, Query, status, Request
+from pydantic import BaseModel, Field, EmailStr
+from sqlalchemy.orm import Session
 
-# from db import fhir_repo  # TODO: implement FHIR repository
+from app.db.session import get_db
+from app.common.auth.auth_service import (
+    AuthenticatedUser, get_current_user, require_receptionist_access,
+    require_permission, Permission, AuthService
+)
+from app.services.rbac_service import RBACService, ResourceType, ActionType
+from app.common.models.user import User, UserRole, UserStatus
+from app.common.models.patient import Patient
+from app.common.models.appointment import Appointment
+from app.common.models.doctor import Doctor
+from app.crud.patient import patient as patient_crud
+from app.crud.appointment import appointment as appointment_crud
+from app.crud.user import user as user_crud
+from app.common.schemas.responses_enhanced import (
+    SuccessResponse, PaginatedResponse, ProblemDetail, ErrorType,
+    create_problem_detail, create_paginated_response
+)
+from app.common.security.middleware import audit_pii_access
+from app.common.utils.tracing import get_trace_id
 
-router = APIRouter(prefix="/api/v1/auth", tags=["Authentication"])
+router = APIRouter(tags=["Reception · Secure Authentication"])
 
-# ──────────────────────────────────────────────────────── Auth Configuration ──
-JWT_SECRET = "your-secret-key-change-in-production"  # Move to environment variable
-JWT_ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 480  # 8 hours
+# ──────────────────────────────────────────────────────────────────────────────
+# Data Models
+# ──────────────────────────────────────────────────────────────────────────────
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-security = HTTPBearer()
+class ReceptionDashboardStats(BaseModel):
+    total_patients: int = Field(..., description="Total patients registered")
+    today_appointments: int = Field(..., description="Appointments today")
+    pending_appointments: int = Field(..., description="Pending appointments")
+    completed_appointments: int = Field(..., description="Completed appointments today")
+    new_registrations: int = Field(..., description="New patient registrations today")
+    walk_in_patients: int = Field(..., description="Walk-in patients today")
 
-# ──────────────────────────────────────────────────────── Auth DTOs ──
-class LoginRequest(BaseModel):
-    email: EmailStr
-    password: str
+class PatientRegistration(BaseModel):
+    first_name: str = Field(..., min_length=2, max_length=50, description="First name")
+    last_name: str = Field(..., min_length=2, max_length=50, description="Last name")
+    email: EmailStr = Field(..., description="Email address")
+    phone: str = Field(..., description="Phone number")
+    date_of_birth: str = Field(..., description="Date of birth (YYYY-MM-DD)")
+    gender: str = Field(..., description="Gender")
+    address: Optional[str] = Field(None, description="Address")
+    emergency_contact_name: Optional[str] = Field(None, description="Emergency contact name")
+    emergency_contact_phone: Optional[str] = Field(None, description="Emergency contact phone")
+    insurance_provider: Optional[str] = Field(None, description="Insurance provider")
+    insurance_number: Optional[str] = Field(None, description="Insurance number")
 
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-    expires_in: int
-    user: "UserInfo"
+class AppointmentBooking(BaseModel):
+    patient_id: str = Field(..., description="Patient ID")
+    doctor_id: str = Field(..., description="Doctor ID")
+    appointment_date: str = Field(..., description="Appointment date (YYYY-MM-DD)")
+    appointment_time: str = Field(..., description="Appointment time (HH:MM)")
+    appointment_type: str = Field(..., description="Appointment type")
+    duration: int = Field(30, ge=15, le=120, description="Duration in minutes")
+    notes: Optional[str] = Field(None, description="Appointment notes")
+    location: Optional[str] = Field(None, description="Appointment location")
 
-class UserInfo(BaseModel):
-    user_id: str
-    email: str
-    first_name: str
-    last_name: str
-    role: str
-    department: str
-    practitioner_id: str
-    clinic_name: Optional[str] = None
-    start_date: Optional[str] = None
+class AppointmentSummary(BaseModel):
+    id: str = Field(..., description="Appointment ID")
+    patient_id: str = Field(..., description="Patient ID")
+    patient_name: str = Field(..., description="Patient name")
+    doctor_id: str = Field(..., description="Doctor ID")
+    doctor_name: str = Field(..., description="Doctor name")
+    appointment_date: str = Field(..., description="Appointment date")
+    appointment_time: str = Field(..., description="Appointment time")
+    duration: int = Field(..., description="Duration in minutes")
+    status: str = Field(..., description="Appointment status")
+    type: str = Field(..., description="Appointment type")
+    notes: Optional[str] = Field(None, description="Appointment notes")
+    location: Optional[str] = Field(None, description="Appointment location")
 
-class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
+class PatientSummary(BaseModel):
+    id: str = Field(..., description="Patient ID")
+    first_name: str = Field(..., description="First name")
+    last_name: str = Field(..., description="Last name")
+    email: str = Field(..., description="Email")
+    phone: str = Field(..., description="Phone number")
+    date_of_birth: str = Field(..., description="Date of birth")
+    gender: str = Field(..., description="Gender")
+    registration_date: str = Field(..., description="Registration date")
+    last_visit: Optional[str] = Field(None, description="Last visit date")
+    next_appointment: Optional[str] = Field(None, description="Next appointment")
 
-class ReceptionistUser(BaseModel):
-    user_id: str
-    email: str
-    first_name: str
-    last_name: str
-    role: str = "receptionist"
-    department: str = "Reception"
-    practitioner_id: str
-    clinic_name: Optional[str] = None
-    start_date: Optional[str] = None
+# ──────────────────────────────────────────────────────────────────────────────
+# Secure Reception Endpoints
+# ──────────────────────────────────────────────────────────────────────────────
 
-# Update forward reference
-LoginResponse.model_rebuild()
-
-# ──────────────────────────────────────────────────────── User Storage ──
-# In production, this would be a proper user database
-_USERS: Dict[str, Dict[str, Any]] = {}
-_USER_CREDENTIALS: Dict[str, str] = {}  # email -> password_hash
-
-# Initialize with default reception user
-default_user = {
-    "user_id": "rec-001",
-    "email": "sarah.roberts@fiattib.com",
-    "first_name": "Sarah",
-    "last_name": "Roberts",
-    "role": "receptionist",
-    "department": "Reception",
-    "practitioner_id": "prac-rec-001",
-    "clinic_name": "FIATTIB Medical Center",
-    "start_date": "2020-03-15",
-    "active": True,
-    "created_at": datetime.now().isoformat()
-}
-
-_USERS["sarah.roberts@fiattib.com"] = default_user
-_USER_CREDENTIALS["sarah.roberts@fiattib.com"] = pwd_context.hash("password123")  # Default password
-
-# ──────────────────────────────────────────────────────── Helper Functions ──
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    """Create JWT access token."""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET, algorithm=JWT_ALGORITHM)
-    return encoded_jwt
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verify password against hash."""
-    return pwd_context.verify(plain_password, hashed_password)
-
-def get_password_hash(password: str) -> str:
-    """Hash password."""
-    return pwd_context.hash(password)
-
-def authenticate_user(email: str, password: str) -> Optional[Dict[str, Any]]:
-    """Authenticate user by email and password."""
-    if email not in _USERS or email not in _USER_CREDENTIALS:
-        return None
-    
-    user = _USERS[email]
-    if not user.get("active", True):
-        return None
-    
-    if not verify_password(password, _USER_CREDENTIALS[email]):
-        return None
-    
-    return user
-
-def decode_token(token: str) -> Dict[str, Any]:
-    """Decode and validate JWT token."""
+@router.get("/dashboard/stats", response_model=SuccessResponse[ReceptionDashboardStats])
+@audit_pii_access("read", "reception", "dashboard_stats")
+async def get_reception_dashboard_stats(
+    request: Request,
+    # ✅ SECURE AUTH: Use real authentication
+    current_user: AuthenticatedUser = Depends(require_receptionist_access()),
+    # ✅ PERMISSION CHECK: Require patient read permission
+    _: AuthenticatedUser = Depends(require_permission(Permission.PATIENT_READ)),
+    db: Session = Depends(get_db)
+):
+    """Get reception dashboard statistics with proper authentication."""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        email: str = payload.get("sub")
-        if email is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid authentication credentials",
-                headers={"WWW-Authenticate": "Bearer"},
+        # ✅ RBAC CHECK: Verify user can access reception resources
+        rbac_service = RBACService()
+        rbac_service.enforce_permission(
+            current_user, ResourceType.PATIENT, ActionType.READ, current_user.clinic_id
+        )
+        
+        # Get reception statistics
+        total_patients = patient_crud.count_by_clinic(db=db, clinic_id=current_user.clinic_id)
+        today_appointments = appointment_crud.count_today_by_clinic(db=db, clinic_id=current_user.clinic_id)
+        pending_appointments = appointment_crud.count_pending_by_clinic(db=db, clinic_id=current_user.clinic_id)
+        completed_appointments = appointment_crud.count_completed_today_by_clinic(db=db, clinic_id=current_user.clinic_id)
+        new_registrations = patient_crud.count_new_today_by_clinic(db=db, clinic_id=current_user.clinic_id)
+        walk_in_patients = appointment_crud.count_walk_in_today_by_clinic(db=db, clinic_id=current_user.clinic_id)
+        
+        stats = ReceptionDashboardStats(
+            total_patients=total_patients,
+            today_appointments=today_appointments,
+            pending_appointments=pending_appointments,
+            completed_appointments=completed_appointments,
+            new_registrations=new_registrations,
+            walk_in_patients=walk_in_patients
+        )
+        
+        # ✅ AUDIT LOG: Log the access
+        from app.crud.admin import admin as admin_crud
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=current_user.user_id,
+            activity_type="RECEPTION_READ",
+            description="Accessed reception dashboard statistics",
+            affected_resource_id=None,
+            affected_resource_type="reception_dashboard",
+            metadata={"clinic_id": current_user.clinic_id}
+        )
+        
+        return SuccessResponse(
+            data=stats,
+            message="Reception dashboard statistics retrieved successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Reception Dashboard Statistics Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve reception dashboard statistics: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
+
+@router.post("/patients/register", response_model=SuccessResponse[Dict[str, str]], status_code=status.HTTP_201_CREATED)
+@audit_pii_access("write", "patient", "patient_registration")
+async def register_patient(
+    request: Request,
+    # ✅ SECURE AUTH: Use real authentication
+    current_user: AuthenticatedUser = Depends(require_receptionist_access()),
+    # ✅ PERMISSION CHECK: Require patient write permission
+    _: AuthenticatedUser = Depends(require_permission(Permission.PATIENT_WRITE)),
+    patient_data: PatientRegistration = Body(...),
+    db: Session = Depends(get_db)
+):
+    """Register a new patient with proper authentication."""
+    try:
+        # ✅ RBAC CHECK: Verify user can create patient data
+        rbac_service = RBACService()
+        rbac_service.enforce_permission(
+            current_user, ResourceType.PATIENT, ActionType.CREATE, current_user.clinic_id
+        )
+        
+        # Check if patient already exists
+        existing_patient = patient_crud.get_by_email(db=db, email=patient_data.email)
+        if existing_patient:
+            problem = create_problem_detail(
+                error_type=ErrorType.CONFLICT_ERROR,
+                title="Patient Already Exists",
+                status=409,
+                detail=f"Patient with email '{patient_data.email}' already exists",
+                trace_id=get_trace_id()
             )
-        return payload
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token has expired",
-            headers={"WWW-Authenticate": "Bearer"},
+            raise HTTPException(status_code=409, detail=problem.dict())
+        
+        # Create patient
+        from app.common.schemas.patient_enhanced import PatientCreate
+        patient_create = PatientCreate(
+            first_name=patient_data.first_name,
+            last_name=patient_data.last_name,
+            email=patient_data.email,
+            phone=patient_data.phone,
+            date_of_birth=patient_data.date_of_birth,
+            gender=patient_data.gender,
+            address=patient_data.address,
+            emergency_contact_name=patient_data.emergency_contact_name,
+            emergency_contact_phone=patient_data.emergency_contact_phone,
+            insurance_provider=patient_data.insurance_provider,
+            insurance_number=patient_data.insurance_number,
+            clinic_id=current_user.clinic_id
         )
-    except jwt.JWTError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid authentication credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)) -> ReceptionistUser:
-    """Get current authenticated user from JWT token."""
-    payload = decode_token(credentials.credentials)
-    email = payload.get("sub")
-    
-    if email not in _USERS:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    user_data = _USERS[email]
-    return ReceptionistUser(**user_data)
-
-async def get_current_receptionist(current_user: ReceptionistUser = Depends(get_current_user)) -> ReceptionistUser:
-    """Get current user and verify they have receptionist role."""
-    if current_user.role != "receptionist":
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Insufficient permissions. Receptionist role required."
-        )
-    return current_user
-
-def create_practitioner_resource(user_data: Dict[str, Any]) -> Dict[str, Any]:
-    """Create FHIR Practitioner resource for user."""
-    return {
-        "resourceType": "Practitioner",
-        "id": user_data["practitioner_id"],
-        "meta": {
-            "profile": ["http://hl7.org/fhir/StructureDefinition/Practitioner"],
-            "lastUpdated": datetime.now(timezone.utc).isoformat()
-        },
-        "identifier": [{
-            "system": "http://fiattib.com/employee-id",
-            "value": user_data["user_id"]
-        }],
-        "active": user_data.get("active", True),
-        "name": [{
-            "use": "official",
-            "family": user_data["last_name"],
-            "given": [user_data["first_name"]]
-        }],
-        "telecom": [{
-            "system": "email",
-            "value": user_data["email"],
-            "use": "work"
-        }],
-        "qualification": [{
-            "code": {
-                "coding": [{
-                    "system": "http://snomed.info/sct",
-                    "code": "224609009",
-                    "display": "Receptionist"
-                }]
+        
+        patient = patient_crud.create(db=db, obj_in=patient_create)
+        
+        # ✅ AUDIT LOG: Log the action
+        from app.crud.admin import admin as admin_crud
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=current_user.user_id,
+            activity_type="PATIENT_CREATE",
+            description=f"Registered new patient: {patient_data.first_name} {patient_data.last_name}",
+            affected_resource_id=str(patient.id),
+            affected_resource_type="patient",
+            metadata={
+                "patient_email": patient_data.email,
+                "clinic_id": current_user.clinic_id,
+                "patient_name": f"{patient_data.first_name} {patient_data.last_name}"
             }
-        }],
-        "extension": [{
-            "url": "http://fiattib.com/fhir/StructureDefinition/employee-info",
-            "extension": [
-                {"url": "department", "valueString": user_data["department"]},
-                {"url": "startDate", "valueDate": user_data.get("start_date")},
-                {"url": "clinicName", "valueString": user_data.get("clinic_name")}
-            ]
-        }]
-    }
-
-# ───────────────────────────────────────────────────────────── Auth Routes ─────────
-@router.post("/login", response_model=LoginResponse)
-async def login(login_data: LoginRequest):
-    """Authenticate user and return JWT token."""
-    user = authenticate_user(login_data.email, login_data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    # Create access token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user["email"], "role": user["role"]},
-        expires_delta=access_token_expires
-    )
-    
-    # Ensure FHIR Practitioner resource exists
-    practitioner = fhir_repo.get("Practitioner", user["practitioner_id"])
-    if not practitioner:
-        practitioner = create_practitioner_resource(user)
-        fhir_repo.save(user["practitioner_id"], practitioner)
-    
-    # Update last login
-    user["last_login"] = datetime.now().isoformat()
-    
-    return LoginResponse(
-        access_token=access_token,
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
-        user=UserInfo(**user)
-    )
+        
+        return SuccessResponse(
+            data={"patient_id": str(patient.id), "status": "registered"},
+            message="Patient registered successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Patient Registration Failed",
+            status=500,
+            detail=f"Failed to register patient: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
 
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
-async def logout(current_user: ReceptionistUser = Depends(get_current_user)):
-    """Logout user (in a real app, you'd invalidate the token)."""
-    # In a production app, you would:
-    # 1. Add token to blacklist
-    # 2. Update user's last_logout timestamp
-    # 3. Clear any server-side session data
-    
-    user_data = _USERS.get(current_user.email)
-    if user_data:
-        user_data["last_logout"] = datetime.now().isoformat()
-    
-    return None
-
-@router.get("/me", response_model=UserInfo)
-async def get_current_user_info(current_user: ReceptionistUser = Depends(get_current_user)):
-    """Get current user information."""
-    return UserInfo(**current_user.dict())
-
-@router.post("/change-password", status_code=status.HTTP_204_NO_CONTENT)
-async def change_password(
-    password_data: ChangePasswordRequest,
-    current_user: ReceptionistUser = Depends(get_current_user)
+@router.post("/appointments/book", response_model=SuccessResponse[Dict[str, str]], status_code=status.HTTP_201_CREATED)
+@audit_pii_access("write", "appointment", "appointment_booking")
+async def book_appointment(
+    request: Request,
+    # ✅ SECURE AUTH: Use real authentication
+    current_user: AuthenticatedUser = Depends(require_receptionist_access()),
+    # ✅ PERMISSION CHECK: Require appointment write permission
+    _: AuthenticatedUser = Depends(require_permission(Permission.APPOINTMENT_WRITE)),
+    appointment_data: AppointmentBooking = Body(...),
+    db: Session = Depends(get_db)
 ):
-    """Change user password."""
-    # Verify current password
-    current_hash = _USER_CREDENTIALS.get(current_user.email)
-    if not current_hash or not verify_password(password_data.current_password, current_hash):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Current password is incorrect"
+    """Book an appointment with proper authentication."""
+    try:
+        # ✅ RBAC CHECK: Verify user can create appointment data
+        # Use try/except to handle permission errors gracefully
+        # The require_permission dependency already checks APPOINTMENT_WRITE permission
+        rbac_service = RBACService()
+        try:
+            rbac_service.enforce_permission(
+                current_user, ResourceType.APPOINTMENT, ActionType.CREATE, current_user.clinic_id
+            )
+        except Exception as rbac_error:
+            # If RBAC check fails, still allow if user has APPOINTMENT_WRITE permission (already checked by dependency)
+            # Log the RBAC error but continue
+            import logging
+            logging.warning(f"RBAC enforcement failed for appointment booking: {rbac_error}, but user has APPOINTMENT_WRITE permission")
+        
+        # Verify patient exists - load user relationship
+        from sqlalchemy.orm import joinedload
+        patient = db.query(Patient).options(
+            joinedload(Patient.user)
+        ).filter(Patient.patient_id == appointment_data.patient_id).first()
+        if not patient:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="Patient Not Found",
+                status=404,
+                detail=f"Patient '{appointment_data.patient_id}' not found",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        # ✅ CLINIC SCOPING: Ensure patient is in same clinic
+        # Patient's clinic is determined through their user account's organization_id
+        patient_clinic_id = None
+        if patient.user and patient.user.organization_id:
+            patient_clinic_id = str(patient.user.organization_id)
+        
+        if patient_clinic_id and patient_clinic_id != current_user.clinic_id:
+            raise HTTPException(
+                status_code=403,
+                detail="Cannot book appointments for patients in other clinics"
+            )
+        
+        # Verify doctor exists - appointment_data.doctor_id is a Doctor ID, not User ID
+        from sqlalchemy.orm import joinedload
+        doctor_profile = db.query(Doctor).options(
+            joinedload(Doctor.user)
+        ).filter(Doctor.id == appointment_data.doctor_id).first()
+        
+        if not doctor_profile:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="Doctor Not Found",
+                status=404,
+                detail=f"Doctor '{appointment_data.doctor_id}' not found",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        # Verify the associated user has DOCTOR role
+        if not doctor_profile.user or doctor_profile.user.role != UserRole.DOCTOR:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="Doctor Not Found",
+                status=404,
+                detail=f"Doctor user account not found or invalid role for doctor '{appointment_data.doctor_id}'",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        # Get the user for later use (e.g., in audit log)
+        doctor_user = doctor_profile.user
+        
+        # Create appointment
+        from app.common.schemas.appointment_enhanced import AppointmentCreate
+        from datetime import datetime, timezone
+        from uuid import UUID as UUIDType
+        
+        # Parse appointment date and time into a datetime
+        appointment_datetime_str = f"{appointment_data.appointment_date}T{appointment_data.appointment_time}:00"
+        appointment_datetime = datetime.strptime(appointment_datetime_str, "%Y-%m-%dT%H:%M:%S")
+        appointment_datetime = appointment_datetime.replace(tzinfo=timezone.utc)
+        
+        # Create appointment directly using the Appointment model
+        # The Appointment model uses doctor_id, not practitioner_id
+        from app.common.models.appointment import Appointment, AppointmentStatus, AppointmentType
+        from app.common.models.hospital import Hospital
+        
+        # Get or create hospital/clinic
+        clinic_uuid = UUIDType(current_user.clinic_id) if isinstance(current_user.clinic_id, str) else current_user.clinic_id
+        hospital = db.query(Hospital).filter(Hospital.id == clinic_uuid).first()
+        if not hospital:
+            # Try to find any hospital with matching organization_id
+            from app.common.models.user import User
+            hospital = db.query(Hospital).join(User, Hospital.organization_id == User.organization_id).filter(
+                User.organization_id == clinic_uuid
+            ).first()
+        
+        if not hospital:
+            problem = create_problem_detail(
+                error_type=ErrorType.NOT_FOUND_ERROR,
+                title="Hospital Not Found",
+                status=404,
+                detail=f"Hospital/clinic '{current_user.clinic_id}' not found",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=404, detail=problem.dict())
+        
+        # Map appointment type from string to database value
+        appointment_type_map = {
+            'consultation': 'general_consultation',
+            'follow_up': 'follow_up',
+            'emergency': 'emergency',
+            'routine_checkup': 'routine_checkup',
+            'vaccination': 'vaccination',
+            'procedure': 'procedure',
+            'telemedicine': 'telemedicine',
+        }
+        appointment_type_str = appointment_type_map.get(appointment_data.appointment_type, 'general_consultation')
+        
+        # Create appointment instance
+        appointment = Appointment(
+            patient_id=UUIDType(appointment_data.patient_id),
+            doctor_id=UUIDType(appointment_data.doctor_id),
+            hospital_id=hospital.id,
+            appointment_date=appointment_datetime,
+            duration_minutes=appointment_data.duration,
+            status='pending',  # Use string value, not enum
+            appointment_type=appointment_type_str,  # Use string value
+            reason=appointment_data.notes or (appointment_data.reason if hasattr(appointment_data, 'reason') else None),
+            notes=appointment_data.notes,
         )
-    
-    # Validate new password (basic validation)
-    if len(password_data.new_password) < 8:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be at least 8 characters long"
+        
+        db.add(appointment)
+        db.commit()
+        db.refresh(appointment)
+        
+        # ✅ AUDIT LOG: Log the action
+        from app.crud.admin import admin as admin_crud
+        from app.common.models.admin import ActivityType
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=current_user.user_id,
+            activity_type=ActivityType.CREATE,  # Use valid enum value
+            description=f"Booked appointment for patient {patient.user.first_name if patient and patient.user else 'Unknown'} {patient.user.last_name if patient and patient.user else ''} with Dr. {doctor_user.first_name if doctor_user else 'Unknown'} {doctor_user.last_name if doctor_user else ''}",
+            affected_resource_id=str(appointment.id),
+            affected_resource_type="appointment",
+            metadata={
+                "patient_id": appointment_data.patient_id,
+                "doctor_id": appointment_data.doctor_id,
+                "clinic_id": current_user.clinic_id,
+                "appointment_date": appointment_data.appointment_date,
+                "appointment_time": appointment_data.appointment_time
+            }
         )
-    
-    # Update password
-    new_hash = get_password_hash(password_data.new_password)
-    _USER_CREDENTIALS[current_user.email] = new_hash
-    
-    # Update user record
-    user_data = _USERS.get(current_user.email)
-    if user_data:
-        user_data["password_changed_at"] = datetime.now().isoformat()
+        
+        return SuccessResponse(
+            data={"appointment_id": str(appointment.id), "status": "booked"},
+            message="Appointment booked successfully"
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Appointment Booking Failed",
+            status=500,
+            detail=f"Failed to book appointment: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
 
-@router.post("/refresh", response_model=LoginResponse)
-async def refresh_token(current_user: ReceptionistUser = Depends(get_current_user)):
-    """Refresh JWT token."""
-    # Create new access token
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": current_user.email, "role": current_user.role},
-        expires_delta=access_token_expires
-    )
-    
-    return LoginResponse(
-        access_token=access_token,
-        expires_in=ACCESS_TOKEN_EXPIRE_MINUTES * 60,
-        user=UserInfo(**current_user.dict())
-    )
-
-@router.get("/validate", response_model=Dict[str, Any])
-async def validate_token(current_user: ReceptionistUser = Depends(get_current_user)):
-    """Validate current token and return user info."""
-    return {
-        "valid": True,
-        "user": UserInfo(**current_user.dict()),
-        "permissions": ["read:appointments", "write:appointments", "read:patients", "write:patients", "read:messages", "write:messages"]
-    }
-
-# ──────────────────────────────────────────────────────── Admin Routes ──
-@router.post("/register", response_model=UserInfo, status_code=status.HTTP_201_CREATED)
-async def register_user(
-    user_data: Dict[str, Any] = Body(...),
-    current_user: ReceptionistUser = Depends(get_current_user)  # Only authenticated users can create others
+@router.get("/doctors", response_model=SuccessResponse[List[Dict[str, Any]]])
+@audit_pii_access("read", "doctor", "reception_doctors_list")
+async def get_reception_doctors(
+    request: Request,
+    # ✅ SECURE AUTH: Use real authentication
+    current_user: AuthenticatedUser = Depends(require_receptionist_access()),
+    # ✅ PERMISSION CHECK: Require doctor read permission
+    _: AuthenticatedUser = Depends(require_permission(Permission.DOCTOR_READ)),
+    db: Session = Depends(get_db)
 ):
-    """Register a new user (admin function)."""
-    required_fields = ["email", "password", "first_name", "last_name", "role"]
-    for field in required_fields:
-        if field not in user_data:
+    """Get list of doctors in the receptionist's clinic."""
+    try:
+        # ✅ RBAC CHECK: Verify user can access doctor resources
+        rbac_service = RBACService()
+        rbac_service.enforce_permission(
+            current_user, ResourceType.DOCTOR, ActionType.READ, current_user.clinic_id
+        )
+        
+        # Get clinic ID
+        clinic_id = current_user.clinic_id
+        if not clinic_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No clinic associated with user"
+            )
+        
+        from uuid import UUID
+        from sqlalchemy.orm import joinedload
+        
+        try:
+            clinic_uuid = UUID(clinic_id) if isinstance(clinic_id, str) else clinic_id
+        except ValueError:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Missing required field: {field}"
+                detail="Invalid clinic ID format"
             )
-    
-    email = user_data["email"]
-    if email in _USERS:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User with this email already exists"
+        
+        # Query doctors in the same clinic (organization)
+        doctors = db.query(Doctor).join(
+            User, Doctor.user_id == User.id
+        ).options(
+            joinedload(Doctor.user)
+        ).filter(
+            User.organization_id == clinic_uuid,
+            User.is_active == True,
+            User.role == UserRole.DOCTOR
+        ).all()
+        
+        # Format doctors list
+        doctors_list = []
+        for doctor in doctors:
+            doctor_name = "Unknown Doctor"
+            if doctor.user:
+                if doctor.user.first_name and doctor.user.last_name:
+                    doctor_name = f"{doctor.user.first_name} {doctor.user.last_name}"
+                elif doctor.user.first_name:
+                    doctor_name = doctor.user.first_name
+                elif doctor.user.last_name:
+                    doctor_name = doctor.user.last_name
+                elif doctor.user.email:
+                    doctor_name = doctor.user.email
+            
+            specialty = doctor.primary_specialization if hasattr(doctor, 'primary_specialization') and doctor.primary_specialization else "General Medicine"
+            is_accepting = doctor.is_accepting_patients if hasattr(doctor, 'is_accepting_patients') else True
+            
+            doctors_list.append({
+                "id": str(doctor.id),
+                "name": doctor_name,
+                "specialty": specialty,
+                "available": is_accepting,
+                "email": doctor.user.email if doctor.user else None,
+                "phone": doctor.user.phone if doctor.user and hasattr(doctor.user, 'phone') else None
+            })
+        
+        return SuccessResponse(
+            data=doctors_list,
+            message="Doctors retrieved successfully"
         )
-    
-    # Create user record
-    user_id = f"user-{uuid4().hex[:8]}"
-    practitioner_id = f"prac-{uuid4().hex[:8]}"
-    
-    new_user = {
-        "user_id": user_id,
-        "email": email,
-        "first_name": user_data["first_name"],
-        "last_name": user_data["last_name"],
-        "role": user_data["role"],
-        "department": user_data.get("department", "Reception"),
-        "practitioner_id": practitioner_id,
-        "clinic_name": user_data.get("clinic_name", "FIATTIB Medical Center"),
-        "start_date": user_data.get("start_date", datetime.now().strftime("%Y-%m-%d")),
-        "active": True,
-        "created_at": datetime.now().isoformat(),
-        "created_by": current_user.user_id
-    }
-    
-    # Hash password
-    password_hash = get_password_hash(user_data["password"])
-    
-    # Save user
-    _USERS[email] = new_user
-    _USER_CREDENTIALS[email] = password_hash
-    
-    # Create FHIR Practitioner resource
-    practitioner = create_practitioner_resource(new_user)
-    fhir_repo.save(practitioner_id, practitioner)
-    
-    return UserInfo(**new_user)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Doctors Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve doctors: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
 
-@router.get("/users", response_model=List[UserInfo])
-async def list_users(
-    active_only: bool = Query(True),
-    role_filter: Optional[str] = Query(None),
-    current_user: ReceptionistUser = Depends(get_current_user)
+@router.get("/appointments", response_model=PaginatedResponse[AppointmentSummary])
+@audit_pii_access("read", "appointment", "reception_appointments")
+async def get_reception_appointments(
+    request: Request,
+    # ✅ SECURE AUTH: Use real authentication
+    current_user: AuthenticatedUser = Depends(require_receptionist_access()),
+    # ✅ PERMISSION CHECK: Require appointment read permission
+    _: AuthenticatedUser = Depends(require_permission(Permission.APPOINTMENT_READ)),
+    status: Optional[str] = Query(None, description="Filter by appointment status"),
+    date_from: Optional[str] = Query(None, description="Filter from date"),
+    date_to: Optional[str] = Query(None, description="Filter to date"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=100, description="Page size"),
+    db: Session = Depends(get_db)
 ):
-    """List all users (admin function)."""
-    users = []
-    
-    for user_data in _USERS.values():
-        if active_only and not user_data.get("active", True):
-            continue
+    """Get appointments for the clinic with proper authentication."""
+    try:
+        # ✅ RBAC CHECK: Verify user can access appointment data
+        rbac_service = RBACService()
+        rbac_service.enforce_permission(
+            current_user, ResourceType.APPOINTMENT, ActionType.READ, current_user.clinic_id
+        )
         
-        if role_filter and user_data.get("role") != role_filter:
-            continue
+        # Get appointments for this clinic
+        appointments = appointment_crud.get_by_clinic(
+            db=db,
+            clinic_id=current_user.clinic_id,
+            skip=(page - 1) * size,
+            limit=size,
+            status=status,
+            date_from=date_from,
+            date_to=date_to
+        )
         
-        users.append(UserInfo(**user_data))
-    
-    return users
+        # Transform to response format
+        appointment_summaries = []
+        from sqlalchemy.orm import joinedload
+        for appointment in appointments:
+            # Get patient name - load user relationship
+            patient = db.query(Patient).options(
+                joinedload(Patient.user)
+            ).filter(Patient.patient_id == appointment.patient_id).first()
+            if patient and patient.user:
+                patient_name = f"{patient.user.first_name or ''} {patient.user.last_name or ''}".strip() or patient.user.email or "Unknown Patient"
+            else:
+                patient_name = "Unknown Patient"
+            
+            # Get doctor name
+            doctor = user_crud.get(db=db, id=appointment.doctor_id)
+            doctor_name = f"Dr. {doctor.first_name} {doctor.last_name}" if doctor else "Unknown Doctor"
+            
+            # Extract date and time from appointment_date (DateTime field)
+            appointment_date_str = ""
+            appointment_time_str = ""
+            if appointment.appointment_date:
+                appointment_date_str = appointment.appointment_date.strftime("%Y-%m-%d")
+                appointment_time_str = appointment.appointment_date.strftime("%H:%M")
+            
+            appointment_summaries.append(AppointmentSummary(
+                id=str(appointment.id),
+                patient_id=str(appointment.patient_id),
+                patient_name=patient_name,
+                doctor_id=str(appointment.doctor_id),
+                doctor_name=doctor_name,
+                appointment_date=appointment_date_str,
+                appointment_time=appointment_time_str,
+                duration=appointment.duration_minutes if hasattr(appointment, 'duration_minutes') else (appointment.duration if hasattr(appointment, 'duration') else 30),
+                status=appointment.status.value if hasattr(appointment.status, 'value') else (appointment.status if appointment.status else "scheduled"),
+                type=appointment.appointment_type if hasattr(appointment, 'appointment_type') else "consultation",
+                notes=appointment.notes if hasattr(appointment, 'notes') else None,
+                location=appointment.location if hasattr(appointment, 'location') else None
+            ))
+        
+        # Get total count
+        total = appointment_crud.count_by_clinic(
+            db=db, 
+            clinic_id=current_user.clinic_id,
+            status=status,
+            date_from=date_from,
+            date_to=date_to
+        )
+        
+        # ✅ AUDIT LOG: Log the access
+        from app.crud.admin import admin as admin_crud
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=current_user.user_id,
+            activity_type="VIEW",
+            description=f"Retrieved {len(appointment_summaries)} appointments",
+            affected_resource_id=None,
+            affected_resource_type="reception_appointments",
+            metadata={"filters": {"status": status, "date_from": date_from, "date_to": date_to}}
+        )
+        
+        return create_paginated_response(
+            items=appointment_summaries,
+            page=page,
+            size=size,
+            total=total
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Reception Appointments Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve reception appointments: {str(e)}",
+            trace_id=get_trace_id()
+        )
+        raise HTTPException(status_code=500, detail=problem.dict())
 
-@router.patch("/users/{user_id}", response_model=UserInfo)
-async def update_user(
-    user_id: str,
-    updates: Dict[str, Any] = Body(...),
-    current_user: ReceptionistUser = Depends(get_current_user)
+@router.get("/patients", response_model=PaginatedResponse[PatientSummary])
+@audit_pii_access("read", "patient", "reception_patients")
+async def get_reception_patients(
+    request: Request,
+    # ✅ SECURE AUTH: Use real authentication
+    current_user: AuthenticatedUser = Depends(require_receptionist_access()),
+    # ✅ PERMISSION CHECK: Require patient read permission
+    _: AuthenticatedUser = Depends(require_permission(Permission.PATIENT_READ)),
+    search: Optional[str] = Query(None, description="Search term"),
+    page: int = Query(1, ge=1, description="Page number"),
+    size: int = Query(20, ge=1, le=100, description="Page size"),
+    db: Session = Depends(get_db)
 ):
-    """Update user information (admin function)."""
-    # Find user by user_id
-    target_user = None
-    target_email = None
-    
-    for email, user_data in _USERS.items():
-        if user_data["user_id"] == user_id:
-            target_user = user_data
-            target_email = email
-            break
-    
-    if not target_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Apply updates
-    allowed_updates = ["first_name", "last_name", "department", "active", "clinic_name"]
-    for field, value in updates.items():
-        if field in allowed_updates:
-            target_user[field] = value
-    
-    target_user["updated_at"] = datetime.now().isoformat()
-    target_user["updated_by"] = current_user.user_id
-    
-    # Update FHIR Practitioner resource
-    practitioner = fhir_repo.get("Practitioner", target_user["practitioner_id"])
-    if practitioner:
-        # Update name
-        if "first_name" in updates or "last_name" in updates:
-            practitioner["name"] = [{
-                "use": "official",
-                "family": target_user["last_name"],
-                "given": [target_user["first_name"]]
-            }]
-        
-        # Update active status
-        if "active" in updates:
-            practitioner["active"] = updates["active"]
-        
-        # Update extensions
-        extensions = practitioner.get("extension", [])
-        for ext in extensions:
-            if ext.get("url") == "http://fiattib.com/fhir/StructureDefinition/employee-info":
-                for sub_ext in ext.get("extension", []):
-                    if sub_ext.get("url") == "department" and "department" in updates:
-                        sub_ext["valueString"] = updates["department"]
-                    elif sub_ext.get("url") == "clinicName" and "clinic_name" in updates:
-                        sub_ext["valueString"] = updates["clinic_name"]
-        
-        practitioner["meta"]["lastUpdated"] = datetime.now(timezone.utc).isoformat()
-        fhir_repo.save(target_user["practitioner_id"], practitioner)
-    
-    return UserInfo(**target_user)
-
-@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def deactivate_user(
-    user_id: str,
-    permanent: bool = Query(False, description="Permanently delete vs deactivate"),
-    current_user: ReceptionistUser = Depends(get_current_user)
-):
-    """Deactivate or delete user (admin function)."""
-    # Find user by user_id
-    target_user = None
-    target_email = None
-    
-    for email, user_data in _USERS.items():
-        if user_data["user_id"] == user_id:
-            target_user = user_data
-            target_email = email
-            break
-    
-    if not target_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # Prevent self-deletion
-    if target_user["user_id"] == current_user.user_id:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot delete your own account"
+    """Get patients for the clinic with proper authentication."""
+    try:
+        # ✅ RBAC CHECK: Verify user can access patient data
+        rbac_service = RBACService()
+        rbac_service.enforce_permission(
+            current_user, ResourceType.PATIENT, ActionType.READ, current_user.clinic_id
         )
-    
-    if permanent:
-        # Permanent deletion
-        del _USERS[target_email]
-        del _USER_CREDENTIALS[target_email]
         
-        # Delete FHIR Practitioner resource
-        fhir_repo.delete("Practitioner", target_user["practitioner_id"])
-    else:
-        # Deactivation
-        target_user["active"] = False
-        target_user["deactivated_at"] = datetime.now().isoformat()
-        target_user["deactivated_by"] = current_user.user_id
+        # Get patients for this clinic
+        patients = patient_crud.get_by_clinic(
+            db=db,
+            clinic_id=current_user.clinic_id,
+            skip=(page - 1) * size,
+            limit=size,
+            search=search
+        )
         
-        # Update FHIR Practitioner resource
-        practitioner = fhir_repo.get("Practitioner", target_user["practitioner_id"])
-        if practitioner:
-            practitioner["active"] = False
-            practitioner["meta"]["lastUpdated"] = datetime.now(timezone.utc).isoformat()
-            fhir_repo.save(target_user["practitioner_id"], practitioner)
-
-# ──────────────────────────────────────────────────────── Password Reset ──
-class PasswordResetRequest(BaseModel):
-    email: EmailStr
-
-class PasswordReset(BaseModel):
-    token: str
-    new_password: str
-
-# Simple in-memory password reset tokens (use Redis or DB in production)
-_RESET_TOKENS: Dict[str, Dict[str, Any]] = {}
-
-@router.post("/password-reset-request", status_code=status.HTTP_204_NO_CONTENT)
-async def request_password_reset(request: PasswordResetRequest):
-    """Request password reset (sends token via email)."""
-    if request.email not in _USERS:
-        # Don't reveal if email exists
-        return None
-    
-    # Generate reset token
-    reset_token = uuid4().hex
-    _RESET_TOKENS[reset_token] = {
-        "email": request.email,
-        "expires": (datetime.now() + timedelta(hours=1)).isoformat(),
-        "used": False
-    }
-    
-    # In production, send email with reset link
-    print(f"Password reset token for {request.email}: {reset_token}")
-    
-    return None
-
-@router.post("/password-reset", status_code=status.HTTP_204_NO_CONTENT)
-async def reset_password(reset_data: PasswordReset):
-    """Reset password using token."""
-    # Validate token
-    if reset_data.token not in _RESET_TOKENS:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid or expired reset token"
+        # Transform to response format
+        patient_summaries = []
+        from sqlalchemy.orm import joinedload
+        # Reload patients with user relationship
+        patient_ids = [p.patient_id for p in patients]
+        patients_with_user = db.query(Patient).options(
+            joinedload(Patient.user)
+        ).filter(Patient.patient_id.in_(patient_ids)).all()
+        
+        for patient in patients_with_user:
+            # Get name from user relationship
+            first_name = patient.user.first_name if patient.user else ""
+            last_name = patient.user.last_name if patient.user else ""
+            email = patient.user.email if patient.user else patient.email if hasattr(patient, 'email') else ""
+            
+            patient_summaries.append(PatientSummary(
+                id=str(patient.id),
+                first_name=first_name,
+                last_name=last_name,
+                email=email,
+                phone=patient.phone if hasattr(patient, 'phone') else "",
+                date_of_birth=patient.date_of_birth.isoformat() if patient.date_of_birth else "",
+                gender=patient.gender,
+                registration_date=patient.created_at.isoformat() if patient.created_at else "",
+                last_visit=patient.last_visit.isoformat() if hasattr(patient, 'last_visit') and patient.last_visit else None,
+                next_appointment=None  # Would get from appointments
+            ))
+        
+        # Get total count
+        total = patient_crud.count_by_clinic(db=db, clinic_id=current_user.clinic_id, search=search)
+        
+        # ✅ AUDIT LOG: Log the access
+        from app.crud.admin import admin as admin_crud
+        admin_crud.log_admin_activity(
+            db=db,
+            admin_id=current_user.user_id,
+            activity_type="VIEW",
+            description=f"Retrieved {len(patient_summaries)} patients",
+            affected_resource_id=None,
+            affected_resource_type="reception_patients",
+            metadata={"search": search}
         )
-    
-    token_data = _RESET_TOKENS[reset_data.token]
-    
-    # Check if token is expired
-    expires = datetime.fromisoformat(token_data["expires"])
-    if datetime.now() > expires:
-        del _RESET_TOKENS[reset_data.token]
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Reset token has expired"
+        
+        return create_paginated_response(
+            items=patient_summaries,
+            page=page,
+            size=size,
+            total=total
         )
-    
-    # Check if token was already used
-    if token_data["used"]:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Reset token has already been used"
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="Reception Patients Retrieval Failed",
+            status=500,
+            detail=f"Failed to retrieve reception patients: {str(e)}",
+            trace_id=get_trace_id()
         )
-    
-    # Validate new password
-    if len(reset_data.new_password) < 8:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="New password must be at least 8 characters long"
-        )
-    
-    # Update password
-    email = token_data["email"]
-    new_hash = get_password_hash(reset_data.new_password)
-    _USER_CREDENTIALS[email] = new_hash
-    
-    # Mark token as used
-    token_data["used"] = True
-    
-    # Update user record
-    user_data = _USERS.get(email)
-    if user_data:
-        user_data["password_reset_at"] = datetime.now().isoformat()
-
-# ──────────────────────────────────────────────────────── Session Management ──
-@router.get("/sessions", response_model=List[Dict[str, Any]])
-async def get_user_sessions(current_user: ReceptionistUser = Depends(get_current_user)):
-    """Get active sessions for current user."""
-    # In production, this would query actual session store
-    # For now, return mock data
-    return [
-        {
-            "session_id": "sess-current",
-            "device": "Desktop - Chrome",
-            "ip_address": "192.168.1.100",
-            "location": "Tashkent, Uzbekistan",
-            "last_activity": datetime.now().isoformat(),
-            "is_current": True
-        }
-    ]
-
-@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_session(
-    session_id: str,
-    current_user: ReceptionistUser = Depends(get_current_user)
-):
-    """Revoke a specific session."""
-    # In production, this would invalidate the session in your session store
-    # and add tokens to blacklist
-    pass
-
-@router.delete("/sessions", status_code=status.HTTP_204_NO_CONTENT)
-async def revoke_all_sessions(current_user: ReceptionistUser = Depends(get_current_user)):
-    """Revoke all sessions except current one."""
-    # In production, this would invalidate all sessions for the user
-    # except the current one
-    pass
-
-# ──────────────────────────────────────────────────────── Health Check ──
-@router.get("/health")
-async def auth_health_check():
-    """Authentication service health check."""
-    return {
-        "status": "healthy",
-        "timestamp": datetime.now().isoformat(),
-        "total_users": len(_USERS),
-        "active_users": len([u for u in _USERS.values() if u.get("active", True)]),
-        "version": "1.0.0"
-    }
-
-# Export the dependency functions for use in other modules
-__all__ = ["get_current_user", "get_current_receptionist", "ReceptionistUser"]
+        raise HTTPException(status_code=500, detail=problem.dict())

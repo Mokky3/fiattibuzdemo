@@ -1,6 +1,6 @@
 # app/common/models/notification.py
 """Notification models for the EHR system."""
-from sqlalchemy import Column, String, Boolean, DateTime, Text, ForeignKey, Enum, JSON, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, Text, ForeignKey, Enum, JSON, Integer, Table
 from sqlalchemy.orm import relationship
 from sqlalchemy import String
 from sqlalchemy.sql import func
@@ -53,16 +53,17 @@ class NotificationStatus(str, enum.Enum):
 class Notification(Base):
     """User notifications."""
     __tablename__ = "notifications"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
     # Recipient
-    recipient_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    recipient_id = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Notification details
-    notification_type = Column(Enum(NotificationType), nullable=False)
-    channel = Column(Enum(NotificationChannel), nullable=False)
-    priority = Column(Enum(NotificationPriority), default=NotificationPriority.NORMAL)
+    notification_type = Column(Enum(NotificationType, native_enum=False), nullable=False)
+    channel = Column(Enum(NotificationChannel, native_enum=False), nullable=False)
+    priority = Column(Enum(NotificationPriority, native_enum=False), default=NotificationPriority.NORMAL)
     
     # Content
     title = Column(String(200), nullable=False)
@@ -74,7 +75,7 @@ class Notification(Base):
     reference_id = Column(String(36), nullable=True)
     
     # Status
-    status = Column(Enum(NotificationStatus), default=NotificationStatus.PENDING)
+    status = Column(Enum(NotificationStatus, native_enum=False), default=NotificationStatus.PENDING)
     
     # Delivery tracking
     scheduled_for = Column(DateTime(timezone=True), nullable=True)
@@ -107,19 +108,24 @@ class Notification(Base):
     
     # Relationships
     recipient = relationship("User", back_populates="notifications")
-    templates_used = relationship("NotificationTemplate", secondary="notification_template_usage")
+    templates_used = relationship(
+        "NotificationTemplate",
+        secondary="notification_template_usage",
+        back_populates="used_by_notifications",
+    )
 
 
 class NotificationTemplate(Base):
     """Notification templates."""
     __tablename__ = "notification_templates"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     
     # Template identification
     code = Column(String(50), unique=True, nullable=False)
     name = Column(String(200), nullable=False)
-    notification_type = Column(Enum(NotificationType), nullable=False)
+    notification_type = Column(Enum(NotificationType, native_enum=False), nullable=False)
     
     # Content templates
     channels = Column(JSON, nullable=False)  # Array of supported channels
@@ -138,7 +144,7 @@ class NotificationTemplate(Base):
     
     # Settings
     is_active = Column(Boolean, default=True)
-    priority = Column(Enum(NotificationPriority), default=NotificationPriority.NORMAL)
+    priority = Column(Enum(NotificationPriority, native_enum=False), default=NotificationPriority.NORMAL)
     
     # Localization
     language = Column(String(5), default="en")
@@ -147,16 +153,33 @@ class NotificationTemplate(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
+    # Relationships
+    used_by_notifications = relationship(
+        "Notification",
+        secondary="notification_template_usage",
+        back_populates="templates_used",
+    )
+
+
+# Association table for Notification <-> NotificationTemplate usage
+notification_template_usage = Table(
+    "notification_template_usage",
+    Base.metadata,
+    Column("notification_id", String(36), ForeignKey("ops.notifications.id"), primary_key=True),
+    Column("template_id", String(36), ForeignKey("ops.notification_templates.id"), primary_key=True),
+)
+
 
 class NotificationPreference(Base):
     """User notification preferences."""
     __tablename__ = "notification_preferences"
+    __table_args__ = {"schema": "ops"}
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("core.users.id"), nullable=False)
     
     # Type preferences
-    notification_type = Column(Enum(NotificationType), nullable=False)
+    notification_type = Column(Enum(NotificationType, native_enum=False), nullable=False)
     
     # Channel preferences
     in_app_enabled = Column(Boolean, default=True)

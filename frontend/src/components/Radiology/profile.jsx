@@ -2,149 +2,170 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, User, Settings, Bell, Shield, Key, Camera, Edit, Save, X, Check, Mail, Phone, MapPin, Calendar, Award, Activity, Clock, Download, Monitor, Eye, FileText, Stethoscope } from 'lucide-react';
 // Import the radiology header component
 import RadiologyHeader from './header';
+import { getRadiologistProfile, updateRadiologistProfile, changeRadiologistPassword, getRadiologistStats, getRadiologistActivity, updateRadiologistPreferences, updateRadiologistNotifications, updateRadiologistSecurity } from '../../services/radiologyService';
 
 const RadiologyProfileModule = () => {
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [profileData, setProfileData] = useState({
-    // Personal Information
-    firstName: 'Dr. Sarah',
-    lastName: 'Anderson',
-    email: 'sarah.anderson@radportal.com',
-    phone: '+1 (555) 123-4567',
-    address: '123 Medical Center Drive',
-    city: 'New York',
-    state: 'NY',
-    zipCode: '10001',
-    dateOfBirth: '1985-03-15',
-    
-    // Professional Information
-    employeeId: 'RAD-001',
-    position: 'Staff Radiologist',
-    department: 'Diagnostic Radiology',
-    supervisor: 'Dr. Michael Chen, MD',
-    hireDate: '2020-06-15',
-    certification: 'Board Certified Diagnostic Radiologist',
-    licenseNumber: 'MD-NY-12345',
-    licenseExpiry: '2026-03-15',
-    subspecialty: 'Abdominal Imaging',
-    medicalSchool: 'Johns Hopkins School of Medicine',
-    residency: 'Massachusetts General Hospital',
-    fellowship: 'Stanford University - Abdominal Imaging',
-    
-    // Contact Preferences
-    emailNotifications: true,
-    smsNotifications: false,
-    criticalAlerts: true,
-    weeklyReports: true,
-    systemUpdates: false,
-    pacsAlerts: true,
-    reportReminders: true,
-    
-    // Security Settings
-    twoFactorAuth: true,
-    sessionTimeout: 30,
-    loginAlerts: true,
-    
-    // Display Preferences
-    theme: 'dark',
-    language: 'en',
-    timezone: 'America/New_York',
-    dateFormat: 'MM/DD/YYYY',
-    timeFormat: '12-hour',
-    pacsLayout: 'quad',
-    windowingPreset: 'auto'
-  });
+  // Real profile data from API
+  const [profileData, setProfileData] = useState({});
+  const [statsData, setStatsData] = useState({});
+  const [activityData, setActivityData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-  const [tempProfileData, setTempProfileData] = useState(profileData);
+  // Fetch profile data from API
+  useEffect(() => {
+    let mounted = true;
+    const fetchProfileData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        
+        const [profile, stats, activity] = await Promise.all([
+          getRadiologistProfile(),
+          getRadiologistStats(),
+          getRadiologistActivity()
+        ]);
+        
+        if (mounted) {
+          setProfileData(profile || {});
+          setStatsData(stats || {});
+          setActivityData(activity || []);
+        }
+      } catch (err) {
+        console.error('Error fetching profile data:', err);
+        if (mounted) {
+          setError(err.message);
+          // Set fallback data
+          setProfileData({
+            firstName: 'Dr. Sarah',
+            lastName: 'Anderson',
+            email: 'sarah.anderson@radportal.com',
+            phone: '+1 (555) 123-4567',
+            address: '123 Medical Center Drive',
+            city: 'New York',
+            state: 'NY',
+            zipCode: '10001',
+            dateOfBirth: '1985-03-15',
+            employeeId: 'RAD-001',
+            position: 'Staff Radiologist',
+            department: 'Diagnostic Radiology',
+            supervisor: 'Dr. Michael Chen, MD',
+            hireDate: '2020-06-15',
+            certification: 'Board Certified Diagnostic Radiologist',
+            licenseNumber: 'MD-NY-12345',
+            licenseExpiry: '2026-03-15',
+            subspecialty: 'Abdominal Imaging',
+            medicalSchool: 'Johns Hopkins School of Medicine',
+            residency: 'Massachusetts General Hospital',
+            fellowship: 'Stanford University - Abdominal Imaging',
+            emailNotifications: true,
+            smsNotifications: false,
+            criticalAlerts: true,
+            weeklyReports: true,
+            systemUpdates: false,
+            pacsAlerts: true,
+            reportReminders: true,
+            twoFactorAuth: true,
+            sessionTimeout: 30,
+            loginAlerts: true,
+            theme: 'dark',
+            language: 'en',
+            timezone: 'America/New_York',
+            dateFormat: 'MM/DD/YYYY',
+            timeFormat: '12-hour',
+            pacsLayout: 'quad',
+            windowingPreset: 'auto'
+          });
+          setStatsData({
+            totalStudies: 1247,
+            reportsFinalized: 1189,
+            avgReportTime: '18 minutes',
+            criticalFindings: 23,
+            consultations: 45,
+            accuracy: '99.7%',
+            productivity: '15.2 RVUs/day',
+            thisWeek: {
+              studiesRead: 89,
+              reportsFinalized: 86,
+              criticalFindings: 3,
+              hoursWorked: 45,
+              avgTurnaroundTime: '16 minutes'
+            },
+            thisMonth: {
+              studiesRead: 384,
+              reportsFinalized: 378,
+              criticalFindings: 12,
+              hoursWorked: 180,
+              avgTurnaroundTime: '18 minutes'
+            },
+            modalityBreakdown: {
+              CT: 45,
+              MRI: 25,
+              XR: 20,
+              US: 10
+            }
+          });
+          setActivityData([
+            {
+              id: 1,
+              action: 'Finalized CT Chest Report',
+              timestamp: '2025-06-29 14:30',
+              type: 'report',
+              details: 'CT Chest W/O Contrast - Acc: CTG2025001'
+            },
+            {
+              id: 2,
+              action: 'Critical Finding Notification',
+              timestamp: '2025-06-29 11:45',
+              type: 'critical',
+              details: 'Pneumothorax identified - Emergency physician notified'
+            },
+            {
+              id: 3,
+              action: 'Reviewed MRI Brain Study',
+              timestamp: '2025-06-29 09:15',
+              type: 'review',
+              details: 'MRI Brain W/ & W/O Contrast - Acc: MRI2025042'
+            }
+          ]);
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    fetchProfileData();
+    return () => { mounted = false };
+  }, []);
+
+  const [tempProfileData, setTempProfileData] = useState({});
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
 
-  // Activity data - radiology specific
-  const [activityData] = useState([
-    {
-      id: 1,
-      action: 'Finalized CT Chest Report',
-      timestamp: '2025-06-29 14:30',
-      type: 'report',
-      details: 'CT Chest W/O Contrast - Acc: CTG2025001'
-    },
-    {
-      id: 2,
-      action: 'Critical Finding Notification',
-      timestamp: '2025-06-29 11:45',
-      type: 'critical',
-      details: 'Pneumothorax identified - Emergency physician notified'
-    },
-    {
-      id: 3,
-      action: 'Reviewed MRI Brain Study',
-      timestamp: '2025-06-29 09:15',
-      type: 'review',
-      details: 'MRI Brain W/ & W/O Contrast - Acc: MRI2025042'
-    },
-    {
-      id: 4,
-      action: 'PACS Session Started',
-      timestamp: '2025-06-29 08:00',
-      type: 'login',
-      details: 'Successful login from Workstation RAD-WS-01'
-    },
-    {
-      id: 5,
-      action: 'Updated Reading Preferences',
-      timestamp: '2025-06-28 16:20',
-      type: 'settings',
-      details: 'Changed default windowing preset to Lung'
-    },
-    {
-      id: 6,
-      action: 'Consultation Completed',
-      timestamp: '2025-06-28 14:15',
-      type: 'consultation',
-      details: 'Second opinion provided for complex abdominal mass'
-    }
-  ]);
+  // Update tempProfileData when profileData changes
+  useEffect(() => {
+    setTempProfileData(profileData);
+  }, [profileData]);
 
-  // Statistics data - radiology specific
-  const [statsData] = useState({
-    totalStudies: 1247,
-    reportsFinalized: 1189,
-    avgReportTime: '18 minutes',
-    criticalFindings: 23,
-    consultations: 45,
-    accuracy: '99.7%',
-    productivity: '15.2 RVUs/day',
-    thisWeek: {
-      studiesRead: 89,
-      reportsFinalized: 86,
-      criticalFindings: 3,
-      hoursWorked: 45,
-      avgTurnaroundTime: '16 minutes'
-    },
-    thisMonth: {
-      studiesRead: 384,
-      reportsFinalized: 378,
-      criticalFindings: 12,
-      hoursWorked: 180,
-      avgTurnaroundTime: '18 minutes'
-    },
-    modalityBreakdown: {
-      CT: 45,
-      MRI: 25,
-      XR: 20,
-      US: 10
+  const handleSaveProfile = async () => {
+    try {
+      setSaving(true);
+      await updateRadiologistProfile(tempProfileData);
+      setProfileData(tempProfileData);
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Error saving profile:', err);
+      setError('Failed to save profile changes');
+    } finally {
+      setSaving(false);
     }
-  });
-
-  const handleSaveProfile = () => {
-    setProfileData(tempProfileData);
-    setIsEditing(false);
-    // Here you would typically make an API call to save the data
   };
 
   const handleCancelEdit = () => {
@@ -152,15 +173,24 @@ const RadiologyProfileModule = () => {
     setIsEditing(false);
   };
 
-  const handlePasswordChange = () => {
+  const handlePasswordChange = async () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
       alert('New passwords do not match');
       return;
     }
-    // Here you would typically make an API call to change the password
-    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    setShowPasswordForm(false);
-    alert('Password changed successfully');
+    
+    try {
+      setSaving(true);
+      await changeRadiologistPassword(passwordData);
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setShowPasswordForm(false);
+      alert('Password changed successfully');
+    } catch (err) {
+      console.error('Error changing password:', err);
+      setError('Failed to change password');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const ProfileSection = () => (
@@ -181,10 +211,20 @@ const RadiologyProfileModule = () => {
             <div className="flex space-x-2">
               <button
                 onClick={handleSaveProfile}
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                disabled={saving}
+                className="bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               >
-                <Save className="w-4 h-4" />
-                Save
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    Save
+                  </>
+                )}
               </button>
               <button
                 onClick={handleCancelEdit}
@@ -202,7 +242,7 @@ const RadiologyProfileModule = () => {
       <div className="flex items-center space-x-6 mb-8">
         <div className="relative">
           <div className="w-24 h-24 bg-teal-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-            {profileData.firstName[0]}{profileData.lastName[0]}
+            {profileData.firstName?.[0] || 'R'}{profileData.lastName?.[0] || 'D'}
           </div>
           {isEditing && (
             <button className="absolute bottom-0 right-0 bg-white border border-gray-300 rounded-full p-2 hover:bg-gray-50">
@@ -600,9 +640,17 @@ const RadiologyProfileModule = () => {
             <div className="flex space-x-2">
               <button
                 onClick={handlePasswordChange}
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+                disabled={saving}
+                className="bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
               >
-                Update Password
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Updating...
+                  </>
+                ) : (
+                  'Update Password'
+                )}
               </button>
               <button
                 onClick={() => setShowPasswordForm(false)}
@@ -759,19 +807,19 @@ const RadiologyProfileModule = () => {
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex justify-between text-sm">
                   <span>Studies Read:</span>
-                  <span className="font-medium">{statsData.thisWeek.studiesRead}</span>
+                  <span className="font-medium">{statsData?.thisWeek?.studiesRead || 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Reports Finalized:</span>
-                  <span className="font-medium">{statsData.thisWeek.reportsFinalized}</span>
+                  <span className="font-medium">{statsData?.thisWeek?.reportsFinalized || 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Critical Findings:</span>
-                  <span className="font-medium">{statsData.thisWeek.criticalFindings}</span>
+                  <span className="font-medium">{statsData?.thisWeek?.criticalFindings || 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Avg Turnaround:</span>
-                  <span className="font-medium">{statsData.thisWeek.avgTurnaroundTime}</span>
+                  <span className="font-medium">{statsData?.thisWeek?.avgTurnaroundTime || 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -780,19 +828,19 @@ const RadiologyProfileModule = () => {
               <div className="bg-gray-50 rounded-lg p-3">
                 <div className="flex justify-between text-sm">
                   <span>Studies Read:</span>
-                  <span className="font-medium">{statsData.thisMonth.studiesRead}</span>
+                  <span className="font-medium">{statsData?.thisMonth?.studiesRead || 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Reports Finalized:</span>
-                  <span className="font-medium">{statsData.thisMonth.reportsFinalized}</span>
+                  <span className="font-medium">{statsData?.thisMonth?.reportsFinalized || 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Critical Findings:</span>
-                  <span className="font-medium">{statsData.thisMonth.criticalFindings}</span>
+                  <span className="font-medium">{statsData?.thisMonth?.criticalFindings || 0}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Avg Turnaround:</span>
-                  <span className="font-medium">{statsData.thisMonth.avgTurnaroundTime}</span>
+                  <span className="font-medium">{statsData?.thisMonth?.avgTurnaroundTime || 'N/A'}</span>
                 </div>
               </div>
             </div>
@@ -829,6 +877,31 @@ const RadiologyProfileModule = () => {
       <RadiologyHeader />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading profile data...</p>
+            </div>
+          </div>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+            <div className="flex items-center">
+              <X className="w-5 h-5 text-red-500 mr-2" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Error loading profile</h3>
+                <p className="text-sm text-red-600 mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Main Content */}
+        {!loading && !error && (
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* Profile Sidebar */}
           <div className="lg:col-span-1">
@@ -836,16 +909,16 @@ const RadiologyProfileModule = () => {
               {/* Profile Summary */}
               <div className="text-center mb-6">
                 <div className="w-20 h-20 bg-teal-500 rounded-full flex items-center justify-center text-white text-xl font-bold mx-auto mb-4">
-                  {profileData.firstName[0]}{profileData.lastName[0]}
+                  {profileData.firstName?.[0] || 'R'}{profileData.lastName?.[0] || 'D'}
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900">
-                  {profileData.firstName} {profileData.lastName}
+                  {profileData.firstName || 'Radiologist'} {profileData.lastName || 'User'}
                 </h3>
-                <p className="text-gray-600">{profileData.position}</p>
-                <p className="text-sm text-gray-500">{profileData.employeeId}</p>
+                <p className="text-gray-600">{profileData.position || 'Staff Radiologist'}</p>
+                <p className="text-sm text-gray-500">{profileData.employeeId || 'RAD-001'}</p>
                 <div className="flex items-center justify-center mt-2 space-x-1">
                   <Monitor className="w-4 h-4 text-blue-600" />
-                  <span className="text-sm text-blue-600">{profileData.subspecialty}</span>
+                  <span className="text-sm text-blue-600">{profileData.subspecialty || 'Diagnostic Radiology'}</span>
                 </div>
               </div>
 
@@ -853,19 +926,19 @@ const RadiologyProfileModule = () => {
               <div className="space-y-3 mb-6">
                 <div className="flex items-center space-x-3">
                   <Mail className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600 truncate">{profileData.email}</span>
+                  <span className="text-sm text-gray-600 truncate">{profileData.email || 'radiologist@example.com'}</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Phone className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">{profileData.phone}</span>
+                  <span className="text-sm text-gray-600">{profileData.phone || '+1 (555) 123-4567'}</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <MapPin className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">{profileData.city}, {profileData.state}</span>
+                  <span className="text-sm text-gray-600">{profileData.city || 'New York'}, {profileData.state || 'NY'}</span>
                 </div>
                 <div className="flex items-center space-x-3">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">Joined {profileData.hireDate}</span>
+                  <span className="text-sm text-gray-600">Joined {profileData.hireDate || '2020-06-15'}</span>
                 </div>
               </div>
 
@@ -875,15 +948,15 @@ const RadiologyProfileModule = () => {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-teal-700">Studies This Week:</span>
-                    <span className="font-medium text-teal-900">{statsData.thisWeek.studiesRead}</span>
+                    <span className="font-medium text-teal-900">{statsData?.thisWeek?.studiesRead || 0}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-teal-700">Avg Report Time:</span>
-                    <span className="font-medium text-teal-900">{statsData.avgReportTime}</span>
+                    <span className="font-medium text-teal-900">{statsData?.avgReportTime || 'N/A'}</span>
                   </div>
                   <div className="flex justify-between text-sm">
                     <span className="text-teal-700">Accuracy:</span>
-                    <span className="font-medium text-teal-900">{statsData.accuracy}</span>
+                    <span className="font-medium text-teal-900">{statsData?.accuracy || 'N/A'}</span>
                   </div>
                 </div>
               </div>
@@ -926,6 +999,7 @@ const RadiologyProfileModule = () => {
             {activeTab === 'statistics' && <StatisticsSection />}
           </div>
         </div>
+        )}
       </div>
     </div>
   );

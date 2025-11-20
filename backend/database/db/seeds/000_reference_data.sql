@@ -1,0 +1,2 @@
+-- Example idempotent seed (reference data)
+-- INSERT INTO ref.specialties(name) VALUES ('Cardiology') ON CONFLICT DO NOTHING;

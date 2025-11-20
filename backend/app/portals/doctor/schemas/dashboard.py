@@ -91,7 +91,7 @@ class PendingTask(BaseModel):
     description: str = Field(..., min_length=10, max_length=300)
     
     # Priority and timing
-    priority: str = Field(..., regex=r'^(low|normal|high|urgent)$')
+    priority: str = Field(..., pattern=r'^(low|normal|high|urgent)$')
     due_date: Optional[datetime] = None
     created_at: datetime
     
@@ -149,7 +149,7 @@ class TimeSeriesDataPoint(BaseModel):
 
 class ChartData(BaseModel):
     """Chart data for dashboard widgets"""
-    chart_type: str = Field(..., regex=r'^(line|bar|pie|area|donut)$')
+    chart_type: str = Field(..., pattern=r'^(line|bar|pie|area|donut)$')
     title: str = Field(..., min_length=3, max_length=100)
     
     # Data series
@@ -495,7 +495,7 @@ class PatientSummary(BaseModel):
     requires_follow_up: bool = Field(default=False)
     
     # Risk factors
-    risk_level: str = Field(default="low", regex=r'^(low|medium|high)$')
+    risk_level: str = Field(default="low", pattern=r'^(low|medium|high)$')
     risk_factors: List[str] = Field(default_factory=list)
     
     # Communication preferences
@@ -531,8 +531,8 @@ class MyPatientsList(BaseModel):
 class ClinicalAlert(BaseModel):
     """Clinical decision support alert"""
     id: str
-    alert_type: str = Field(..., regex=r'^(drug_interaction|allergy|contraindication|guideline|reminder)$')
-    severity: str = Field(..., regex=r'^(info|warning|critical)$')
+    alert_type: str = Field(..., pattern=r'^(drug_interaction|allergy|contraindication|guideline|reminder)$')
+    severity: str = Field(..., pattern=r'^(info|warning|critical)$')
     
     # Alert content
     title: str = Field(..., min_length=5, max_length=100)
@@ -549,7 +549,7 @@ class ClinicalAlert(BaseModel):
     alternative_suggestions: List[str] = Field(default_factory=list)
     
     # Evidence
-    evidence_level: Optional[str] = Field(None, regex=r'^(A|B|C|D)$')
+    evidence_level: Optional[str] = Field(None, pattern=r'^(A|B|C|D)$')
     source: Optional[str] = Field(None, max_length=200)
     
     # Status
@@ -572,8 +572,8 @@ class ClinicalGuideline(BaseModel):
     
     # Recommendation
     recommendation: str = Field(..., min_length=20, max_length=1000)
-    strength_of_recommendation: str = Field(..., regex=r'^(strong|weak|conditional)$')
-    quality_of_evidence: str = Field(..., regex=r'^(high|moderate|low|very_low)$')
+    strength_of_recommendation: str = Field(..., pattern=r'^(strong|weak|conditional)$')
+    quality_of_evidence: str = Field(..., pattern=r'^(high|moderate|low|very_low)$')
     
     # Supporting information
     rationale: Optional[str] = Field(None, max_length=1000)
@@ -779,7 +779,7 @@ class ReportRequest(BaseModel):
     include_financial_data: bool = Field(default=False)
     
     # Grouping options
-    group_by: Optional[str] = Field(None, regex=r'^(day|week|month|patient|type)$')
+    group_by: Optional[str] = Field(None, pattern=r'^(day|week|month|patient|type)$')
     
     # Custom fields
     additional_fields: List[str] = Field(default_factory=list)
@@ -791,7 +791,7 @@ class ReportRequest(BaseModel):
 class ReportResponse(BaseModel):
     """Response for report generation"""
     report_id: str
-    status: str = Field(..., regex=r'^(generating|completed|failed)$')
+    status: str = Field(..., pattern=r'^(generating|completed|failed)$')
     
     # Report details
     report_type: ReportType
@@ -870,7 +870,7 @@ class DashboardLayout(BaseModel):
     auto_refresh: bool = Field(default=True)
     
     # Theme
-    theme: str = Field(default="light", regex=r'^(light|dark|auto)$')
+    theme: str = Field(default="light", pattern=r'^(light|dark|auto)$')
     color_scheme: str = Field(default="default", max_length=50)
     
     # Metadata
@@ -887,7 +887,7 @@ class DashboardDataFilter(BaseModel):
     # Time range
     start_date: Optional[date] = None
     end_date: Optional[date] = None
-    time_period: Optional[str] = Field(None, regex=r'^(today|week|month|quarter|year|custom)$')
+    time_period: Optional[str] = Field(None, pattern=r'^(today|week|month|quarter|year|custom)$')
     
     # Entity filters
     patient_ids: Optional[List[str]] = None
@@ -900,31 +900,26 @@ class DashboardDataFilter(BaseModel):
     include_pending: bool = Field(default=True)
     
     # Grouping
-    group_by: Optional[str] = Field(None, regex=r'^(day|week|month|type|status)$')
+    group_by: Optional[str] = Field(None, pattern=r'^(day|week|month|type|status)$')
     
     # Sorting
     sort_by: Optional[str] = None
-    sort_order: str = Field(default="desc", regex=r'^(asc|desc)$')
+    sort_order: str = Field(default="desc", pattern=r'^(asc|desc)$')
 
 # ================================
-# Validators
+# Validators (class-scoped)
 # ================================
 
-@validator('end_date')
-def validate_date_range(cls, v, values):
-    """Validate that end date is after start date"""
-    if v and 'start_date' in values and values['start_date']:
-        if v < values['start_date']:
+class DashboardDataFilter(DashboardDataFilter):
+    @validator('end_date')
+    def _validate_date_range(cls, v, values):
+        if v and values.get('start_date') and v < values['start_date']:
             raise ValueError('End date must be after start date')
-    return v
+        return v
 
-@validator('position_x')
-def validate_widget_position(cls, v, values):
-    """Validate widget position doesn't exceed grid"""
-    if 'width' in values and v + values['width'] > 12:
-        raise ValueError('Widget position plus width cannot exceed grid columns')
-    return v
-
-# Apply validators to relevant classes
-ChartData.__validators__['validate_date_range'] = validator('period_end', allow_reuse=True)(validate_date_range)
-DashboardWidget.__validators__['validate_widget_position'] = validator('position_x', allow_reuse=True)(validate_widget_position)
+class DashboardWidget(DashboardWidget):
+    @validator('position_x')
+    def _validate_widget_position(cls, v, values):
+        if 'width' in values and v + values['width'] > 12:
+            raise ValueError("Widget position plus width cannot exceed grid columns")
+        return v

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Settings, Bell, Shield, Palette, Clock, Globe, Monitor, Smartphone, Volume2, Eye, Database, Download, Upload, RotateCcw, Save, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import NurseHeader from './header';
+import { getSettings, saveSettings } from '../../services/nurseService';
 
 const NurseSettingsModule = () => {
   const [activeSection, setActiveSection] = useState('notifications');
@@ -118,12 +119,26 @@ const NurseSettingsModule = () => {
     setHasUnsavedChanges(true);
   };
 
-  const handleSaveSettings = () => {
-    // Simulate saving settings
-    console.log('Saving settings:', settings);
-    setHasUnsavedChanges(false);
-    setShowSaveNotification(true);
-    setTimeout(() => setShowSaveNotification(false), 3000);
+  useEffect(() => {
+    let active = true
+    ;(async () => {
+      try {
+        const env = await getSettings()
+        if (!active) return
+        // backend returns envelope { settings, lastUpdated }
+        if (env && env.settings) setSettings(env.settings)
+      } catch (e) {}
+    })()
+    return () => { active = false }
+  }, [])
+
+  const handleSaveSettings = async () => {
+    try {
+      await saveSettings(settings)
+      setHasUnsavedChanges(false);
+      setShowSaveNotification(true);
+      setTimeout(() => setShowSaveNotification(false), 3000);
+    } catch (e) {}
   };
 
   const handleResetSection = (section) => {
