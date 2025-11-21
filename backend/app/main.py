@@ -230,9 +230,20 @@ _env_allowed_origins = [
     if origin.strip()
 ]
 
+_merged_allowed_origins: list[str] = []
+if _env_allowed_origins:
+    _merged_allowed_origins.extend(_env_allowed_origins)
+
+for origin in _default_allowed_origins:
+    if origin not in _merged_allowed_origins:
+        _merged_allowed_origins.append(origin)
+
+_cors_origin_regex = os.getenv("CORS_ORIGINS_REGEX", r"https://.*\.netlify\.app")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=_env_allowed_origins or _default_allowed_origins,
+    allow_origins=_merged_allowed_origins,
+    allow_origin_regex=_cors_origin_regex,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
