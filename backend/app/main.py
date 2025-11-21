@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -223,18 +223,51 @@ app.add_middleware(
         "http://localhost:5174",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
+        "https://zamez.netlify.app",  # Your production site
+        # Add your Firebase hosting URL if you're using it too
+        "https://fiattib.web.app",
+        "https://fiattib.firebaseapp.com",
     ],
+    allow_origin_regex=r"https://.*\.netlify\.app",  # All Netlify previews
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
+# ================================
+# CORS Helper Function
+# ================================
+def get_cors_headers(origin: str) -> dict:
+    """Get CORS headers for the given origin."""
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "https://zamez.netlify.app",
+        "https://fiattib.web.app",
+        "https://fiattib.firebaseapp.com",
+    ]
+    
+    if origin and (origin in allowed_origins or origin.endswith(".netlify.app")):
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    return {}
+
 # Add OPTIONS handler for CORS preflight
 @app.options("/{rest_of_path:path}")
-async def options_handler():
+async def options_handler(request: Request):
+    """Handle CORS preflight requests"""
+    origin = request.headers.get("origin")
+    headers = get_cors_headers(origin) if origin else {}
     from fastapi.responses import Response
-    return Response(status_code=204)
+    return Response(status_code=204, headers=headers)
 
 # Add simple health check
 @app.get("/api/v1/health")
@@ -888,18 +921,7 @@ async def http_exception_handler(request, exc):
     
     # Get origin from request for CORS
     origin = request.headers.get("origin")
-    headers = {}
-    if origin and origin in [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-    ]:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
-        headers["Access-Control-Allow-Headers"] = "*"
+    headers = get_cors_headers(origin) if origin else {}
     
     return JSONResponse(
         status_code=exc.status_code,
@@ -914,18 +936,7 @@ async def value_error_handler(request, exc):
     
     # Get origin from request for CORS
     origin = request.headers.get("origin")
-    headers = {}
-    if origin and origin in [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-    ]:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
-        headers["Access-Control-Allow-Headers"] = "*"
+    headers = get_cors_headers(origin) if origin else {}
     
     return JSONResponse(
         status_code=422,
@@ -943,18 +954,7 @@ async def general_exception_handler(request, exc):
     
     # Get origin from request for CORS
     origin = request.headers.get("origin")
-    headers = {}
-    if origin and origin in [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-    ]:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
-        headers["Access-Control-Allow-Headers"] = "*"
+    headers = get_cors_headers(origin) if origin else {}
     
     return JSONResponse(
         status_code=500,
