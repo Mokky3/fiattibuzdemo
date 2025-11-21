@@ -18,6 +18,8 @@ from app.db.base_class import Base
 # Database URL from environment variable
 # Use PostgreSQL if available, otherwise fallback to SQLite
 DATABASE_URL = os.getenv("DATABASE_URL")
+SQLALCHEMY_DATABASE_URL = None  # Initialize to avoid NameError
+
 if DATABASE_URL and DATABASE_URL.startswith("postgresql"):
     try:
         import psycopg2  # noqa: F401
@@ -27,7 +29,7 @@ if DATABASE_URL and DATABASE_URL.startswith("postgresql"):
         print("Warning: psycopg2 not found, falling back to SQLite")
         DATABASE_URL = None
 
-if not DATABASE_URL:
+if not SQLALCHEMY_DATABASE_URL:
     # Always point SQLite to the project root ehr.db to avoid cwd-dependent paths
     # Fiattib.Uz directory is three levels up from this file: session.py -> db -> app -> backend -> Fiattib.Uz
     project_root = Path(__file__).resolve().parents[3]
