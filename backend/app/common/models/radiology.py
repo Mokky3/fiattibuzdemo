@@ -4,30 +4,30 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 import uuid
 
-from app.db.base_class import Base
+from app.db.base_class import Base, UUIDColumn
 
 
 class RadiologyStudy(Base):
     __tablename__ = "radiology_studies"
     __table_args__ = {"schema": "ehr"}
 
-    id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
-    accession_number = Column(String(50), unique=True, index=True, nullable=False)
-    patient_id = Column(String(36), ForeignKey("ehr.patients.patient_id"), nullable=False)
+    id = UUIDColumn(primary_key=True, default=uuid.uuid4, index=True)
+    accession_number = Column(String(50), unique=True, index=True, nullable=True)
+    patient_id = UUIDColumn(ForeignKey("ehr.patients.patient_id"), nullable=False)
     mrn = Column(String(50), nullable=True)
     patient_name = Column(String(200), nullable=True)
     age = Column(Integer, nullable=True)
     gender = Column(String(1), nullable=True)
     dob = Column(Date, nullable=True)
 
-    order_date = Column(DateTime(timezone=True), nullable=False)
-    scheduled_date = Column(DateTime(timezone=True), nullable=False)
-    modality = Column(String(20), nullable=False)
-    body_part = Column(String(100), nullable=False)
-    study_description = Column(String(500), nullable=False)
+    order_date = Column(DateTime(timezone=True), nullable=True)
+    scheduled_date = Column(DateTime(timezone=True), nullable=True)
+    modality = Column(String(20), nullable=True)
+    body_part = Column(String(100), nullable=True)
+    study_description = Column(String(500), nullable=True)
     indication = Column(Text, nullable=True)
-    priority = Column(String(20), nullable=False)  # STAT/Urgent/Routine
-    status = Column(String(20), nullable=False)  # scheduled/in_progress/completed/cancelled
+    priority = Column(String(20), nullable=True)  # STAT/Urgent/Routine
+    status = Column(String(20), nullable=False, default="IMPORTED_NO_REPORT")  # scheduled/in_progress/completed/cancelled/IMPORTED_NO_REPORT
     ordering_physician = Column(String(200), nullable=True)
     technologist = Column(String(200), nullable=True)
     location = Column(String(200), nullable=True)
@@ -39,6 +39,14 @@ class RadiologyStudy(Base):
     insurance = Column(String(200), nullable=True)
     authorization = Column(String(200), nullable=True)
     cpt_code = Column(String(50), nullable=True)
+
+    # Orthanc / DICOM fields
+    orthanc_study_id = Column(String(255), nullable=False, index=True)
+    study_instance_uid = Column(String(255), nullable=False, index=True)
+    source = Column(String(50), nullable=True)  # 'internal', 'external_cd', 'external_clinic'
+    study_date = Column(Date, nullable=True)
+    uploaded_by = UUIDColumn(ForeignKey("core.users.id"), nullable=True)
+    uploaded_at = Column(DateTime(timezone=True), server_default=func.now())
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

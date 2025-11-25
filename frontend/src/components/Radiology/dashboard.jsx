@@ -1,20 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, Clock, Eye, FileText, Monitor, Camera, AlertCircle, CheckCircle, User, ChevronDown, ChevronUp, Flag, X, Activity, BarChart3, ArrowUp } from 'lucide-react';
+import { Clock, Eye, FileText, Monitor, Camera, AlertCircle, CheckCircle, Flag, X, BarChart3, ArrowUp } from 'lucide-react';
 import RadiologyHeader from './header';
-import StudyListItem from './shared/StudyListItem';
-import StudyGridItem from './shared/StudyGridItem';
 import { getWorklistStudies, getDashboardSummary, getWorklistStats, getWorklistCollection, getRecentActivity } from '../../services/radiologyService';
 import { getModalityIcon, getPriorityColor, getReadingStatusColor, getTimeAgo } from './shared/studyUtils';
 
 const RadiologyDashboard = () => {
   const [selectedFilter, setSelectedFilter] = useState('unread');
-  const [sortBy, setSortBy] = useState('priority');
-  const [sortOrder, setSortOrder] = useState('desc');
-  const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudy, setSelectedStudy] = useState(null);
-  const [viewMode, setViewMode] = useState('list'); // list, grid
-  const [showFilters, setShowFilters] = useState(false);
-  const [expandedStudy, setExpandedStudy] = useState(null);
 
   // Advanced filters
   const [filters, setFilters] = useState({
@@ -79,222 +71,200 @@ const RadiologyDashboard = () => {
   }, [selectedFilter, filters.modality, filters.priority, filters.timeRange]);
 
 
-  // Dashboard Stats Component
+  // Dashboard Stats Component (for sidebar) - Merged into single card
   const DashboardStats = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">Total Studies Today</p>
-            <p className="text-3xl font-bold text-gray-900">
-              {dashboardSummary.total || worklistStudies.length}
-            </p>
-            <div className="flex items-center mt-2">
-              <ArrowUp className="w-4 h-4 text-green-500 mr-1" />
-              <span className="text-green-500 text-sm">
-                {dashboardSummary.completionRate ? `${dashboardSummary.completionRate}% completion rate` : '+12% from yesterday'}
-              </span>
-            </div>
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 mb-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-gray-600 text-xs">Total Studies</p>
+            <BarChart3 className="w-3 h-3 text-blue-600" />
           </div>
-          <div className="bg-blue-100 p-3 rounded-lg">
-            <BarChart3 className="w-6 h-6 text-blue-600" />
+          <p className="text-xl font-bold text-gray-900">
+            {dashboardSummary.total || worklistStudies.length}
+          </p>
+          <div className="flex items-center mt-0.5">
+            <ArrowUp className="w-2.5 h-2.5 text-green-500 mr-0.5" />
+            <span className="text-green-500 text-xs">
+              {dashboardSummary.completionRate ? `${dashboardSummary.completionRate}%` : '+12%'}
+            </span>
           </div>
         </div>
-      </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">Pending Studies</p>
-            <p className="text-3xl font-bold text-red-600">
-              {dashboardSummary.unread || worklistStats.unread || worklistStudies.filter(s => s.readingStatus === 'unread').length}
-            </p>
-            <div className="flex items-center mt-2">
-              <Clock className="w-4 h-4 text-orange-500 mr-1" />
-              <span className="text-orange-500 text-sm">
-                Avg wait: {dashboardSummary.avgTatHours ? `${Math.round(dashboardSummary.avgTatHours * 60)} min` : '45 min'}
-              </span>
-            </div>
+        
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-gray-600 text-xs">Pending</p>
+            <AlertCircle className="w-3 h-3 text-red-600" />
           </div>
-          <div className="bg-red-100 p-3 rounded-lg">
-            <AlertCircle className="w-6 h-6 text-red-600" />
+          <p className="text-xl font-bold text-red-600">
+            {dashboardSummary.unread || worklistStats.unread || worklistStudies.filter(s => s.readingStatus === 'unread').length}
+          </p>
+          <div className="flex items-center mt-0.5">
+            <Clock className="w-2.5 h-2.5 text-orange-500 mr-0.5" />
+            <span className="text-orange-500 text-xs">
+              {dashboardSummary.avgTatHours ? `${Math.round(dashboardSummary.avgTatHours * 60)}m` : '45m'}
+            </span>
           </div>
         </div>
-      </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">Completed Today</p>
-            <p className="text-3xl font-bold text-green-600">
-              {dashboardSummary.final || worklistStats.final || worklistStudies.filter(s => s.readingStatus === 'final').length}
-            </p>
-            <div className="flex items-center mt-2">
-              <CheckCircle className="w-4 h-4 text-green-500 mr-1" />
-              <span className="text-green-500 text-sm">
-                {dashboardSummary.completionRate && dashboardSummary.completionRate > 80 ? 'On track for goals' : 'Keep up the pace'}
-              </span>
-            </div>
+        
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-gray-600 text-xs">Completed</p>
+            <CheckCircle className="w-3 h-3 text-green-600" />
           </div>
-          <div className="bg-green-100 p-3 rounded-lg">
-            <CheckCircle className="w-6 h-6 text-green-600" />
+          <p className="text-xl font-bold text-green-600">
+            {dashboardSummary.final || worklistStats.final || worklistStudies.filter(s => s.readingStatus === 'final').length}
+          </p>
+          <div className="flex items-center mt-0.5">
+            <CheckCircle className="w-2.5 h-2.5 text-green-500 mr-0.5" />
+            <span className="text-green-500 text-xs">
+              {dashboardSummary.completionRate && dashboardSummary.completionRate > 80 ? 'On track' : 'Keep pace'}
+            </span>
           </div>
         </div>
-      </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">Critical Studies</p>
-            <p className="text-3xl font-bold text-orange-600">
-              {dashboardSummary.stat || worklistStats.statCount || worklistStudies.filter(s => s.priority === 'STAT').length}
-            </p>
-            <div className="flex items-center mt-2">
-              <Flag className="w-4 h-4 text-red-500 mr-1" />
-              <span className="text-red-500 text-sm">
-                {dashboardSummary.critical > 0 ? 'Requires attention' : 'All clear'}
-              </span>
-            </div>
+        
+        <div>
+          <div className="flex items-center justify-between mb-1">
+            <p className="text-gray-600 text-xs">Critical</p>
+            <Flag className="w-3 h-3 text-orange-600" />
           </div>
-          <div className="bg-orange-100 p-3 rounded-lg">
-            <Flag className="w-6 h-6 text-orange-600" />
+          <p className="text-xl font-bold text-orange-600">
+            {dashboardSummary.stat || worklistStats.statCount || worklistStudies.filter(s => s.priority === 'STAT').length}
+          </p>
+          <div className="flex items-center mt-0.5">
+            <Flag className="w-2.5 h-2.5 text-red-500 mr-0.5" />
+            <span className="text-red-500 text-xs">
+              {dashboardSummary.critical > 0 ? 'Attention' : 'All clear'}
+            </span>
           </div>
         </div>
       </div>
     </div>
   );
 
-  // Quick Actions Component
+  // Quick Actions Component (for sidebar)
   const QuickActions = () => (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-        <div className="space-y-3">
-          <button 
-            onClick={() => setSelectedFilter('unread')}
-            className="w-full flex items-center justify-between p-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
-          >
-            <div className="flex items-center space-x-3">
-              <Eye className="w-5 h-5 text-blue-600" />
-              <span className="font-medium text-blue-900">View Unread Studies</span>
-            </div>
-            <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded-full text-sm">
-              {worklistStudies.filter(s => s.readingStatus === 'unread').length}
-            </span>
-          </button>
-          
-          <button 
-            onClick={() => setSelectedFilter('reading')}
-            className="w-full flex items-center justify-between p-3 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors"
-          >
-            <div className="flex items-center space-x-3">
-              <Clock className="w-5 h-5 text-yellow-600" />
-              <span className="font-medium text-yellow-900">Continue Reading</span>
-            </div>
-            <span className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full text-sm">
-              {worklistStudies.filter(s => s.readingStatus === 'reading').length}
-            </span>
-          </button>
-          
-          <button className="w-full flex items-center justify-between p-3 bg-green-50 hover:bg-green-100 rounded-lg transition-colors">
-            <div className="flex items-center space-x-3">
-              <FileText className="w-5 h-5 text-green-600" />
-              <span className="font-medium text-green-900">Generate Reports</span>
-            </div>
-            <span className="bg-green-200 text-green-800 px-2 py-1 rounded-full text-sm">
-              {worklistStudies.filter(s => s.readingStatus === 'preliminary').length}
-            </span>
-          </button>
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 mb-4">
+      <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
+      <div className="space-y-2">
+        <button 
+          onClick={() => setSelectedFilter('unread')}
+          className="w-full flex items-center justify-between p-2 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors text-xs"
+        >
+          <div className="flex items-center space-x-2">
+            <Eye className="w-4 h-4 text-blue-600" />
+            <span className="font-medium text-blue-900">Unread Studies</span>
+          </div>
+          <span className="bg-blue-200 text-blue-800 px-2 py-1 rounded-full text-xs">
+            {worklistStudies.filter(s => s.readingStatus === 'unread').length}
+          </span>
+        </button>
+        
+        <button 
+          onClick={() => setSelectedFilter('reading')}
+          className="w-full flex items-center justify-between p-2 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-colors text-xs"
+        >
+          <div className="flex items-center space-x-2">
+            <Clock className="w-4 h-4 text-yellow-600" />
+            <span className="font-medium text-yellow-900">Continue Reading</span>
+          </div>
+          <span className="bg-yellow-200 text-yellow-800 px-2 py-1 rounded-full text-xs">
+            {worklistStudies.filter(s => s.readingStatus === 'reading').length}
+          </span>
+        </button>
+        
+        <button className="w-full flex items-center justify-between p-2 bg-green-50 hover:bg-green-100 rounded-lg transition-colors text-xs">
+          <div className="flex items-center space-x-2">
+            <FileText className="w-4 h-4 text-green-600" />
+            <span className="font-medium text-green-900">Generate Reports</span>
+          </div>
+          <span className="bg-green-200 text-green-800 px-2 py-1 rounded-full text-xs">
+            {worklistStudies.filter(s => s.readingStatus === 'preliminary').length}
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+
+  // Study Distribution Component (for sidebar)
+  const StudyDistribution = () => (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 mb-4">
+      <h3 className="text-sm font-semibold text-gray-900 mb-3">Study Distribution</h3>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Monitor className="w-4 h-4 text-blue-600" />
+            <span className="text-xs text-gray-700">CT Scans</span>
+          </div>
+          <span className="font-medium text-gray-900 text-sm">
+            {dashboardSummary.ct || worklistStats.byModality?.CT || worklistStudies.filter(s => s.modality === 'CT').length}
+          </span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Monitor className="w-4 h-4 text-purple-600" />
+            <span className="text-xs text-gray-700">MRI</span>
+          </div>
+          <span className="font-medium text-gray-900 text-sm">
+            {dashboardSummary.mri || worklistStats.byModality?.MRI || worklistStudies.filter(s => s.modality === 'MRI').length}
+          </span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Camera className="w-4 h-4 text-gray-600" />
+            <span className="text-xs text-gray-700">X-Ray</span>
+          </div>
+          <span className="font-medium text-gray-900 text-sm">
+            {dashboardSummary.xr || worklistStats.byModality?.XR || worklistStudies.filter(s => s.modality === 'XR').length}
+          </span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Eye className="w-4 h-4 text-green-600" />
+            <span className="text-xs text-gray-700">Ultrasound</span>
+          </div>
+          <span className="font-medium text-gray-900 text-sm">
+            {dashboardSummary.us || worklistStats.byModality?.US || worklistStudies.filter(s => s.modality === 'US').length}
+          </span>
         </div>
       </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-        <div className="space-y-4">
-          {recentActivity.length > 0 ? (
-            recentActivity.map((activity) => {
-              const getIcon = () => {
-                switch (activity.icon) {
-                  case 'check': return <CheckCircle className="w-4 h-4 text-green-600" />;
-                  case 'eye': return <Eye className="w-4 h-4 text-blue-600" />;
-                  case 'alert': return <AlertCircle className="w-4 h-4 text-red-600" />;
-                  default: return <Activity className="w-4 h-4 text-gray-600" />;
-                }
-              };
-              
-              const getBgColor = () => {
-                switch (activity.color) {
-                  case 'green': return 'bg-green-100';
-                  case 'blue': return 'bg-blue-100';
-                  case 'red': return 'bg-red-100';
-                  default: return 'bg-gray-100';
-                }
-              };
-              
-              return (
-                <div key={activity.id} className="flex items-start space-x-3">
-                  <div className={`${getBgColor()} p-1 rounded-full`}>
-                    {getIcon()}
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-gray-900">{activity.message}</p>
-                    <p className="text-xs text-gray-500">{activity.patient}</p>
-                    <p className="text-xs text-gray-400">{activity.time}</p>
-                  </div>
-                </div>
-              );
-            })
-          ) : (
-            <div className="text-center py-4 text-gray-500">
-              <Activity className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-              <p className="text-sm">No recent activity</p>
-            </div>
-          )}
+    </div>
+  );
+
+  // Weekly Overview Component (for sidebar)
+  const WeeklyOverview = () => (
+    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+      <h3 className="text-sm font-semibold text-gray-900 mb-3">Weekly Overview</h3>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-600">Total Studies</span>
+          <span className="font-semibold text-gray-900 text-sm">
+            {dashboardSummary.weeklyTotal ?? 0}
+          </span>
         </div>
-      </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Study Distribution</h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Monitor className="w-4 h-4 text-blue-600" />
-              <span className="text-sm text-gray-700">CT Scans</span>
-            </div>
-            <span className="font-medium text-gray-900">
-              {dashboardSummary.ct || worklistStats.byModality?.CT || worklistStudies.filter(s => s.modality === 'CT').length}
-            </span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Monitor className="w-4 h-4 text-purple-600" />
-              <span className="text-sm text-gray-700">MRI</span>
-            </div>
-            <span className="font-medium text-gray-900">
-              {dashboardSummary.mri || worklistStats.byModality?.MRI || worklistStudies.filter(s => s.modality === 'MRI').length}
-            </span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Camera className="w-4 h-4 text-gray-600" />
-              <span className="text-sm text-gray-700">X-Ray</span>
-            </div>
-            <span className="font-medium text-gray-900">
-              {dashboardSummary.xr || worklistStats.byModality?.XR || worklistStudies.filter(s => s.modality === 'XR').length}
-            </span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-2">
-              <Eye className="w-4 h-4 text-green-600" />
-              <span className="text-sm text-gray-700">Ultrasound</span>
-            </div>
-            <span className="font-medium text-gray-900">
-              {dashboardSummary.us || worklistStats.byModality?.US || worklistStudies.filter(s => s.modality === 'US').length}
-            </span>
-          </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-600">Average per Day</span>
+          <span className="font-semibold text-gray-900 text-sm">
+            {dashboardSummary.dailyAverage ?? 0}
+          </span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-600">Critical Findings</span>
+          <span className="font-semibold text-red-600 text-sm">
+            {dashboardSummary.weeklyCritical ?? 0}
+          </span>
+        </div>
+        
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-600">Quality Score</span>
+          <span className="font-semibold text-green-600 text-sm">
+            {dashboardSummary.qualityScore ?? 0}%
+          </span>
         </div>
       </div>
     </div>
@@ -344,342 +314,8 @@ const RadiologyDashboard = () => {
     </div>
   );
 
-  // Performance Metrics Component
-  const PerformanceMetrics = () => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Today's Performance</h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Studies Read</span>
-            <span className="font-semibold text-gray-900">
-              {dashboardSummary.studiesRead || worklistStudies.filter(s => s.readingStatus === 'final').length}/
-              {dashboardSummary.studiesTotal || worklistStudies.length}
-            </span>
-          </div>
-          <div className="w-full bg-gray-200 rounded-full h-2">
-            <div 
-              className="bg-teal-500 h-2 rounded-full" 
-              style={{ 
-                width: `${dashboardSummary.completionRate || (worklistStudies.filter(s => s.readingStatus === 'final').length / worklistStudies.length) * 100}%` 
-              }}
-            ></div>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Average TAT</span>
-            <span className="font-semibold text-gray-900">
-              {dashboardSummary.avgTatHours || 1.2} hours
-            </span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Reports Pending</span>
-            <span className="font-semibold text-orange-600">
-              {dashboardSummary.pendingReports || worklistStudies.filter(s => s.readingStatus === 'preliminary').length}
-            </span>
-          </div>
-        </div>
-      </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Weekly Overview</h3>
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Total Studies</span>
-            <span className="font-semibold text-gray-900">
-              {dashboardSummary.weeklyTotal || 247}
-            </span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Average per Day</span>
-            <span className="font-semibold text-gray-900">
-              {dashboardSummary.dailyAverage || 35.3}
-            </span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Critical Findings</span>
-            <span className="font-semibold text-red-600">
-              {dashboardSummary.weeklyCritical || dashboardSummary.criticalFindings || 12}
-            </span>
-          </div>
-          
-          <div className="flex items-center justify-between">
-            <span className="text-gray-600">Quality Score</span>
-            <span className="font-semibold text-green-600">
-              {dashboardSummary.qualityScore || 98.5}%
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
   // Common utilities imported from shared
 
-  // Filtering and sorting logic
-  const filteredStudies = worklistStudies.filter(study => {
-    const matchesFilter = selectedFilter === 'all' || study.readingStatus === selectedFilter;
-    const matchesSearch = study.patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         study.accessionNumber.includes(searchTerm) ||
-                         study.mrn.includes(searchTerm) ||
-                         study.studyDescription.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesModalityFilter = filters.modality === 'all' || study.modality === filters.modality;
-    const matchesPriorityFilter = filters.priority === 'all' || study.priority === filters.priority;
-    
-    return matchesFilter && matchesSearch && matchesModalityFilter && matchesPriorityFilter;
-  });
-
-  const sortedStudies = [...filteredStudies].sort((a, b) => {
-    let comparison = 0;
-    
-    switch (sortBy) {
-      case 'priority':
-        const priorityOrder = { 'STAT': 3, 'Urgent': 2, 'Routine': 1 };
-        comparison = priorityOrder[b.priority] - priorityOrder[a.priority];
-        break;
-      case 'time':
-        comparison = new Date(a.studyDate) - new Date(b.studyDate);
-        break;
-      case 'patient':
-        comparison = a.patientName.localeCompare(b.patientName);
-        break;
-      case 'modality':
-        comparison = a.modality.localeCompare(b.modality);
-        break;
-      default:
-        comparison = 0;
-    }
-    
-    return sortOrder === 'asc' ? comparison : -comparison;
-  });
-
-
-  // Stats Component
-  const WorklistStats = () => (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">Unread Studies</p>
-            <p className="text-3xl font-bold text-blue-600">
-              {worklistStudies.filter(s => s.readingStatus === 'unread').length}
-            </p>
-          </div>
-          <div className="bg-blue-100 p-3 rounded-lg">
-            <Eye className="w-6 h-6 text-blue-600" />
-          </div>
-        </div>
-      </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">STAT Studies</p>
-            <p className="text-3xl font-bold text-red-600">
-              {worklistStudies.filter(s => s.priority === 'STAT').length}
-            </p>
-          </div>
-          <div className="bg-red-100 p-3 rounded-lg">
-            <AlertCircle className="w-6 h-6 text-red-600" />
-          </div>
-        </div>
-      </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">In Progress</p>
-            <p className="text-3xl font-bold text-yellow-600">
-              {worklistStudies.filter(s => s.readingStatus === 'reading').length}
-            </p>
-          </div>
-          <div className="bg-yellow-100 p-3 rounded-lg">
-            <Clock className="w-6 h-6 text-yellow-600" />
-          </div>
-        </div>
-      </div>
-      
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">Completed Today</p>
-            <p className="text-3xl font-bold text-green-600">
-              {worklistStudies.filter(s => s.readingStatus === 'final').length}
-            </p>
-          </div>
-          <div className="bg-green-100 p-3 rounded-lg">
-            <CheckCircle className="w-6 h-6 text-green-600" />
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  // Main Header Component
-  const WorklistHeader = () => (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-6">
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Radiology Worklist</h1>
-          <p className="text-gray-600">Studies awaiting interpretation</p>
-        </div>
-        
-        <div className="flex items-center space-x-4">
-          {/* Filter Tabs */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            {[
-              { key: 'unread', label: 'Unread', count: worklistStudies.filter(s => s.readingStatus === 'unread').length },
-              { key: 'reading', label: 'Reading', count: worklistStudies.filter(s => s.readingStatus === 'reading').length },
-              { key: 'preliminary', label: 'Preliminary', count: worklistStudies.filter(s => s.readingStatus === 'preliminary').length },
-              { key: 'all', label: 'All', count: worklistStudies.length }
-            ].map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setSelectedFilter(tab.key)}
-                className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                  selectedFilter === tab.key
-                    ? 'bg-white text-teal-700 shadow-sm'
-                    : 'text-gray-600 hover:text-gray-900'
-                }`}
-              >
-                {tab.label} ({tab.count})
-              </button>
-            ))}
-          </div>
-
-          {/* View Mode */}
-          <div className="flex bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`px-3 py-2 rounded-md text-sm transition-colors ${
-                viewMode === 'list' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'
-              }`}
-            >
-              List
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`px-3 py-2 rounded-md text-sm transition-colors ${
-                viewMode === 'grid' ? 'bg-white shadow-sm' : 'hover:bg-gray-200'
-              }`}
-            >
-              Grid
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Search and Filters */}
-      <div className="mt-4 flex flex-col lg:flex-row gap-4">
-        <div className="flex-1 relative">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            placeholder="Search by patient name, MRN, accession number..."
-            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <button
-            onClick={() => setShowFilters(!showFilters)}
-            className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-          >
-            <Filter className="w-4 h-4" />
-            <span>Filters</span>
-            {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          </button>
-          
-          <select
-            value={`${sortBy}-${sortOrder}`}
-            onChange={(e) => {
-              const [newSortBy, newSortOrder] = e.target.value.split('-');
-              setSortBy(newSortBy);
-              setSortOrder(newSortOrder);
-            }}
-            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-          >
-            <option value="priority-desc">Priority (High to Low)</option>
-            <option value="time-asc">Time (Oldest First)</option>
-            <option value="time-desc">Time (Newest First)</option>
-            <option value="patient-asc">Patient Name (A-Z)</option>
-            <option value="modality-asc">Modality</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Advanced Filters */}
-      {showFilters && (
-        <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Modality</label>
-              <select
-                value={filters.modality}
-                onChange={(e) => setFilters(prev => ({ ...prev, modality: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="all">All</option>
-                <option value="CT">CT</option>
-                <option value="MRI">MRI</option>
-                <option value="XR">X-Ray</option>
-                <option value="US">Ultrasound</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Priority</label>
-              <select
-                value={filters.priority}
-                onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="all">All</option>
-                <option value="STAT">STAT</option>
-                <option value="Urgent">Urgent</option>
-                <option value="Routine">Routine</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Body Part</label>
-              <select
-                value={filters.bodyPart}
-                onChange={(e) => setFilters(prev => ({ ...prev, bodyPart: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="all">All</option>
-                <option value="Head">Head</option>
-                <option value="Chest">Chest</option>
-                <option value="Abdomen">Abdomen</option>
-                <option value="Pelvis">Pelvis</option>
-                <option value="Extremities">Extremities</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Time Range</label>
-              <select
-                value={filters.timeRange}
-                onChange={(e) => setFilters(prev => ({ ...prev, timeRange: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="today">Today</option>
-                <option value="yesterday">Yesterday</option>
-                <option value="week">This Week</option>
-                <option value="month">This Month</option>
-              </select>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
 
   // Use shared StudyListItem and StudyGridItem
 
@@ -887,7 +523,6 @@ const RadiologyDashboard = () => {
         {/* Dashboard Header */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-          <p className="text-gray-600 mt-2">Welcome back, Dr. Johnson. Here's your radiology overview for today.</p>
         </div>
 
         {/* Loading State */}
@@ -913,68 +548,79 @@ const RadiologyDashboard = () => {
 
         {/* Dashboard Content */}
         {!loading && !error && (
-          <>
-            {/* Dashboard Stats */}
-            <DashboardStats />
-
-            {/* Priority Cases */}
-            <PriorityCases />
-
-            {/* Quick Actions and Info */}
-            <QuickActions />
-
-            {/* Performance Metrics */}
-            <PerformanceMetrics />
-
-            {/* Recent Studies Preview */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Recent Studies</h3>
-                <button 
-                  onClick={() => setViewMode('list')}
-                  className="text-teal-600 hover:text-teal-800 text-sm font-medium"
-                >
-                  View All Studies
-                </button>
+          <div className="flex gap-6">
+            {/* Left Sidebar */}
+            <div className="w-80 flex-shrink-0">
+              {/* Info Boxes */}
+              <div className="mb-6">
+                <DashboardStats />
               </div>
-              
-              <div className="space-y-4">
-                {worklistStudies.length > 0 ? (
-                  worklistStudies.slice(0, 5).map(study => (
-                    <div key={study.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div className="flex items-center space-x-4">
-                        <div className="flex items-center space-x-2">
-                          {getModalityIcon(study.modality)}
-                          <span className="text-sm font-medium text-gray-600">{study.modality}</span>
+
+              {/* Quick Actions */}
+              <QuickActions />
+
+              {/* Study Distribution */}
+              <StudyDistribution />
+
+              {/* Weekly Overview */}
+              <WeeklyOverview />
+            </div>
+
+            {/* Main Content Area */}
+            <div className="flex-1">
+              {/* Priority Cases */}
+              <PriorityCases />
+
+              {/* Recent Studies */}
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900">Recent Studies</h3>
+                  <button 
+                    onClick={() => window.location.href = '/radiology/studies'}
+                    className="text-teal-600 hover:text-teal-800 text-sm font-medium"
+                  >
+                    View All Studies
+                  </button>
+                </div>
+                
+                <div className="space-y-4">
+                  {worklistStudies.length > 0 ? (
+                    worklistStudies.slice(0, 10).map(study => (
+                      <div key={study.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div className="flex items-center space-x-4">
+                          <div className="flex items-center space-x-2">
+                            {getModalityIcon(study.modality)}
+                            <span className="text-sm font-medium text-gray-600">{study.modality}</span>
+                          </div>
+                          <div>
+                            <p className="font-medium text-gray-900">{study.patientName}</p>
+                            <p className="text-sm text-gray-600">{study.studyDescription}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium text-gray-900">{study.patientName}</p>
-                          <p className="text-sm text-gray-600">{study.studyDescription}</p>
+                        <div className="flex items-center space-x-3">
+                          <span className={`px-2 py-1 rounded text-xs border ${getReadingStatusColor(study.readingStatus)}`}>
+                            {study.readingStatus}
+                          </span>
+                          <span className="text-sm text-gray-500">{getTimeAgo(study.studyDate)}</span>
+                          <button
+                            onClick={() => setSelectedStudy(study)}
+                            className="text-teal-600 hover:text-teal-800 text-sm font-medium"
+                          >
+                            View
+                          </button>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-3">
-                        <span className={`px-2 py-1 rounded text-xs border ${getReadingStatusColor(study.readingStatus)}`}>
-                          {study.readingStatus}
-                        </span>
-                        <span className="text-sm text-gray-500">{getTimeAgo(study.studyDate)}</span>
-                        <button
-                          onClick={() => setSelectedStudy(study)}
-                          className="text-teal-600 hover:text-teal-800 text-sm font-medium"
-                        >
-                          View
-                        </button>
-                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <Monitor className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+                      <p>No studies found for the selected filters.</p>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Monitor className="w-12 h-12 mx-auto mb-4 text-gray-300" />
-                    <p>No studies found for the selected filters.</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
 

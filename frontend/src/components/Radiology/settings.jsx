@@ -2,11 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Search, Filter, Settings, Bell, Shield, Database, Users, Monitor, Printer, Wifi, Server, Clock, Mail, Phone, Globe, Save, X, Check, AlertTriangle, Info, Plus, Trash2, Edit, Eye, Camera } from 'lucide-react';
 // Import the radiology header component
 import RadiologyHeader from './header';
+import { getGeneralSettings, updateGeneralSettings, getNotificationSettings, updateNotificationSettings } from '../../services/radiologyService';
 
 const RadiologySettingsModule = () => {
   const [activeTab, setActiveTab] = useState('general');
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
 
   // General Settings
   const [generalSettings, setGeneralSettings] = useState({
@@ -27,6 +31,76 @@ const RadiologySettingsModule = () => {
       days: ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
     }
   });
+
+  // Fetch general settings on mount
+  useEffect(() => {
+    let mounted = true;
+    const fetchGeneralSettings = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const settings = await getGeneralSettings();
+        if (mounted && settings) {
+          setGeneralSettings(settings);
+        }
+      } catch (err) {
+        console.error('Error fetching general settings:', err);
+        if (mounted) {
+          setError(err.message || 'Failed to load general settings');
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    if (activeTab === 'general') {
+      fetchGeneralSettings();
+    }
+    return () => { mounted = false };
+  }, [activeTab]);
+
+  // Fetch notification settings on mount
+  useEffect(() => {
+    let mounted = true;
+    const fetchNotificationSettings = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const settings = await getNotificationSettings();
+        if (mounted && settings) {
+          // Ensure all required fields are present with defaults
+          setNotificationSettings({
+            emailNotifications: settings.emailNotifications ?? true,
+            smsNotifications: settings.smsNotifications ?? true,
+            pushNotifications: settings.pushNotifications ?? true,
+            criticalAlerts: {
+              enabled: settings.criticalAlerts?.enabled ?? true,
+              methods: settings.criticalAlerts?.methods || ['email', 'sms', 'push'],
+              recipients: settings.criticalAlerts?.recipients || []
+            },
+            reportDelivery: {
+              enabled: settings.reportDelivery?.enabled ?? true,
+              schedule: settings.reportDelivery?.schedule || 'immediate',
+              day: settings.reportDelivery?.day || 'daily',
+              time: settings.reportDelivery?.time || 'realtime'
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Error fetching notification settings:', err);
+        if (mounted) {
+          setError(err.message || 'Failed to load notification settings');
+        }
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+
+    if (activeTab === 'notifications') {
+      fetchNotificationSettings();
+    }
+    return () => { mounted = false };
+  }, [activeTab]);
 
   // System Settings
   const [systemSettings, setSystemSettings] = useState({
@@ -66,12 +140,6 @@ const RadiologySettingsModule = () => {
       schedule: 'immediate',
       day: 'daily',
       time: 'realtime'
-    },
-    systemAlerts: {
-      pacsDowntime: true,
-      modalityOffline: true,
-      diskSpaceLow: true,
-      qcFailures: true
     }
   });
 
@@ -198,14 +266,73 @@ const RadiologySettingsModule = () => {
     }
   });
 
-  const handleSaveSettings = (section) => {
-    setShowSaveDialog(true);
-    // Here you would typically make API calls to save the settings
-    setTimeout(() => {
+  const handleSaveSettings = async (section) => {
+    try {
+      setSaving(true);
+      setError(null);
+      
+      if (section === 'General') {
+        await updateGeneralSettings(generalSettings);
+        setShowSaveDialog(true);
+        setTimeout(() => {
+          setShowSaveDialog(false);
+          setHasChanges(false);
+        }, 1000);
+      } else if (section === 'Notifications') {
+        // Ensure data structure matches backend schema
+        // Filter out empty recipient strings and ensure at least one recipient
+        const filteredRecipients = (notificationSettings.criticalAlerts?.recipients || [])
+          .filter(r => r && r.trim() !== '');
+        const finalRecipients = filteredRecipients.length > 0 
+          ? filteredRecipients 
+          : ['admin@hospitalcenter.com'];
+        
+        // Ensure at least one method
+        const finalMethods = (notificationSettings.criticalAlerts?.methods && notificationSettings.criticalAlerts.methods.length > 0)
+          ? notificationSettings.criticalAlerts.methods
+          : ['email'];
+        
+        const payload = {
+          emailNotifications: notificationSettings.emailNotifications ?? true,
+          smsNotifications: notificationSettings.smsNotifications ?? true,
+          pushNotifications: notificationSettings.pushNotifications ?? true,
+          criticalAlerts: {
+            enabled: notificationSettings.criticalAlerts?.enabled ?? true,
+            methods: finalMethods,
+            recipients: finalRecipients
+          },
+          reportDelivery: {
+            enabled: notificationSettings.reportDelivery?.enabled ?? true,
+            schedule: notificationSettings.reportDelivery?.schedule || 'immediate',
+            day: notificationSettings.reportDelivery?.day || 'daily',
+            time: notificationSettings.reportDelivery?.time || 'realtime'
+          }
+        };
+        
+        await updateNotificationSettings(payload);
+        // Update local state with the validated payload
+        setNotificationSettings(payload);
+        setShowSaveDialog(true);
+        setTimeout(() => {
+          setShowSaveDialog(false);
+          setHasChanges(false);
+        }, 1000);
+      } else {
+        // For other sections, show placeholder message
+        setShowSaveDialog(true);
+        setTimeout(() => {
+          setShowSaveDialog(false);
+          setHasChanges(false);
+          alert(`${section} settings saved successfully!`);
+        }, 1000);
+      }
+    } catch (err) {
+      console.error(`Error saving ${section} settings:`, err);
+      setError(err.message || `Failed to save ${section} settings`);
       setShowSaveDialog(false);
-      setHasChanges(false);
-      alert(`${section} settings saved successfully!`);
-    }, 1000);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const getStatusColor = (status) => {
@@ -227,10 +354,35 @@ const RadiologySettingsModule = () => {
     }
   };
 
-  const GeneralSection = () => (
-    <div className="space-y-6">
-      {/* Department Information */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+  const GeneralSection = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading general settings...</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Error</h3>
+                <p className="text-sm text-red-600 mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Department Information */}
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
           Radiology Department Information
         </h3>
@@ -437,15 +589,25 @@ const RadiologySettingsModule = () => {
       <div className="flex justify-end">
         <button
           onClick={() => handleSaveSettings('General')}
-          disabled={!hasChanges}
+          disabled={!hasChanges || saving}
           className="bg-teal-500 hover:bg-teal-600 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
         >
-          <Save className="w-4 h-4" />
-          Save Changes
+          {saving ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4" />
+              Save Changes
+            </>
+          )}
         </button>
       </div>
     </div>
-  );
+    );
+  };
 
   const SystemSection = () => (
     <div className="space-y-6">
@@ -588,9 +750,34 @@ const RadiologySettingsModule = () => {
     </div>
   );
 
-  const NotificationSection = () => (
-    <div className="space-y-6">
-      {/* Notification Methods */}
+  const NotificationSection = () => {
+    if (loading) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading notification settings...</p>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Error Display */}
+        {error && (
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+              <div>
+                <h3 className="text-sm font-medium text-red-800">Error</h3>
+                <p className="text-sm text-red-600 mt-1">{error}</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Notification Methods */}
       <div className="bg-white rounded-lg border border-gray-200 p-6">
         <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
           Notification Methods
@@ -611,8 +798,11 @@ const RadiologySettingsModule = () => {
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={notificationSettings[method.key]}
-                    onChange={(e) => setNotificationSettings({...notificationSettings, [method.key]: e.target.checked})}
+                    checked={notificationSettings[method.key] || false}
+                    onChange={(e) => {
+                      setNotificationSettings({...notificationSettings, [method.key]: e.target.checked});
+                      setHasChanges(true);
+                    }}
                     className="sr-only peer"
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
@@ -637,43 +827,48 @@ const RadiologySettingsModule = () => {
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
-                checked={notificationSettings.criticalAlerts.enabled}
-                onChange={(e) => setNotificationSettings({
-                  ...notificationSettings,
-                  criticalAlerts: {...notificationSettings.criticalAlerts, enabled: e.target.checked}
-                })}
+                checked={notificationSettings.criticalAlerts?.enabled || false}
+                onChange={(e) => {
+                  setNotificationSettings({
+                    ...notificationSettings,
+                    criticalAlerts: {...notificationSettings.criticalAlerts, enabled: e.target.checked}
+                  });
+                  setHasChanges(true);
+                }}
                 className="sr-only peer"
               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
             </label>
           </div>
 
-          {notificationSettings.criticalAlerts.enabled && (
+          {notificationSettings.criticalAlerts?.enabled && (
             <div className="mt-4">
               <label className="block text-sm font-medium text-gray-700 mb-2">Alert Recipients</label>
               <div className="space-y-2">
-                {notificationSettings.criticalAlerts.recipients.map((recipient, index) => (
+                {(notificationSettings.criticalAlerts?.recipients || []).map((recipient, index) => (
                   <div key={index} className="flex items-center space-x-2">
                     <input
                       type="email"
                       value={recipient}
                       onChange={(e) => {
-                        const newRecipients = [...notificationSettings.criticalAlerts.recipients];
+                        const newRecipients = [...(notificationSettings.criticalAlerts?.recipients || [])];
                         newRecipients[index] = e.target.value;
                         setNotificationSettings({
                           ...notificationSettings,
                           criticalAlerts: {...notificationSettings.criticalAlerts, recipients: newRecipients}
                         });
+                        setHasChanges(true);
                       }}
                       className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
                     />
                     <button
                       onClick={() => {
-                        const newRecipients = notificationSettings.criticalAlerts.recipients.filter((_, i) => i !== index);
+                        const newRecipients = (notificationSettings.criticalAlerts?.recipients || []).filter((_, i) => i !== index);
                         setNotificationSettings({
                           ...notificationSettings,
                           criticalAlerts: {...notificationSettings.criticalAlerts, recipients: newRecipients}
                         });
+                        setHasChanges(true);
                       }}
                       className="text-red-600 hover:text-red-700 p-2"
                     >
@@ -687,9 +882,10 @@ const RadiologySettingsModule = () => {
                       ...notificationSettings,
                       criticalAlerts: {
                         ...notificationSettings.criticalAlerts,
-                        recipients: [...notificationSettings.criticalAlerts.recipients, '']
+                        recipients: [...(notificationSettings.criticalAlerts?.recipients || []), '']
                       }
                     });
+                    setHasChanges(true);
                   }}
                   className="flex items-center space-x-2 text-teal-600 hover:text-teal-700"
                 >
@@ -702,51 +898,28 @@ const RadiologySettingsModule = () => {
         </div>
       </div>
 
-      {/* System Alerts */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          System Alerts
-        </h3>
-        <div className="space-y-4">
-          {[
-            { key: 'pacsDowntime', label: 'PACS Downtime', description: 'Alert when PACS system goes offline' },
-            { key: 'modalityOffline', label: 'Modality Offline', description: 'Alert when imaging equipment goes offline' },
-            { key: 'diskSpaceLow', label: 'Low Disk Space', description: 'Alert when storage space is critically low' },
-            { key: 'qcFailures', label: 'QC Failures', description: 'Alert for quality control test failures' }
-          ].map(alert => (
-            <div key={alert.key} className="flex items-center justify-between">
-              <div>
-                <div className="font-medium text-gray-900">{alert.label}</div>
-                <div className="text-sm text-gray-500">{alert.description}</div>
-              </div>
-              <label className="relative inline-flex items-center cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={notificationSettings.systemAlerts[alert.key]}
-                  onChange={(e) => setNotificationSettings({
-                    ...notificationSettings,
-                    systemAlerts: {...notificationSettings.systemAlerts, [alert.key]: e.target.checked}
-                  })}
-                  className="sr-only peer"
-                />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
-              </label>
-            </div>
-          ))}
-        </div>
-      </div>
-
       <div className="flex justify-end">
         <button
           onClick={() => handleSaveSettings('Notifications')}
-          className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+          disabled={!hasChanges || saving}
+          className="bg-teal-500 hover:bg-teal-600 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
         >
-          <Save className="w-4 h-4" />
-          Save Changes
+          {saving ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              Saving...
+            </>
+          ) : (
+            <>
+              <Save className="w-4 h-4" />
+              Save Changes
+            </>
+          )}
         </button>
       </div>
     </div>
-  );
+    );
+  };
 
   const EquipmentSection = () => (
     <div className="space-y-6">
@@ -1069,9 +1242,9 @@ const RadiologySettingsModule = () => {
 
   const tabs = [
     { id: 'general', label: 'General', icon: Settings, component: GeneralSection, locked: false },
-    { id: 'system', label: 'System', icon: Server, component: SystemSection, locked: false },
+    { id: 'system', label: 'System', icon: Server, component: SystemSection, locked: true },
     { id: 'notifications', label: 'Notifications', icon: Bell, component: NotificationSection, locked: false },
-    { id: 'equipment', label: 'Equipment', icon: Monitor, component: EquipmentSection, locked: false },
+    { id: 'equipment', label: 'Equipment', icon: Monitor, component: EquipmentSection, locked: true },
     { id: 'users', label: 'Users', icon: Users, component: UserSection, locked: true },
     { id: 'integrations', label: 'Integrations', icon: Globe, component: IntegrationSection, locked: true }
   ];

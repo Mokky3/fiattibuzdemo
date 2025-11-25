@@ -1,0 +1,150 @@
+# Docker ignore file - excludes files from Docker build context
+# This speeds up Docker builds significantly
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+app.log
+uvicorn_*.log
+
+# Database files
+*.db
+ehr.db
+*.sqlite
+*.sqlite3
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Uploads (should be in Cloud Storage in production)
+uploads/
+backups/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+docker-compose.yml
+Dockerfile.dev
+
+# Documentation
+*.md
+!README.md
+
+# Large directories that shouldn't be in Docker image
+# PACS directory - but include OHIF config and necessary files
+app/common/pacs/Viewers/
+app/common/pacs/monai/
+app/common/pacs/nginx/
+app/common/pacs/docker-compose.yml
+# Include OHIF config files
+!app/common/pacs/ohif/app-config.js
+!app/common/pacs/ohif/viewer.js
+!app/common/pacs/config/orthanc.json
+!app/common/pacs/dicom/
+
+# Database migrations and scripts (not needed in container)
+database/
+# But allow SQL seed files for medications/ICD if needed
+!scripts/*.sql
+
+# Node modules
+node_modules/
+
+# Root-level utility scripts (not needed in production)
+*.py
+!app/**/*.py
+!run.py
+# Include medication and ICD import scripts
+!scripts/import_icd11.py
+!scripts/seed_medication_administrations.py
+!scripts/verify_icd11_import.py
+!scripts/check_icd11_structure.py
+
+# Scripts directory (utility scripts, not needed in production)
+# But include data import scripts for medications/ICD
+scripts/**
+!scripts/import_icd11.py
+!scripts/seed_medication_administrations.py
+!scripts/verify_icd11_import.py
+!scripts/check_icd11_structure.py
+!app/scripts/**/*.py
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+
+# Large media files (but allow OHIF config images if needed)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.webp
+# Allow data files for medications/ICD
+!scripts/*.csv
+!scripts/*.json
+!**/data/*.csv
+!**/data/*.json
+
+# TypeScript/JavaScript files (frontend code in backend directory)
+*.ts
+*.tsx
+*.js
+*.jsx
+*.json
+!package.json
+!package-lock.json
+!requirements.txt
+!openapi.json
+!cloudbuild.yaml
+!Dockerfile
+# Allow OHIF config JSON files
+!app/common/pacs/ohif/**/*.json
+!app/common/pacs/config/**/*.json
+
+# Other large files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# Frontend files that shouldn't be in backend
+LabReport.jsx
+

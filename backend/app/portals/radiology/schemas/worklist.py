@@ -14,40 +14,42 @@ class FinalReport(BaseModel):
 
 
 class WorklistStudy(BaseModel):
-    id: str = Field(..., pattern=r"^RAD-\d{3,}$")
-    accessionNumber: str
-    patientName: str
-    patientId: str
-    mrn: str
-    age: int = Field(..., ge=0, le=130)
-    gender: str = Field(..., pattern=r"^(M|F|O)$")
-    dob: date
-    studyDate: datetime
-    studyTime: str
-    modality: str
-    bodyPart: str
-    studyDescription: str
-    indication: str
-    priority: str = Field(..., pattern=r"^(STAT|Urgent|Routine)$")
-    orderingPhysician: str
-    technologist: str
-    status: str
-    readingStatus: str = Field(..., pattern=r"^(unread|reading|preliminary|final)$")
-    imageCount: int = Field(..., ge=0)
-    seriesCount: int = Field(..., ge=0)
-    studySize: str
-    contrast: bool
-    location: str
-    room: str
-    protocolName: str
+    id: str = Field(..., description="Study identifier (UUID)")
+    accessionNumber: Optional[str] = None
+    patientName: Optional[str] = None
+    patientId: str = Field("", description="Patient ID")
+    mrn: Optional[str] = None
+    age: int = Field(0, ge=0, le=130)
+    gender: str = Field("O", pattern=r"^(M|F|O)$")
+    dob: Optional[date] = None
+    studyDate: Optional[datetime] = None
+    studyTime: str = Field("", description="Study time as HH:MM")
+    modality: Optional[str] = None
+    bodyPart: Optional[str] = None
+    studyDescription: Optional[str] = None
+    indication: Optional[str] = None
+    priority: Optional[str] = None
+    orderingPhysician: Optional[str] = None
+    technologist: Optional[str] = None
+    status: str = Field(..., description="Study status")
+    readingStatus: str = Field("unread", pattern=r"^(unread|reading|preliminary|final)$")
+    imageCount: int = Field(0, ge=0)
+    seriesCount: int = Field(0, ge=0)
+    studySize: str = Field("", description="Study size")
+    contrast: bool = False
+    location: Optional[str] = None
+    room: Optional[str] = None
+    protocolName: str = Field("", description="Protocol name")
     assignedRadiologist: Optional[str] = None
-    priorStudies: int = Field(..., ge=0)
+    priorStudies: int = Field(0, ge=0)
     criticalFlag: bool = False
     tags: List[str] = Field(default_factory=list)
-    turnaroundTime: str
-    estimatedReadTime: str
+    turnaroundTime: str = Field("", description="Turnaround time")
+    estimatedReadTime: str = Field("", description="Estimated read time")
     preliminaryFindings: Optional[str] = None
     finalReport: Optional[FinalReport] = None
+    studyInstanceUID: Optional[str] = Field(None, description="DICOM Study Instance UID")
+    orthancStudyId: Optional[str] = Field(None, description="Orthanc Study ID")
 
 
 class WorklistSummary(BaseModel):

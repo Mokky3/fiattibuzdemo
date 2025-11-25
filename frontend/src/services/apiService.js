@@ -1017,6 +1017,14 @@ export const doctorPatientsAPI = {
     return apiRequest('/doctor/patients');
   },
 
+  // Search patients
+  search: async (query, limit = 10) => {
+    const params = new URLSearchParams({ q: query, limit: limit.toString() }).toString();
+    const res = await apiRequest(`/doctor/patients/search?${params}`);
+    // Handle both {data: [...]} and direct array responses
+    return res?.data || res || [];
+  },
+
   // Get patient by ID
   getById: async (patientId) => {
     return apiRequest(`/doctor/patients/${patientId}`);
@@ -1586,6 +1594,88 @@ export const patientPrescriptionsAPI = {
 };
 
 // Patient Doctor Search API
+// Doctor Imaging API - Medical imaging (OHIF/DICOM) for doctors
+export const doctorImagingAPI = {
+  // Get OHIF viewer URL for a specific study
+  getViewerUrl: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.study_id) queryParams.append('study_id', params.study_id);
+      if (params.study_instance_uid) queryParams.append('study_instance_uid', params.study_instance_uid);
+      if (params.patient_id) queryParams.append('patient_id', params.patient_id);
+      
+      const response = await apiRequest(`/doctor/imaging/viewer?${queryParams.toString()}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Doctor imaging get viewer URL error:', error);
+      throw error;
+    }
+  },
+
+  // Get study details
+  getStudyDetails: async (studyId) => {
+    try {
+      const response = await apiRequest(`/doctor/imaging/studies/${studyId}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Doctor imaging get study details error:', error);
+      throw error;
+    }
+  },
+
+  // List studies (optional patient filter)
+  listStudies: async (patientId = null) => {
+    try {
+      const queryParams = patientId ? `?patient_id=${patientId}` : '';
+      const response = await apiRequest(`/doctor/imaging/studies${queryParams}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Doctor imaging list studies error:', error);
+      throw error;
+    }
+  },
+};
+
+// Patient Imaging API - Medical imaging (OHIF/DICOM) for patients
+export const patientImagingAPI = {
+  // Get OHIF viewer URL for a specific study
+  getViewerUrl: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.study_id) queryParams.append('study_id', params.study_id);
+      if (params.study_instance_uid) queryParams.append('study_instance_uid', params.study_instance_uid);
+      
+      const response = await apiRequest(`/patient/imaging/viewer?${queryParams.toString()}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Patient imaging get viewer URL error:', error);
+      throw error;
+    }
+  },
+
+  // Get study details
+  getStudyDetails: async (studyId) => {
+    try {
+      const response = await apiRequest(`/patient/imaging/studies/${studyId}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Patient imaging get study details error:', error);
+      throw error;
+    }
+  },
+
+  // List patient's studies
+  listStudies: async () => {
+    try {
+      const response = await apiRequest(`/patient/imaging/studies`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Patient imaging list studies error:', error);
+      throw error;
+    }
+  },
+};
+
 export const patientDoctorSearchAPI = {
   // Search doctors (backend doctorsearch_enhanced router)
   search: async ({ q = '', specialty = '', hospital = '', page = 1, size = 20 } = {}) => {

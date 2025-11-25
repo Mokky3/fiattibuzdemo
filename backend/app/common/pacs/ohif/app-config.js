@@ -1,36 +1,29 @@
 window.config = {
   routerBasename: '/',
   showStudyList: true,
-  extensions: [
-    '@ohif/extension-cornerstone',
-    './extensions/monai-extension/index.js',
-
-  ],
+  extensions: [],
+  modes: ['@ohif/mode-longitudinal'],
   customizationService: {},
   whiteLabeling: {},
-
-  servers: {
-    dicomWeb: [
-      {
-        name: 'Orthanc DICOMWeb',
-        wadoUriRoot: 'http://localhost:8042/wado',
-        qidoRoot: 'http://localhost:8042/dicom-web',
-        wadoRoot: 'http://localhost:8042/dicom-web',
+  defaultDataSourceName: 'dicomweb',
+  dataSources: [
+    {
+      namespace: '@ohif/extension-default.dataSourcesModule.dicomweb',
+      sourceName: 'dicomweb',
+      configuration: {
+        friendlyName: 'Orthanc DICOMWeb',
+        name: 'ORTHANC',
+        wadoUriRoot: 'http://localhost:8043/wado',
+        qidoRoot: 'http://localhost:8043/dicom-web',
+        wadoRoot: 'http://localhost:8043/dicom-web',
         qidoSupportsIncludeField: true,
-        imageRendering: 'wadouri',
-        thumbnailRendering: 'wadouri',
+        supportsReject: true,
+        imageRendering: 'wadors',
+        thumbnailRendering: 'wadors',
+        enableStudyLazyLoad: true,
+        supportsFuzzyMatching: true,
+        supportsWildcard: true,
       },
-    ],
-
-    monai: {
-      enabled: true,
-      url: 'http://localhost:8000',
     },
-  },
-
-  // This enables MONAI extension
-  showOverlays: true,
-  showAnnotationTools: true,
-  showLayoutSelector: true,
-  hotkeys: [],
+  ],
 };

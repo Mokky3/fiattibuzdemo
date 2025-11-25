@@ -10,14 +10,14 @@ import OncologyReportForm from './forms/OncologyReportForm';
 import NeurologyReportForm from './forms/NeurologyReportForm';
 import UrologyReportForm from './forms/UrologyReportForm';
 import AllergyImmunologyReportForm from './forms/AllergyImmunologyReportForm';
-import { doctorPatientsAPI, doctorReportsAPI } from '../../services/apiService';
+import { doctorPatientsAPI, doctorReportsAPI, getCurrentUser } from '../../services/apiService';
 
 const Report = () => {
   const { patientId, reportId } = useParams(); // Get reportId if editing existing report
   const navigate = useNavigate();
 
-  const [selectedSpecialty, setSelectedSpecialty] = useState('midwifery & gynecology');
-  const [selectedCode, setSelectedCode] = useState('#025');
+  const [selectedSpecialty, setSelectedSpecialty] = useState('general');
+  const [selectedCode, setSelectedCode] = useState('#001');
   const [patient, setPatient] = useState(null);
   const [formData, setFormData] = useState({});
   const [patientAllergies, setPatientAllergies] = useState([]);
@@ -100,6 +100,65 @@ const Report = () => {
       }
     }
   }, [selectedSpecialty, selectedCode]);
+
+  // Fetch and set the last department report for this patient
+  useEffect(() => {
+    const loadLastReport = async () => {
+      if (!patientId) return;
+      
+      try {
+        // Get current doctor ID from user
+        const currentUser = getCurrentUser();
+        if (!currentUser || !currentUser.id) {
+          console.log('No current user found, defaulting to general report');
+          return;
+        }
+
+        // Fetch patient reports
+        const reportsResponse = await doctorPatientsAPI.getReports(patientId);
+        const reports = reportsResponse?.data || reportsResponse || [];
+        
+        if (!Array.isArray(reports) || reports.length === 0) {
+          console.log('No reports found for patient, defaulting to general report');
+          return;
+        }
+
+        // Filter reports by current doctor and find the most recent one
+        const doctorReports = reports
+          .filter(report => report.doctor_id === currentUser.id)
+          .sort((a, b) => {
+            // Sort by date (most recent first)
+            const dateA = new Date(`${a.date}T${a.time || '00:00:00'}`);
+            const dateB = new Date(`${b.date}T${b.time || '00:00:00'}`);
+            return dateB - dateA;
+          });
+
+        if (doctorReports.length > 0) {
+          const lastReport = doctorReports[0];
+          console.log('Found last report:', lastReport);
+          
+          // Try to get specialty and doc_type from the report
+          // Reports might have these fields directly or in nested data
+          const backendSpecialty = lastReport.specialty || lastReport.reportData?.specialty || 'general_medicine';
+          const docType = lastReport.doc_type || lastReport.reportData?.doc_type || lastReport.problem;
+          
+          // Map to frontend specialty and code
+          const { specialty, code } = mapBackendToFrontend(backendSpecialty, docType);
+          
+          console.log(`Setting report to: ${specialty} / ${code} based on last report`);
+          setSelectedSpecialty(specialty);
+          setSelectedCode(code);
+        } else {
+          console.log('No reports found for current doctor, defaulting to general report');
+        }
+      } catch (error) {
+        console.error('Error loading last report:', error);
+        // Default to general on error
+      }
+    };
+
+    loadLastReport();
+  }, [patientId]);
 
   useEffect(() => {
     const fetchPatient = async () => {
@@ -199,6 +258,61 @@ const Report = () => {
       'allergology': 'dermatology', // Note: backend may not have allergology, mapping to closest
     };
     return specialtyMap[frontendSpecialty] || 'general_medicine';
+  };
+
+  // Map backend specialty/doc_type to frontend specialty and code
+  const mapBackendToFrontend = (backendSpecialty, docType) => {
+    // Map backend specialties to frontend specialties
+    const specialtyMap = {
+      'general_medicine': 'general',
+      'cardiology': 'cardiology',
+      'neurology': 'neurology',
+      'urology': 'urology',
+      'oncology': 'general oncology',
+      'ophthalmology': 'ophthalmology',
+      'surgery': 'traumatology', // Default surgery to traumatology
+      'dermatology': 'allergology', // Default dermatology to allergology
+    };
+
+    let frontendSpecialty = specialtyMap[backendSpecialty] || 'general';
+    let code = '#001'; // Default to general report code
+
+    // Map doc_type to specific codes if available
+    if (docType) {
+      const docTypeMap = {
+        'general_visit': { specialty: 'general', code: '#001' },
+        'midwifery': { specialty: 'midwifery & gynecology', code: '#025' },
+        'cardiology': { specialty: 'cardiology', code: '#601' },
+        'ophthalmology': { specialty: 'ophthalmology', code: '#101' },
+        'neurology': { specialty: 'neurology', code: '#201' },
+        'trauma': { specialty: 'traumatology', code: '#301' },
+        'urology': { specialty: 'urology', code: '#401' },
+        'oncology': { specialty: 'general oncology', code: '#501' },
+        'allergy': { specialty: 'allergology', code: '#701' },
+      };
+
+      const mapped = docTypeMap[docType.toLowerCase()];
+      if (mapped) {
+        frontendSpecialty = mapped.specialty;
+        code = mapped.code;
+      }
+    } else {
+      // If no doc_type, use specialty-based default codes
+      const specialtyCodeMap = {
+        'general': '#001',
+        'cardiology': '#601',
+        'neurology': '#201',
+        'urology': '#401',
+        'general oncology': '#501',
+        'ophthalmology': '#101',
+        'traumatology': '#301',
+        'midwifery & gynecology': '#025',
+        'allergology': '#701',
+      };
+      code = specialtyCodeMap[frontendSpecialty] || '#001';
+    }
+
+    return { specialty: frontendSpecialty, code };
   };
 
   const handleSaveReport = async (payloadFromForm = null) => {

@@ -109,6 +109,7 @@ export async function getStudies(filters = {}) {
   if (filters.modality && filters.modality !== 'all') params.append('modality', filters.modality);
   if (filters.priority && filters.priority !== 'all') params.append('priority', filters.priority);
   if (filters.search) params.append('search', filters.search);
+  if (filters.patientId) params.append('patient_id', filters.patientId);
   if (filters.scheduledFrom) params.append('scheduled_from', filters.scheduledFrom);
   if (filters.scheduledTo) params.append('scheduled_to', filters.scheduledTo);
   params.append('page', filters.page || '1');
@@ -141,6 +142,36 @@ export async function deleteStudy(id) {
 export async function getStudyStats() {
   const res = await apiGet('/api/v1/radiology/studies/stats');
   return res?.data || res || {};
+}
+
+export async function uploadDicomStudy(formData) {
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+  const API_VERSION = '/api/v1';
+  const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`;
+  
+  const token = localStorage.getItem('token');
+  const headers = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  
+  const res = await fetch(`${API_BASE}/radiology/studies/upload-dicom`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  
+  if (!res.ok) {
+    let errorDetail = 'An error occurred';
+    try {
+      const err = await res.json();
+      errorDetail = err?.detail || err?.error || errorDetail;
+    } catch (_) {}
+    throw new Error(errorDetail);
+  }
+  
+  const data = await res.json();
+  return data?.data || data;
 }
 
 // Templates-specific functions
@@ -257,7 +288,10 @@ export async function getRadiologistProfile() {
 }
 
 export async function updateRadiologistProfile(profileData) {
-  const res = await apiSend('/api/v1/radiology/profile', 'PATCH', profileData);
+  // Backend expects { profileData: {...} } structure
+  const payload = { profileData };
+  const res = await apiSend('/api/v1/radiology/profile', 'PATCH', payload);
+  // Backend returns envelope with profileData, statsData, activityData
   return res?.data || res;
 }
 
@@ -289,6 +323,43 @@ export async function updateRadiologistNotifications(notifications) {
 export async function updateRadiologistSecurity(security) {
   const res = await apiSend('/api/v1/radiology/profile/security', 'PATCH', security);
   return res?.data || res;
+}
+
+// General Settings functions
+export async function getGeneralSettings() {
+  const res = await apiGet('/api/v1/radiology/settings/general');
+  // Backend returns GeneralSettings directly (not wrapped in SuccessResponse)
+  return res || null;
+}
+
+export async function updateGeneralSettings(generalSettings) {
+  const res = await apiSend('/api/v1/radiology/settings/general', 'PATCH', generalSettings);
+  // Backend returns GeneralSettings directly (not wrapped in SuccessResponse)
+  return res;
+}
+
+// Notification Settings functions
+export async function getNotificationSettings() {
+  const res = await apiGet('/api/v1/radiology/settings/notifications');
+  // Backend returns NotificationSettings directly (not wrapped in SuccessResponse)
+  return res || null;
+}
+
+export async function updateNotificationSettings(notificationSettings) {
+  const res = await apiSend('/api/v1/radiology/settings/notifications', 'PATCH', notificationSettings);
+  // Backend returns NotificationSettings directly (not wrapped in SuccessResponse)
+  return res;
+}
+
+// Patient Search functions
+export async function searchPatients(query, limit = 10) {
+  if (!query || query.length < 2) {
+    return [];
+  }
+  const params = new URLSearchParams({ q: query, limit: limit.toString() });
+  const res = await apiGet(`/api/v1/radiology/studies/patients/search?${params.toString()}`);
+  // Backend returns array directly
+  return res || [];
 }
 
 export async function getWorklistCollection(filters = {}) {

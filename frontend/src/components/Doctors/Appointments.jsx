@@ -1,10 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Header } from './Header'
 import { format, parse, parseISO } from 'date-fns'
 import CalendarSidebar from './Dashboard/Calendar'
-import { doctorAppointmentsAPI, checkBackendHealth } from '../../services/apiService'
+import { doctorAppointmentsAPI, doctorPatientsAPI, checkBackendHealth } from '../../services/apiService'
 
 const Appointments = () => {
+  const navigate = useNavigate()
   // Current date and selected date
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
@@ -48,6 +50,8 @@ const Appointments = () => {
   const [searchResults, setSearchResults] = useState([])
   const [showSearchResults, setShowSearchResults] = useState(false)
   const [selectedPatient, setSelectedPatient] = useState(null)
+  const [searchLoading, setSearchLoading] = useState(false)
+  const searchTimeoutRef = useRef(null)
 
   // Check backend connection and load appointments
   useEffect(() => {
@@ -110,6 +114,24 @@ const Appointments = () => {
               
               const timeText = (apt.time || '').slice(0, 5) || '00:00'
               
+              // Check if appointment is 3 or more days in the past
+              let finalStatus = mapStatusToUi(apt.status)
+              if (dateObj && !isNaN(dateObj.getTime())) {
+                const today = new Date()
+                today.setHours(0, 0, 0, 0) // Reset time to start of day
+                const appointmentDate = new Date(dateObj)
+                appointmentDate.setHours(0, 0, 0, 0) // Reset time to start of day
+                
+                // Calculate difference in days
+                const diffTime = today.getTime() - appointmentDate.getTime()
+                const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+                
+                // If appointment is 3 or more days in the past, mark as past
+                if (diffDays >= 3 && finalStatus !== 'pending') {
+                  finalStatus = 'past'
+                }
+              }
+              
               return {
                 id: apt.id,
                 time: timeText,
@@ -120,13 +142,15 @@ const Appointments = () => {
                 description: apt.description || apt.notes || 'No description available',
                 provider: apt.doctor_specialization || 'Current Doctor',
                 hospital: apt.hospital_name || 'Unknown Hospital',
-                status: mapStatusToUi(apt.status),
+                status: finalStatus,
                 // Additional comprehensive data
                 patient_id: apt.patient_id,
                 doctor_id: apt.doctor_id,
                 hospital_id: apt.hospital_id,
                 appointment_type: apt.appointment_type,
-                duration_minutes: apt.duration_minutes
+                duration_minutes: apt.duration_minutes,
+                report_id: apt.report_id || apt.reportId || null,
+                has_report: !!(apt.report_id || apt.reportId || apt.report)
               }
             })
             
@@ -169,31 +193,35 @@ const Appointments = () => {
     if (query.length < 2) {
       setSearchResults([])
       setShowSearchResults(false)
+      setSearchLoading(false)
       return
     }
 
     try {
-      const token = localStorage.getItem('token')
+      setSearchLoading(true)
       console.log('Searching patients with query:', query)
-      console.log('Token exists:', !!token)
+      console.log('Backend connected:', backendConnected)
       
-      const response = await fetch(`http://localhost:8000/api/v1/doctor/patients/search?q=${encodeURIComponent(query)}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+      // Always try to search, even if backendConnected is false (it might be a stale state)
+      try {
+        const results = await doctorPatientsAPI.search(query, 10)
+        console.log('Search results (raw):', results)
+        
+        // Handle both array and object with data property
+        const patients = Array.isArray(results) ? results : (results?.data || results?.items || [])
+        console.log('Processed patients:', patients)
+        
+        if (patients && patients.length > 0) {
+          setSearchResults(patients)
+          setShowSearchResults(true)
+        } else {
+          setSearchResults([])
+          setShowSearchResults(true) // Still show "no results" message
         }
-      })
-      
-      console.log('Search response status:', response.status)
-      console.log('Search response headers:', Object.fromEntries(response.headers.entries()))
-      
-      if (response.ok) {
-        const results = await response.json()
-        console.log('Search results:', results)
-        setSearchResults(results)
-        setShowSearchResults(true)
-      } else {
-        // Fallback to mock data for demo
+      } catch (apiError) {
+        console.error('API search error:', apiError)
+        console.error('Error details:', apiError.message, apiError.stack)
+        // Fallback to mock data if API fails
         const mockResults = [
           { id: '1', fullName: 'John Doe', email: 'john.doe@email.com', nationalId: '1234567890' },
           { id: '2', fullName: 'Jane Smith', email: 'jane.smith@email.com', nationalId: '0987654321' },
@@ -206,25 +234,26 @@ const Appointments = () => {
         )
         setSearchResults(mockResults)
         setShowSearchResults(true)
-        console.log('Using mock data due to response status:', response.status)
+        console.log('Using mock data due to API error')
       }
     } catch (error) {
       console.error('Error searching patients:', error)
-      // Fallback to mock data
-      const mockResults = [
-        { id: '1', fullName: 'John Doe', email: 'john.doe@email.com', nationalId: '1234567890' },
-        { id: '2', fullName: 'Jane Smith', email: 'jane.smith@email.com', nationalId: '0987654321' },
-        { id: '3', fullName: 'Ahmed Hassan', email: 'ahmed.hassan@email.com', nationalId: '1122334455' },
-        { id: '4', fullName: 'Sarah Johnson', email: 'sarah.j@email.com', nationalId: '5566778899' }
-      ].filter(patient => 
-        patient.fullName.toLowerCase().includes(query.toLowerCase()) ||
-        patient.email.toLowerCase().includes(query.toLowerCase()) ||
-        patient.nationalId.includes(query)
-      )
-      setSearchResults(mockResults)
-      setShowSearchResults(true)
+      setError('Failed to search patients. Please try again.')
+      setSearchResults([])
+      setShowSearchResults(false)
+    } finally {
+      setSearchLoading(false)
     }
   }
+  
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Handle patient selection
   const handlePatientSelect = (patient) => {
@@ -380,9 +409,28 @@ const handleAccept = async (id) => {
 
     // Only update local state if backend call succeeded
     if (backendConnected) {
-      setAppointments(appointments.map(apt =>
-        apt.id === id ? { ...apt, status: 'upcoming' } : apt
-      ))
+      setAppointments(appointments.map(apt => {
+        if (apt.id === id) {
+          // Check if appointment is 3+ days in the past
+          let newStatus = 'upcoming'
+          if (apt.date && !isNaN(apt.date.getTime())) {
+            const today = new Date()
+            today.setHours(0, 0, 0, 0)
+            const appointmentDate = new Date(apt.date)
+            appointmentDate.setHours(0, 0, 0, 0)
+            
+            const diffTime = today.getTime() - appointmentDate.getTime()
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+            
+            // If appointment is 3 or more days in the past, mark as past
+            if (diffDays >= 3) {
+              newStatus = 'past'
+            }
+          }
+          return { ...apt, status: newStatus }
+        }
+        return apt
+      }))
     } else {
       setError('Backend not available. Cannot accept appointment.')
     }
@@ -659,8 +707,9 @@ const formatSelectedDate = (date) => {
                             >
                               <div className="grid grid-cols-1 sm:grid-cols-12 items-center gap-4">
                                 <div className="col-span-1 sm:col-span-2">
-                                  <div className="bg-[#4DB6B0] text-white rounded-lg p-2 font-bold text-sm text-center">
-                                    {appointment.time}
+                                  <div className="bg-white border-2 border-[#5ACCC3] rounded-lg p-2 text-center">
+                                    <div className="font-bold text-sm text-[#5ACCC3]">{appointment.time}</div>
+                                    <div className="text-xs mt-0.5 text-[#5ACCC3]">{appointment.formattedDate || appointment.date || formatSelectedDate(selectedDate)}</div>
                                   </div>
                                 </div>
                                 <div className="col-span-1 sm:col-span-2">
@@ -671,7 +720,7 @@ const formatSelectedDate = (date) => {
                                     {appointment.problem}
                                   </span>
                                 </div>
-                                <div className="col-span-1 sm:col-span-3 text-gray-600 text-sm">
+                                <div className="col-span-1 sm:col-span-2 text-gray-600 text-sm">
                                   {appointment.description}
                                 </div>
                                 <div className="col-span-1 sm:col-span-1 text-gray-500 text-xs">
@@ -680,12 +729,28 @@ const formatSelectedDate = (date) => {
                                 <div className="col-span-1 sm:col-span-1 text-gray-500 text-xs">
                                   {appointment.provider}
                                 </div>
-                                <div className="col-span-1">
+                                <div className="col-span-1 sm:col-span-3 flex space-x-2">
+                                  {appointment.patient_id && (
+                                    <button 
+                                      onClick={() => navigate(`/doctor/report/${appointment.patient_id}`)}
+                                      className="flex-1 px-4 py-3 bg-white border-2 border-[#5ACCC3] text-[#5ACCC3] rounded-lg text-sm font-medium hover:bg-[#5ACCC3]/10 transition-colors"
+                                    >
+                                      Start
+                                    </button>
+                                  )}
                                   <button 
-                                    onClick={() => handleViewAppointment(appointment.id)}
-                                    className="w-full px-3 py-2 bg-[#4DB6B0] text-white rounded-lg text-sm font-medium hover:bg-[#3DA6A0] transition-colors"
+                                    onClick={() => {
+                                      if (appointment.report_id) {
+                                        // Navigate to report page if report exists
+                                        navigate(`/reports/${appointment.report_id}`)
+                                      } else {
+                                        // Show appointment details if no report
+                                        handleViewAppointment(appointment.id)
+                                      }
+                                    }}
+                                    className={`${appointment.patient_id ? 'flex-1' : 'w-full'} px-4 py-3 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4DB6B0] transition-colors`}
                                   >
-                                    View
+                                    {appointment.report_id ? 'View Report' : 'View'}
                                   </button>
                                 </div>
                               </div>
@@ -741,9 +806,10 @@ const formatSelectedDate = (date) => {
                           >
                             <div className="grid grid-cols-1 sm:grid-cols-12 items-center gap-4">
                               <div className="col-span-1 sm:col-span-2">
-                                <div className="bg-[#4DB6B0] text-white rounded-lg p-2 font-bold text-sm text-center">
-                                  {appointment.time}
-                                </div>
+                                  <div className="bg-white border-2 border-[#5ACCC3] rounded-lg p-2 text-center">
+                                    <div className="font-bold text-sm text-[#5ACCC3]">{appointment.time}</div>
+                                    <div className="text-xs mt-0.5 text-[#5ACCC3]">{appointment.formattedDate || appointment.date || formatSelectedDate(selectedDate)}</div>
+                                  </div>
                               </div>
                               <div className="col-span-1 sm:col-span-2">
                                 <div className="font-semibold text-gray-800">{appointment.patient}</div>
@@ -753,22 +819,22 @@ const formatSelectedDate = (date) => {
                                   {appointment.problem}
                                 </span>
                               </div>
-                              <div className="col-span-1 sm:col-span-3 text-gray-600 text-sm">
+                              <div className="col-span-1 sm:col-span-2 text-gray-600 text-sm">
                                 {appointment.description}
                               </div>
-                              <div className="col-span-1 sm:col-span-2 text-gray-500 text-xs">
+                              <div className="col-span-1 sm:col-span-1 text-gray-500 text-xs">
                                 {appointment.provider}
                               </div>
-                              <div className="col-span-1 sm:col-span-2 flex space-x-2">
+                              <div className="col-span-1 sm:col-span-4 flex space-x-2">
                                 <button 
                                   onClick={() => handleDecline(appointment.id)}
-                                  className="px-3 py-2 border-2 border-red-300 text-red-500 rounded-lg text-sm font-medium hover:bg-red-500 hover:text-white transition-colors"
+                                  className="flex-1 px-3 py-2 border-2 border-red-300 text-red-500 rounded-lg text-sm font-medium hover:bg-red-500 hover:text-white transition-colors"
                                 >
                                   Decline
                                 </button>
                                 <button 
                                   onClick={() => handleAccept(appointment.id)}
-                                  className="px-3 py-2 bg-[#4DB6B0] text-white rounded-lg text-sm font-medium hover:bg-[#3DA6A0] transition-colors"
+                                  className="flex-1 px-3 py-2 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4DB6B0] transition-colors"
                                 >
                                   Accept
                                 </button>
@@ -816,9 +882,10 @@ const formatSelectedDate = (date) => {
                           >
                             <div className="grid grid-cols-1 sm:grid-cols-12 items-center gap-4">
                               <div className="col-span-1 sm:col-span-2">
-                                <div className="bg-gray-400 text-white rounded-lg p-2 font-bold text-sm text-center">
-                                  {appointment.time}
-                                </div>
+                                  <div className="bg-white border-2 border-[#5ACCC3] rounded-lg p-2 text-center">
+                                    <div className="font-bold text-sm text-[#5ACCC3]">{appointment.time}</div>
+                                    <div className="text-xs mt-0.5 text-[#5ACCC3]">{appointment.formattedDate || appointment.date || formatSelectedDate(selectedDate)}</div>
+                                  </div>
                               </div>
                               <div className="col-span-1 sm:col-span-2">
                                 <div className="font-semibold text-gray-700">{appointment.patient}</div>
@@ -828,7 +895,7 @@ const formatSelectedDate = (date) => {
                                   {appointment.problem}
                                 </span>
                               </div>
-                              <div className="col-span-1 sm:col-span-3 text-gray-600 text-sm">
+                              <div className="col-span-1 sm:col-span-2 text-gray-600 text-sm">
                                 {appointment.description}
                               </div>
                               <div className="col-span-1 sm:col-span-1 text-gray-500 text-xs">
@@ -837,10 +904,63 @@ const formatSelectedDate = (date) => {
                               <div className="col-span-1 sm:col-span-1 text-gray-500 text-xs">
                                 {appointment.provider}
                               </div>
-                              <div className="col-span-1">
-                                <button className="w-full px-3 py-2 bg-[#4DB6B0] text-white rounded-lg text-sm font-medium hover:bg-[#3DA6A0] transition-colors">
-                                  Report
-                                </button>
+                              <div className="col-span-1 sm:col-span-3 flex space-x-2">
+                                {(() => {
+                                  // Check if appointment is past 3 days and has no report
+                                  const today = new Date()
+                                  today.setHours(0, 0, 0, 0)
+                                  const appointmentDate = appointment.date ? new Date(appointment.date) : null
+                                  let isPast3Days = false
+                                  
+                                  if (appointmentDate && !isNaN(appointmentDate.getTime())) {
+                                    appointmentDate.setHours(0, 0, 0, 0)
+                                    const diffTime = today.getTime() - appointmentDate.getTime()
+                                    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+                                    isPast3Days = diffDays >= 3
+                                  }
+                                  
+                                  const hasReport = appointment.has_report || appointment.report_id
+                                  const showMissed = isPast3Days && !hasReport
+                                  const showStart = !isPast3Days && appointment.patient_id
+                                  
+                                  if (showMissed) {
+                                    return (
+                                      <button 
+                                        onClick={() => handleViewAppointment(appointment.id)}
+                                        className="w-full px-4 py-3 bg-gray-400 text-white rounded-lg text-sm font-medium hover:bg-gray-500 transition-colors"
+                                      >
+                                        View
+                                      </button>
+                                    )
+                                  } else {
+                                    return (
+                                      <>
+                                        {showStart && (
+                                          <button 
+                                            onClick={() => navigate(`/doctor/report/${appointment.patient_id}`)}
+                                            className="flex-1 px-4 py-3 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors"
+                                          >
+                                            Start
+                                          </button>
+                                        )}
+                                        <button 
+                                          onClick={() => {
+                                            if (appointment.report_id) {
+                                              // Navigate to report page if report exists
+                                              navigate(`/reports/${appointment.report_id}`)
+                                            } else {
+                                              // Show appointment details if no report
+                                              handleViewAppointment(appointment.id)
+                                            }
+                                          }}
+                                          className={`${showStart ? 'flex-1' : 'w-full'} px-4 py-3 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4DB6B0] transition-colors`}
+                                        >
+                                          {appointment.report_id ? 'View Report' : 'View'}
+                                        </button>
+                                      </>
+                                    )
+                                  }
+                                })()}
                               </div>
                             </div>
                           </div>
@@ -893,16 +1013,30 @@ const formatSelectedDate = (date) => {
                     type="text"
                     value={patientSearch}
                     onChange={(e) => {
-                      setPatientSearch(e.target.value)
-                      searchPatients(e.target.value)
+                      const value = e.target.value
+                      setPatientSearch(value)
+                      
+                      // Clear previous timeout
+                      if (searchTimeoutRef.current) {
+                        clearTimeout(searchTimeoutRef.current)
+                      }
+                      
+                      // Debounce search - wait 300ms after user stops typing
+                      searchTimeoutRef.current = setTimeout(() => {
+                        searchPatients(value)
+                      }, 300)
                     }}
                     className="w-full rounded-xl border-2 border-gray-200 px-3 sm:px-4 py-2 sm:py-3 focus:outline-none focus:border-[#5ACCC3] transition-all duration-300 hover:border-gray-300 text-sm sm:text-base"
                     placeholder="Search by name, email, or ID..."
                   />
                   <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                    <svg className="w-5 h-5 text-[#5ACCC3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                    </svg>
+                    {searchLoading ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#5ACCC3]"></div>
+                    ) : (
+                      <svg className="w-5 h-5 text-[#5ACCC3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                      </svg>
+                    )}
                   </div>
                   
                   {/* Search Results Dropdown */}
@@ -1121,8 +1255,8 @@ const formatSelectedDate = (date) => {
       
       {/* View Appointment Modal */}
       {showViewAppointmentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center z-50 p-4">
+          <div className="bg-white bg-opacity-95 backdrop-blur-md rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-4 border-[#5ACCC3]">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">Appointment Details</h2>

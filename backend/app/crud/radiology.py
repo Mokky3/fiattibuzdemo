@@ -21,11 +21,13 @@ class CRUDRadiologyStudy(CRUDBase[RadiologyStudy, Dict[str, Any], Dict[str, Any]
         modality: Optional[str] = None,
         priority: Optional[str] = None,
         search: Optional[str] = None,
+        patient_id: Optional[str] = None,
         scheduled_from: Optional[date] = None,
         scheduled_to: Optional[date] = None,
         skip: int = 0,
         limit: int = 100,
     ) -> List[RadiologyStudy]:
+        from uuid import UUID
         query = db.query(RadiologyStudy)
         if status and status != "all":
             query = query.filter(RadiologyStudy.status == status)
@@ -33,6 +35,13 @@ class CRUDRadiologyStudy(CRUDBase[RadiologyStudy, Dict[str, Any], Dict[str, Any]
             query = query.filter(func.lower(RadiologyStudy.modality) == func.lower(modality))
         if priority and priority != "all":
             query = query.filter(func.lower(RadiologyStudy.priority) == func.lower(priority))
+        if patient_id:
+            try:
+                patient_uuid = UUID(patient_id) if isinstance(patient_id, str) else patient_id
+                query = query.filter(RadiologyStudy.patient_id == patient_uuid)
+            except (ValueError, TypeError):
+                # Invalid UUID format, return empty results
+                return []
         if search:
             like = f"%{search.lower()}%"
             query = query.filter(

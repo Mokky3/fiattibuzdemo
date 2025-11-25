@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.common.auth.auth_service import AuthenticatedUser, require_radiologist_access
+from app.common.auth.auth_service import AuthenticatedUser, require_radiologist_access, AuthService
 from app.common.schemas.responses_enhanced import SuccessResponse
 from app.common.models.user import User, UserProfile, UserRole
 from app.common.models.radiology import RadiologyStudy, RadiologyReport
@@ -34,8 +34,10 @@ def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
-def _build_profile_from_db(db_user: User, db_profile: Optional[UserProfile] = None) -> ProfileData:
-    """Build ProfileData from database User and UserProfile models."""
+def _build_profile_from_db(db_user: User, db_profile: Optional[UserProfile] = None, db_settings: Optional = None) -> ProfileData:
+    """Build ProfileData from database User, UserProfile, and UserSettings models."""
+    from app.common.models.user import UserSettings
+    
     return ProfileData(
         firstName=db_user.first_name or "Radiologist",
         lastName=db_user.last_name or "User",
@@ -66,8 +68,8 @@ def _build_profile_from_db(db_user: User, db_profile: Optional[UserProfile] = No
         pacsAlerts=True,
         reportReminders=True,
         twoFactorAuth=db_user.two_factor_enabled or False,
-        sessionTimeout=30,
-        loginAlerts=True,
+        sessionTimeout=db_settings.session_timeout if db_settings and db_settings.session_timeout else 30,
+        loginAlerts=db_settings.login_alerts if db_settings and db_settings.login_alerts is not None else True,
         theme="dark",
         language=db_user.language or "en",
         timezone=db_user.timezone or "America/New_York",
@@ -78,63 +80,151 @@ def _build_profile_from_db(db_user: User, db_profile: Optional[UserProfile] = No
     )
 
 
+def _build_activity_from_db(db: Session, user_id: str) -> List[ActivityItem]:
+    """Build activity data from database radiology reports and studies."""
+    from uuid import UUID
+    from app.common.models.radiology import WorklistAssignment
+    
+    activities = []
+    activity_id = 1
+    
+    try:
+        user_uuid = UUID(user_id) if isinstance(user_id, str) else user_id
+    except (ValueError, TypeError):
+        return []
+    
+    # Get recent finalized reports
+    recent_reports = db.query(RadiologyReport).filter(
+        RadiologyReport.radiologist_id == user_uuid,
+        RadiologyReport.status == "final"
+    ).order_by(RadiologyReport.report_date.desc()).limit(10).all()
+    
+    for report in recent_reports:
+        study = db.query(RadiologyStudy).filter(RadiologyStudy.id == report.study_id).first()
+        modality = study.modality if study and study.modality else "Unknown"
+        study_desc = study.study_description if study and study.study_description else "Study"
+        
+        # Format timestamp
+        timestamp = report.report_date.strftime("%Y-%m-%d %H:%M") if report.report_date else datetime.now().strftime("%Y-%m-%d %H:%M")
+        
+        activity_type = "critical" if report.is_critical else "report"
+        details = f"{modality} {study_desc}"
+        if study and study.accession_number:
+            details += f" - Acc: {study.accession_number}"
+        
+        activities.append(ActivityItem(
+            id=activity_id,
+            action=f"Finalized {modality} Report" if not report.is_critical else "Critical Finding Notification",
+            timestamp=timestamp,
+            type=activity_type,
+            details=details
+        ))
+        activity_id += 1
+    
+    # Get recent assigned studies
+    recent_assignments = db.query(WorklistAssignment).filter(
+        WorklistAssignment.assigned_radiologist_id == str(user_uuid)
+    ).order_by(WorklistAssignment.assigned_at.desc()).limit(5).all()
+    
+    for assignment in recent_assignments:
+        study = db.query(RadiologyStudy).filter(RadiologyStudy.id == assignment.study_id).first()
+        if study:
+            modality = study.modality or "Unknown"
+            timestamp = assignment.assigned_at.strftime("%Y-%m-%d %H:%M") if assignment.assigned_at else datetime.now().strftime("%Y-%m-%d %H:%M")
+            
+            activities.append(ActivityItem(
+                id=activity_id,
+                action=f"Assigned {modality} Study",
+                timestamp=timestamp,
+                type="review",
+                details=f"{modality} study assigned for review"
+            ))
+            activity_id += 1
+    
+    # Sort by timestamp descending and limit to 20
+    activities.sort(key=lambda x: x.timestamp, reverse=True)
+    return activities[:20] if activities else [item.copy(deep=True) for item in _ACTIVITY_DATA[:3]]
+
+
 def _build_stats_from_db(db: Session, user_id: str) -> StatsData:
     """Build StatsData from database radiology studies and reports."""
     from app.common.models.radiology import WorklistAssignment
+    from uuid import UUID
+    from sqlalchemy import cast, String
     
     now = datetime.now(timezone.utc)
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
     
+    # Convert user_id to UUID if it's a string
+    try:
+        user_uuid = UUID(user_id) if isinstance(user_id, str) else user_id
+    except (ValueError, TypeError):
+        # If conversion fails, return empty stats
+        return StatsData(
+            totalStudies=0,
+            reportsFinalized=0,
+            avgReportTime="0 minutes",
+            criticalFindings=0,
+            consultations=0,
+            accuracy="0%",
+            productivity="0 RVUs/day",
+            thisWeek=PeriodStats(studiesRead=0, reportsFinalized=0, criticalFindings=0, hoursWorked=0, avgTurnaroundTime="0 minutes"),
+            thisMonth=PeriodStats(studiesRead=0, reportsFinalized=0, criticalFindings=0, hoursWorked=0, avgTurnaroundTime="0 minutes"),
+            modalityBreakdown={}
+        )
+    
     # Get studies assigned to this radiologist through WorklistAssignment
+    # WorklistAssignment.assigned_radiologist_id is String(36), so we can compare directly
     total_studies = db.query(WorklistAssignment).filter(
-        WorklistAssignment.assigned_radiologist_id == user_id
+        WorklistAssignment.assigned_radiologist_id == str(user_uuid)
     ).count()
     
     # Get finalized reports
+    # RadiologyReport.radiologist_id is UUID in DB, so use UUID directly
     reports_finalized = db.query(RadiologyReport).filter(
-        RadiologyReport.radiologist_id == user_id,
+        RadiologyReport.radiologist_id == user_uuid,
         RadiologyReport.status == "final"
     ).count()
     
     # Get critical findings
     critical_findings = db.query(RadiologyReport).filter(
-        RadiologyReport.radiologist_id == user_id,
+        RadiologyReport.radiologist_id == user_uuid,
         RadiologyReport.is_critical == True
     ).count()
     
     # This week stats
     this_week_studies = db.query(WorklistAssignment).filter(
-        WorklistAssignment.assigned_radiologist_id == user_id,
+        WorklistAssignment.assigned_radiologist_id == str(user_uuid),
         WorklistAssignment.assigned_at >= week_ago
     ).count()
     
     this_week_reports = db.query(RadiologyReport).filter(
-        RadiologyReport.radiologist_id == user_id,
+        RadiologyReport.radiologist_id == user_uuid,
         RadiologyReport.status == "final",
         RadiologyReport.report_date >= week_ago
     ).count()
     
     this_week_critical = db.query(RadiologyReport).filter(
-        RadiologyReport.radiologist_id == user_id,
+        RadiologyReport.radiologist_id == user_uuid,
         RadiologyReport.is_critical == True,
         RadiologyReport.report_date >= week_ago
     ).count()
     
     # This month stats
     this_month_studies = db.query(WorklistAssignment).filter(
-        WorklistAssignment.assigned_radiologist_id == user_id,
+        WorklistAssignment.assigned_radiologist_id == str(user_uuid),
         WorklistAssignment.assigned_at >= month_ago
     ).count()
     
     this_month_reports = db.query(RadiologyReport).filter(
-        RadiologyReport.radiologist_id == user_id,
+        RadiologyReport.radiologist_id == user_uuid,
         RadiologyReport.status == "final",
         RadiologyReport.report_date >= month_ago
     ).count()
     
     this_month_critical = db.query(RadiologyReport).filter(
-        RadiologyReport.radiologist_id == user_id,
+        RadiologyReport.radiologist_id == user_uuid,
         RadiologyReport.is_critical == True,
         RadiologyReport.report_date >= month_ago
     ).count()
@@ -308,14 +398,21 @@ async def get_profile(
     # Get user profile if it exists
     db_profile = db.query(UserProfile).filter(UserProfile.user_id == db_user.id).first()
     
+    # Get user settings if it exists
+    from app.common.models.user import UserSettings
+    db_settings = db.query(UserSettings).filter(UserSettings.user_id == db_user.id).first()
+    
     # Build profile data from database
-    profile_data = _build_profile_from_db(db_user, db_profile)
+    profile_data = _build_profile_from_db(db_user, db_profile, db_settings)
+    
+    # Build activity from database
+    activity_data = _build_activity_from_db(db, str(db_user.id))
     
     # Build envelope with real data
     envelope = RadiologyProfileEnvelope(
         profileData=profile_data,
         statsData=_build_stats_from_db(db, str(db_user.id)),
-        activityData=_ACTIVITY_DATA,  # Keep mock activity for now
+        activityData=activity_data,
         lastUpdated=_utc_now_iso(),
     )
     
@@ -386,8 +483,12 @@ async def update_profile(
     db.refresh(db_user)
     db.refresh(db_profile)
     
+    # Get user settings
+    from app.common.models.user import UserSettings
+    db_settings = db.query(UserSettings).filter(UserSettings.user_id == db_user.id).first()
+    
     # Build updated profile data
-    updated_profile_data = _build_profile_from_db(db_user, db_profile)
+    updated_profile_data = _build_profile_from_db(db_user, db_profile, db_settings)
     
     # Build envelope with updated data
     envelope = RadiologyProfileEnvelope(
@@ -472,8 +573,12 @@ async def patch_profile(
     db.refresh(db_user)
     db.refresh(db_profile)
     
+    # Get user settings
+    from app.common.models.user import UserSettings
+    db_settings = db.query(UserSettings).filter(UserSettings.user_id == db_user.id).first()
+    
     # Build updated profile data
-    updated_profile_data = _build_profile_from_db(db_user, db_profile)
+    updated_profile_data = _build_profile_from_db(db_user, db_profile, db_settings)
     
     # Build envelope with updated data
     envelope = RadiologyProfileEnvelope(
@@ -491,10 +596,16 @@ async def get_activity(
     db: Session = Depends(get_db),
     current_user: AuthenticatedUser = Depends(require_radiologist_access()),
 ) -> SuccessResponse:
-    # For now, return mock activity data
-    # TODO: Build real activity from user activities, radiology reports, etc.
-    # This could be enhanced to query UserActivity, RadiologyReport activities, etc.
-    return SuccessResponse(data=[item.copy(deep=True) for item in _ACTIVITY_DATA])
+    # Get the authenticated radiologist user from the database
+    db_user = db.query(User).filter(User.id == current_user.user_id).first()
+    
+    if not db_user:
+        # Fallback to mock activity data if user not found
+        return SuccessResponse(data=[item.copy(deep=True) for item in _ACTIVITY_DATA])
+    
+    # Build activity from database
+    activity_data = _build_activity_from_db(db, str(db_user.id))
+    return SuccessResponse(data=activity_data)
 
 
 @router.get("/statistics", response_model=StatsData)
@@ -534,6 +645,7 @@ async def get_stats(
 async def change_password(
     payload: PasswordChangeRequest,
     current_user: AuthenticatedUser = Depends(require_radiologist_access()),
+    db: Session = Depends(get_db),
 ) -> Dict[str, str]:
     if payload.newPassword != payload.confirmPassword:
         raise HTTPException(
@@ -545,6 +657,23 @@ async def change_password(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="New password must be different from current password",
         )
+    
+    # Get the user from database
+    db_user = db.query(User).filter(User.id == current_user.user_id).first()
+    if not db_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not AuthService.verify_password(payload.currentPassword, db_user.password_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Current password is incorrect",
+        )
+    
+    # Hash and update password
+    db_user.password_hash = AuthService.get_password_hash(payload.newPassword)
+    db.commit()
+    
     return {"message": "Password updated successfully"}
 
 
@@ -587,15 +716,33 @@ async def update_security(
     current_user: AuthenticatedUser = Depends(require_radiologist_access()),
     db: Session = Depends(get_db),
 ) -> SuccessResponse:
-    """Update security settings like 2FA, session timeout, etc."""
+    """Update security settings like 2FA, session timeout, login alerts, etc."""
+    from app.common.models.user import UserSettings
+    
     db_user = db.query(User).filter(User.id == current_user.user_id).first()
     
     if not db_user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Update security settings
+    # Update two-factor authentication on User model
     if "twoFactorAuth" in security:
         db_user.two_factor_enabled = security["twoFactorAuth"]
+    
+    # Get or create UserSettings
+    db_settings = db.query(UserSettings).filter(UserSettings.user_id == db_user.id).first()
+    if not db_settings:
+        import uuid
+        db_settings = UserSettings(
+            id=str(uuid.uuid4()),
+            user_id=db_user.id,
+        )
+        db.add(db_settings)
+    
+    # Update login alerts and session timeout in UserSettings
+    if "loginAlerts" in security:
+        db_settings.login_alerts = security["loginAlerts"]
+    if "sessionTimeout" in security:
+        db_settings.session_timeout = security["sessionTimeout"]
     
     db.commit()
     return SuccessResponse(data={"message": "Security settings updated successfully"})

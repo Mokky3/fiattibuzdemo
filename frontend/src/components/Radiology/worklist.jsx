@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, Clock, Eye, FileText, Monitor, AlertCircle, CheckCircle, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { format, parseISO, differenceInHours, differenceInMinutes } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 // Import the radiology header component
 import RadiologyHeader from './header';
 import StudyListItem from './shared/StudyListItem';
 import StudyGridItem from './shared/StudyGridItem';
+import { getModalityIcon, getPriorityColor, getReadingStatusColor } from './shared/studyUtils';
 import { getWorklistStudies, getWorklistStats, getWorklistCollection, updateStudyStatus, assignStudy } from '../../services/radiologyService';
 
 const RadiologyWorklist = () => {
+  const navigate = useNavigate();
   const [selectedFilter, setSelectedFilter] = useState('unread');
   const [sortBy, setSortBy] = useState('priority');
   const [sortOrder, setSortOrder] = useState('desc');
@@ -16,6 +19,7 @@ const RadiologyWorklist = () => {
   const [viewMode, setViewMode] = useState('list'); // list, grid
   const [showFilters, setShowFilters] = useState(false);
   const [expandedStudy, setExpandedStudy] = useState(null);
+  const [updatingStatus, setUpdatingStatus] = useState({});
 
   // Advanced filters
   const [filters, setFilters] = useState({
@@ -86,14 +90,49 @@ const RadiologyWorklist = () => {
   const filteredStudies = worklistStudies;
   const sortedStudies = worklistStudies; // Backend handles sorting
 
+  // Handle toggle expand for "More" button
+  const handleToggleExpand = (studyId) => {
+    setExpandedStudy(expandedStudy === studyId ? null : studyId);
+  };
+
+  // Handle "Read" button - update status to "reading" and open study detail modal
+  const handleReadStudy = async (study) => {
+    try {
+      setUpdatingStatus(prev => ({ ...prev, [study.id]: true }));
+      
+      // Update study status to "reading" if it's currently "unread"
+      if (study.readingStatus === 'unread') {
+        await updateStudyStatus(study.id, 'reading');
+        
+        // Refresh the worklist to get updated status
+        const studiesData = await getWorklistCollection({
+          readingStatus: selectedFilter === 'all' ? undefined : selectedFilter,
+          modality: filters.modality === 'all' ? undefined : filters.modality,
+          priority: filters.priority === 'all' ? undefined : filters.priority,
+          timeRange: filters.timeRange === 'all' ? undefined : filters.timeRange,
+          search: searchTerm || undefined,
+          sortBy: sortBy,
+          sortOrder: sortOrder,
+          page: pagination.page,
+          size: pagination.size
+        });
+        
+        setWorklistStudies(studiesData.items || []);
+      }
+      
+      // Open study detail modal
+      setSelectedStudy(study);
+    } catch (err) {
+      console.error('Error updating study status:', err);
+      alert('Failed to update study status: ' + (err.message || 'Unknown error'));
+    } finally {
+      setUpdatingStatus(prev => ({ ...prev, [study.id]: false }));
+    }
+  };
+
   const WorklistHeader = () => (
     <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-6">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Radiology Worklist</h1>
-          <p className="text-gray-600">Studies awaiting interpretation</p>
-        </div>
-        
         <div className="flex items-center space-x-4">
           {/* Filter Tabs */}
           <div className="flex bg-gray-100 rounded-lg p-1">
@@ -250,62 +289,47 @@ const RadiologyWorklist = () => {
 
   // Using shared StudyListItem and StudyGridItem components
 
+  // Worklist Stats Component (for sidebar) - Separate boxes
   const WorklistStats = () => (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">STAT Studies</p>
-            <p className="text-3xl font-bold text-red-600">
-              {worklistStats.statCount || worklistStudies.filter(s => s.priority === 'STAT').length}
-            </p>
-          </div>
-          <div className="bg-red-100 p-3 rounded-lg">
-            <AlertCircle className="w-6 h-6 text-red-600" />
-          </div>
+    <div className="space-y-4">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-gray-600 text-xs">STAT Studies</p>
+          <AlertCircle className="w-4 h-4 text-red-600" />
         </div>
+        <p className="text-2xl font-bold text-red-600">
+          {worklistStats.statCount || worklistStudies.filter(s => s.priority === 'STAT').length}
+        </p>
       </div>
       
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">In Progress</p>
-            <p className="text-3xl font-bold text-yellow-600">
-              {worklistStats.reading || worklistStudies.filter(s => s.readingStatus === 'reading').length}
-            </p>
-          </div>
-          <div className="bg-yellow-100 p-3 rounded-lg">
-            <Clock className="w-6 h-6 text-yellow-600" />
-          </div>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-gray-600 text-xs">In Progress</p>
+          <Clock className="w-4 h-4 text-yellow-600" />
         </div>
+        <p className="text-2xl font-bold text-yellow-600">
+          {worklistStats.reading || worklistStudies.filter(s => s.readingStatus === 'reading').length}
+        </p>
       </div>
       
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">Completed Today</p>
-            <p className="text-3xl font-bold text-green-600">
-              {worklistStats.final || worklistStudies.filter(s => s.readingStatus === 'final').length}
-            </p>
-          </div>
-          <div className="bg-green-100 p-3 rounded-lg">
-            <CheckCircle className="w-6 h-6 text-green-600" />
-          </div>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-gray-600 text-xs">Completed</p>
+          <CheckCircle className="w-4 h-4 text-green-600" />
         </div>
+        <p className="text-2xl font-bold text-green-600">
+          {worklistStats.final || worklistStudies.filter(s => s.readingStatus === 'final').length}
+        </p>
       </div>
       
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-gray-600 text-sm">Critical Findings</p>
-            <p className="text-3xl font-bold text-orange-600">
-              {worklistStats.criticalCount || worklistStudies.filter(s => s.criticalFlag).length}
-            </p>
-          </div>
-          <div className="bg-orange-100 p-3 rounded-lg">
-            <AlertCircle className="w-6 h-6 text-orange-600" />
-          </div>
+      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+        <div className="flex items-center justify-between mb-2">
+          <p className="text-gray-600 text-xs">Critical</p>
+          <AlertCircle className="w-4 h-4 text-orange-600" />
         </div>
+        <p className="text-2xl font-bold text-orange-600">
+          {worklistStats.criticalCount || worklistStudies.filter(s => s.criticalFlag).length}
+        </p>
       </div>
     </div>
   );
@@ -316,8 +340,10 @@ const RadiologyWorklist = () => {
         <div className="p-6 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{study.patientName}</h2>
-              <p className="text-gray-600">{study.studyDescription}</p>
+              <h2 className="text-xl font-bold text-gray-900">{study.patientName || 'Unknown Patient'}</h2>
+              {study.studyDescription && (
+                <p className="text-gray-600">{study.studyDescription}</p>
+              )}
             </div>
             <button
               onClick={() => setSelectedStudy(null)}
@@ -336,45 +362,59 @@ const RadiologyWorklist = () => {
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-gray-600">Name:</span>
-                    <span className="font-medium">{study.patientName}</span>
+                    <span className="font-medium">{study.patientName || 'N/A'}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">MRN:</span>
-                    <span className="font-medium">{study.mrn}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">DOB:</span>
-                    <span className="font-medium">{format(parseISO(study.dob), 'MMM d, yyyy')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Age/Gender:</span>
-                    <span className="font-medium">{study.age}Y {study.gender}</span>
-                  </div>
+                  {study.mrn && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">MRN:</span>
+                      <span className="font-medium">{study.mrn}</span>
+                    </div>
+                  )}
+                  {study.dob && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">DOB:</span>
+                      <span className="font-medium">{format(parseISO(study.dob), 'MMM d, yyyy')}</span>
+                    </div>
+                  )}
+                  {(study.age || study.gender) && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Age/Gender:</span>
+                      <span className="font-medium">{study.age || '?'}Y {study.gender || ''}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Study Details</h3>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Accession:</span>
-                    <span className="font-medium">{study.accessionNumber}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Study Date:</span>
-                    <span className="font-medium">{format(parseISO(study.studyDate), 'MMM d, yyyy HH:mm')}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Modality:</span>
-                    <span className="font-medium flex items-center space-x-1">
-                      {getModalityIcon(study.modality)}
-                      <span>{study.modality}</span>
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Body Part:</span>
-                    <span className="font-medium">{study.bodyPart}</span>
-                  </div>
+                  {study.accessionNumber && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Accession:</span>
+                      <span className="font-medium">{study.accessionNumber}</span>
+                    </div>
+                  )}
+                  {study.studyDate && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Study Date:</span>
+                      <span className="font-medium">{format(parseISO(study.studyDate), 'MMM d, yyyy HH:mm')}</span>
+                    </div>
+                  )}
+                  {study.modality && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Modality:</span>
+                      <span className="font-medium flex items-center space-x-1">
+                        {getModalityIcon(study.modality)}
+                        <span>{study.modality}</span>
+                      </span>
+                    </div>
+                  )}
+                  {study.bodyPart && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Body Part:</span>
+                      <span className="font-medium">{study.bodyPart}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between">
                     <span className="text-gray-600">Images:</span>
                     <span className="font-medium">{study.imageCount} ({study.seriesCount} series)</span>
@@ -387,24 +427,32 @@ const RadiologyWorklist = () => {
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">Clinical Information</h3>
                 <div className="bg-gray-50 rounded-lg p-4 space-y-2 text-sm">
-                  <div>
-                    <span className="text-gray-600 block">Indication:</span>
-                    <span className="font-medium">{study.indication}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Ordering Physician:</span>
-                    <span className="font-medium">{study.orderingPhysician}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Location:</span>
-                    <span className="font-medium">{study.location}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Priority:</span>
-                    <span className={`px-2 py-1 rounded text-xs border ${getPriorityColor(study.priority)}`}>
-                      {study.priority}
-                    </span>
-                  </div>
+                  {study.indication && (
+                    <div>
+                      <span className="text-gray-600 block">Indication:</span>
+                      <span className="font-medium">{study.indication}</span>
+                    </div>
+                  )}
+                  {study.orderingPhysician && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Ordering Physician:</span>
+                      <span className="font-medium">{study.orderingPhysician}</span>
+                    </div>
+                  )}
+                  {study.location && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Location:</span>
+                      <span className="font-medium">{study.location}</span>
+                    </div>
+                  )}
+                  {study.priority && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Priority:</span>
+                      <span className={`px-2 py-1 rounded text-xs border ${getPriorityColor(study.priority)}`}>
+                        {study.priority}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -473,11 +521,79 @@ const RadiologyWorklist = () => {
             </div>
             
             <div className="flex space-x-3">
-              <button className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center space-x-2">
+              <button 
+                onClick={() => {
+                  // Navigate to PACS page with studyInstanceUID and orthancStudyId
+                  if (study.studyInstanceUID || study.orthancStudyId) {
+                    navigate('/radiology/pacs', { 
+                      state: { 
+                        studyInstanceUID: study.studyInstanceUID,
+                        orthancStudyId: study.orthancStudyId
+                      } 
+                    });
+                  } else {
+                    alert('Study Instance UID or Orthanc Study ID not available for this study');
+                  }
+                }}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center space-x-2"
+              >
                 <Monitor className="w-4 h-4" />
                 <span>Open in PACS</span>
               </button>
-              <button className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center space-x-2">
+              <button 
+                onClick={async () => {
+                  try {
+                    if (study.readingStatus === 'unread') {
+                      await updateStudyStatus(study.id, 'reading');
+                      // Refresh the worklist
+                      const studiesData = await getWorklistCollection({
+                        readingStatus: selectedFilter === 'all' ? undefined : selectedFilter,
+                        modality: filters.modality === 'all' ? undefined : filters.modality,
+                        priority: filters.priority === 'all' ? undefined : filters.priority,
+                        timeRange: filters.timeRange === 'all' ? undefined : filters.timeRange,
+                        search: searchTerm || undefined,
+                        sortBy: sortBy,
+                        sortOrder: sortOrder,
+                        page: pagination.page,
+                        size: pagination.size
+                      });
+                      setWorklistStudies(studiesData.items || []);
+                      // Update selected study
+                      const updatedStudy = studiesData.items?.find(s => s.id === study.id);
+                      if (updatedStudy) {
+                        setSelectedStudy(updatedStudy);
+                        // Navigate to PACS page with studyInstanceUID and orthancStudyId
+                        if (updatedStudy.studyInstanceUID || updatedStudy.orthancStudyId) {
+                          navigate('/radiology/pacs', { 
+                            state: { 
+                              studyInstanceUID: updatedStudy.studyInstanceUID,
+                              orthancStudyId: updatedStudy.orthancStudyId
+                            } 
+                          });
+                        } else {
+                          alert('Study Instance UID or Orthanc Study ID not available for this study');
+                        }
+                      }
+                    } else {
+                      // Navigate to PACS page with studyInstanceUID and orthancStudyId
+                      if (study.studyInstanceUID || study.orthancStudyId) {
+                        navigate('/radiology/pacs', { 
+                          state: { 
+                            studyInstanceUID: study.studyInstanceUID,
+                            orthancStudyId: study.orthancStudyId
+                          } 
+                        });
+                      } else {
+                        alert('Study Instance UID or Orthanc Study ID not available for this study');
+                      }
+                    }
+                  } catch (err) {
+                    console.error('Error starting reading:', err);
+                    alert('Failed to start reading: ' + (err.message || 'Unknown error'));
+                  }
+                }}
+                className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center space-x-2"
+              >
                 <FileText className="w-4 h-4" />
                 <span>Start Reading</span>
               </button>
@@ -493,35 +609,41 @@ const RadiologyWorklist = () => {
       <RadiologyHeader />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <WorklistHeader />
-        
-        {/* Loading State */}
-        {loading && (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
-            <span className="ml-3 text-gray-600">Loading worklist...</span>
+        <div className="flex gap-6">
+          {/* Left Sidebar */}
+          <div className="w-80 flex-shrink-0">
+            {/* Info Boxes */}
+            {!loading && !error && <WorklistStats />}
           </div>
-        )}
 
-        {/* Error State */}
-        {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
-            <div className="flex items-center">
-              <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-              <div>
-                <h3 className="text-sm font-medium text-red-800">Error loading worklist</h3>
-                <p className="text-sm text-red-600 mt-1">{error}</p>
+          {/* Main Content Area */}
+          <div className="flex-1">
+            <WorklistHeader />
+            
+            {/* Loading State */}
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
+                <span className="ml-3 text-gray-600">Loading worklist...</span>
               </div>
-            </div>
-          </div>
-        )}
+            )}
 
-        {/* Stats and Content */}
-        {!loading && !error && (
-          <>
-            <WorklistStats />
-        
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+            {/* Error State */}
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+                <div className="flex items-center">
+                  <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                  <div>
+                    <h3 className="text-sm font-medium text-red-800">Error loading worklist</h3>
+                    <p className="text-sm text-red-600 mt-1">{error}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Studies List */}
+            {!loading && !error && (
+              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-gray-900">
               {selectedFilter === 'all' ? 'All Studies' : `${selectedFilter.charAt(0).toUpperCase() + selectedFilter.slice(1)} Studies`}
@@ -544,9 +666,21 @@ const RadiologyWorklist = () => {
                 <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-4'}>
                   {sortedStudies.map(study => (
                     viewMode === 'grid' ? (
-                      <StudyGridItem key={study.id} study={study} />
+                      <StudyGridItem 
+                        key={study.id} 
+                        study={study}
+                        onSelect={handleReadStudy}
+                        isUpdating={updatingStatus[study.id] || false}
+                      />
                     ) : (
-                      <StudyListItem key={study.id} study={study} />
+                      <StudyListItem 
+                        key={study.id} 
+                        study={study}
+                        expandedId={expandedStudy}
+                        onToggleExpand={handleToggleExpand}
+                        onSelect={handleReadStudy}
+                        isUpdating={updatingStatus[study.id] || false}
+                      />
                     )
                   ))}
                 </div>
@@ -580,12 +714,13 @@ const RadiologyWorklist = () => {
                 )}
               </>
             )}
+              </div>
+            )}
           </div>
-          </>
-        )}
-      </div>
+        </div>
 
-      {selectedStudy && <StudyDetailModal study={selectedStudy} />}
+        {selectedStudy && <StudyDetailModal study={selectedStudy} />}
+      </div>
     </div>
   );
 };

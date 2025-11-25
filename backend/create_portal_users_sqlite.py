@@ -67,13 +67,13 @@ def main() -> None:
                 )
             except sqlite3.OperationalError:
                 # Fallback to older schema with hashed_password and surname
-            cur.execute(
-                """
-                INSERT INTO users (username, email, hashed_password, role, first_name, surname, pinfl, phone_number)
-                VALUES (?,?,?,?,?,?,?,?)
-                """,
-                (username, email, hashed_password, role, first_name, surname, pinfl, phone_number),
-            )
+                cur.execute(
+                    """
+                    INSERT INTO users (username, email, hashed_password, role, first_name, surname, pinfl, phone_number)
+                    VALUES (?,?,?,?,?,?,?,?)
+                    """,
+                    (username, email, hashed_password, role, first_name, surname, pinfl, phone_number),
+                )
             results.append((role, email, pwd, True))
 
         # Ensure a doctor profile exists (older schema lacks user_id)

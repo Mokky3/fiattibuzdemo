@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
-import { ArrowLeft, Printer, Download, FileText, Calendar, User, Building2 } from 'lucide-react';
+import { ArrowLeft, Printer, Download, FileText, Calendar, User, Building2, Monitor, Eye } from 'lucide-react';
 import { patientRecordsAPI, patientPrescriptionsAPI } from '../../services/apiService';
 import SpecialtyReportView from './SpecialtyReportView';
 
@@ -181,6 +181,33 @@ const RecordSummary = () => {
             </button>
             <h1 className="text-xl font-bold text-white">Record Summary</h1>
             <div className="flex items-center space-x-2">
+              {/* View in PACS button - only show for imaging records */}
+              {(() => {
+                // Check if this is an imaging record with study data
+                const attachments = record?.attachments || [];
+                const radiologyStudy = attachments.find(att => att.type === 'radiology_study');
+                const studyInstanceUID = radiologyStudy?.studyInstanceUID;
+                
+                if (studyInstanceUID) {
+                  return (
+                    <button
+                      onClick={() => {
+                        navigate('/patient/pacs', {
+                          state: {
+                            studyInstanceUID: studyInstanceUID,
+                            orthancStudyId: radiologyStudy?.orthancStudyId
+                          }
+                        });
+                      }}
+                      className="bg-white text-emerald-400 px-4 py-2 rounded-md hover:bg-gray-100 transition-colors flex items-center"
+                    >
+                      <Monitor className="h-5 w-5 mr-2" />
+                      View in PACS
+                    </button>
+                  );
+                }
+                return null;
+              })()}
               <button
                 onClick={handleDownload}
                 className="bg-white text-emerald-400 px-4 py-2 rounded-md hover:bg-gray-100 transition-colors flex items-center"

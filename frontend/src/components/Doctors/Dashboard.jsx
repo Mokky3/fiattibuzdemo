@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react'
 import { Header } from './Header'
+import { useNavigate } from 'react-router-dom'
 import { format, isSameDay, parseISO } from 'date-fns'
 import CalendarSidebar from './Dashboard/Calendar'
 import { dashboardAPI, isAuthenticated, getCurrentUser, doctorAppointmentsAPI, checkBackendHealth } from '../../services/apiService'
 
 const Dashboard = () => {
+  const navigate = useNavigate()
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [isLoaded, setIsLoaded] = useState(false)
@@ -145,9 +147,12 @@ const Dashboard = () => {
               time: timeText,
               patient: apt.patient || apt.patient_name || 'Unknown Patient',
               problem: apt.problem || apt.appointment_type || 'General Consultation',
+              description: apt.description || apt.notes || '',
               status: apt.status || 'pending',
               hospital: apt.hospital || apt.hospital_name || 'Main Hospital',
-              provider: apt.provider || apt.doctor_specialization || 'General Medicine'
+              provider: apt.provider || apt.doctor_specialization || 'General Medicine',
+              patient_id: apt.patient_id,
+              report_id: apt.report_id || apt.reportId || null
             }
           })
           
@@ -430,8 +435,9 @@ const Dashboard = () => {
                       >
                         <div className="grid grid-cols-1 sm:grid-cols-12 items-center gap-4">
                           <div className="col-span-1 sm:col-span-2">
-                            <div className="bg-[#4DB6B0] text-white rounded-lg p-2 font-bold text-sm text-center">
-                              {appointment.time}
+                            <div className="bg-white border-2 border-[#5ACCC3] rounded-lg p-2 text-center">
+                              <div className="font-bold text-sm text-[#5ACCC3]">{appointment.time}</div>
+                              <div className="text-xs mt-0.5 text-[#5ACCC3]">{appointment.formattedDate || appointment.date || format(selectedDate, 'MMM d, yyyy')}</div>
                             </div>
                           </div>
                           <div className="col-span-1 sm:col-span-2">
@@ -442,18 +448,37 @@ const Dashboard = () => {
                               {appointment.problem}
                             </span>
                           </div>
-                          <div className="col-span-1 sm:col-span-4 text-gray-600 text-sm">
+                          <div className="col-span-1 sm:col-span-2 text-gray-600 text-sm">
                             {appointment.description}
+                          </div>
+                          <div className="col-span-1 sm:col-span-1 text-gray-500 text-xs">
+                            {appointment.hospital || 'Unknown Hospital'}
                           </div>
                           <div className="col-span-1 sm:col-span-1 text-gray-500 text-xs">
                             {appointment.provider}
                           </div>
-                          <div className="col-span-1">
+                          <div className="col-span-1 sm:col-span-3 flex space-x-2">
+                            {appointment.patient_id && (
+                              <button 
+                                onClick={() => navigate(`/doctor/report/${appointment.patient_id}`)}
+                                className="flex-1 px-4 py-3 bg-white border-2 border-[#5ACCC3] text-[#5ACCC3] rounded-lg text-sm font-medium hover:bg-[#5ACCC3]/10 transition-colors"
+                              >
+                                Start
+                              </button>
+                            )}
                             <button 
-                              onClick={() => handleViewAppointment(appointment.id)}
-                              className="w-full px-3 py-2 bg-[#4DB6B0] text-white rounded-lg text-sm font-medium hover:bg-[#3DA6A0] transition-colors"
+                              onClick={() => {
+                                if (appointment.report_id) {
+                                  // Navigate to report page if report exists
+                                  navigate(`/reports/${appointment.report_id}`)
+                                } else {
+                                  // Show appointment details if no report
+                                  handleViewAppointment(appointment.id)
+                                }
+                              }}
+                              className={`${appointment.patient_id ? 'flex-1' : 'w-full'} px-4 py-3 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4DB6B0] transition-colors`}
                             >
-                              View
+                              {appointment.report_id ? 'View Report' : 'View'}
                             </button>
                           </div>
                         </div>
@@ -545,7 +570,7 @@ const Dashboard = () => {
       
       {/* View Appointment Modal */}
       {showViewAppointmentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-md flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-white/30 backdrop-blur-md flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">

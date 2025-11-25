@@ -2,10 +2,29 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './Header';
 import { useNavigate } from 'react-router-dom';
 import { doctorPatientsAPI, medicationsAPI, checkBackendHealth } from '../../services/apiService';
+import { uploadDicomStudy, getStudies } from '../../services/radiologyService';
+import { Upload, Monitor, FileText, X, Loader, AlertCircle, Calendar, Eye } from 'lucide-react';
+import { format } from 'date-fns';
 
 const Patient = () => {
   const [selectedPatient, setSelectedPatient] = useState(0);
   const [activeTab, setActiveTab] = useState('reports');
+  
+  // Radiology tab state
+  const [patientRadiologyStudies, setPatientRadiologyStudies] = useState([]);
+  const [radiologyLoading, setRadiologyLoading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState(null);
+  const fileInputRef = useRef(null);
+  const [uploadForm, setUploadForm] = useState({
+    modality: '',
+    body_part: '',
+    description: '',
+    source: 'external_cd',
+    study_date: format(new Date(), 'yyyy-MM-dd'),
+    file: null
+  });
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -83,16 +102,58 @@ const Patient = () => {
   // Load patient-specific data when selected patient changes
   useEffect(() => {
     if (patients.length > 0 && selectedPatient < patients.length) {
-      loadPatientData(patients[selectedPatient].id);
-      loadPatientDetails(patients[selectedPatient].id);
+      const patientId = patients[selectedPatient].id;
+      loadPatientData(patientId);
+      loadPatientDetails(patientId);
+      // Also load radiology studies if radiology tab is active
+      if (activeTab === 'radiology') {
+        loadPatientRadiologyStudies(patientId);
+      }
     }
-  }, [selectedPatient, patients]);
+  }, [selectedPatient, patients, activeTab]);
 
   const loadPatientData = async (patientId) => {
     if (activeTab === 'reports') {
       await loadPatientReports(patientId);
     } else if (activeTab === 'prescriptions') {
       await loadPatientPrescriptions(patientId);
+    } else if (activeTab === 'radiology') {
+      await loadPatientRadiologyStudies(patientId);
+    }
+  };
+  
+  const loadPatientRadiologyStudies = async (patientId) => {
+    if (!patientId) {
+      console.log('No patientId provided, skipping radiology studies load');
+      setPatientRadiologyStudies([]);
+      return;
+    }
+    try {
+      setRadiologyLoading(true);
+      console.log('Loading radiology studies for patient:', patientId);
+      // Filter studies by patient_id directly
+      const studiesData = await getStudies({
+        patientId: patientId, // Use patient_id filter instead of search
+        page: 1,
+        size: 100
+      });
+      console.log('Radiology studies response:', studiesData);
+      // Handle different response formats
+      let studies = [];
+      if (Array.isArray(studiesData)) {
+        studies = studiesData;
+      } else if (studiesData?.items && Array.isArray(studiesData.items)) {
+        studies = studiesData.items;
+      } else if (studiesData?.data && Array.isArray(studiesData.data)) {
+        studies = studiesData.data;
+      }
+      console.log('Parsed radiology studies:', studies);
+      setPatientRadiologyStudies(studies);
+    } catch (err) {
+      console.error('Error loading radiology studies:', err);
+      setPatientRadiologyStudies([]);
+    } finally {
+      setRadiologyLoading(false);
     }
   };
 
@@ -164,6 +225,8 @@ const Patient = () => {
         await loadPatientReports(patients[selectedPatient].id);
       } else if (newTab === 'prescriptions') {
         await loadPatientPrescriptions(patients[selectedPatient].id);
+      } else if (newTab === 'radiology') {
+        await loadPatientRadiologyStudies(patients[selectedPatient].id);
       }
     }
   };
@@ -592,11 +655,109 @@ const Patient = () => {
     );
   };
 
+  const renderRadiologyContent = () => {
+    if (!selectedPatientDetails) {
+      return (
+        <div className="text-center py-12 text-gray-500">
+          <p>Please select a patient to view radiology studies</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="space-y-6">
+        {/* Upload Button */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={() => setShowUploadModal(true)}
+            className="px-4 py-2 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4BB5AC] transition-colors flex items-center space-x-2"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Upload DICOM Study</span>
+          </button>
+        </div>
+
+        {/* Studies List */}
+        {radiologyLoading ? (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5ACCC3]"></div>
+          </div>
+        ) : patientRadiologyStudies.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-lg shadow-sm">
+            <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">No radiology studies found for this patient</p>
+            <p className="text-sm text-gray-500 mt-2">Upload a DICOM study to get started</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {patientRadiologyStudies.map((study) => (
+              <div key={study.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Monitor className="w-5 h-5 text-[#5ACCC3]" />
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-sm">
+                        {study.studyDescription || study.modality || 'Radiology Study'}
+                      </h3>
+                      {study.modality && (
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded mt-1 inline-block">
+                          {study.modality}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="space-y-1 text-xs text-gray-600 mb-3">
+                  {study.bodyPart && (
+                    <div>Body Part: {study.bodyPart}</div>
+                  )}
+                  {study.scheduledDate && (
+                    <div className="flex items-center">
+                      <Calendar className="w-3 h-3 mr-1" />
+                      {format(new Date(study.scheduledDate), 'MMM d, yyyy')}
+                    </div>
+                  )}
+                  {study.accessionNumber && (
+                    <div className="flex items-center">
+                      <FileText className="w-3 h-3 mr-1" />
+                      {study.accessionNumber}
+                    </div>
+                  )}
+                </div>
+
+                {study.studyInstanceUid && (
+                  <button
+                    onClick={() => {
+                      navigate('/doctor/pacs', { 
+                        state: { 
+                          studyInstanceUID: study.studyInstanceUid,
+                          orthancStudyId: study.orthancStudyId,
+                          patientId: patients[selectedPatient]?.id || null
+                        } 
+                      });
+                    }}
+                    className="w-full px-3 py-2 bg-[#5ACCC3] text-white rounded text-xs font-medium hover:bg-[#4BB5AC] transition-colors flex items-center justify-center space-x-2"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>View Images</span>
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderContent = () => {
     if (activeTab === 'reports') {
       return renderReportsContent();
     } else if (activeTab === 'prescriptions') {
       return renderPrescriptionsContent();
+    } else if (activeTab === 'radiology') {
+      return renderRadiologyContent();
     }
     return null;
   };
@@ -859,6 +1020,16 @@ const Patient = () => {
                       >
                         Prescriptions
                       </button>
+                      <button 
+                        onClick={() => handleTabChange('radiology')}
+                        className={`px-4 sm:px-6 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 ${
+                          activeTab === 'radiology' 
+                            ? 'bg-[#5ACCC3] text-white shadow-sm' 
+                            : 'text-[#5ACCC3] hover:bg-white hover:shadow-sm'
+                        }`}
+                      >
+                        Radiology
+                      </button>
                     </div>
                     <div className="flex items-center space-x-3">
                       <div className="relative">
@@ -957,7 +1128,7 @@ const Patient = () => {
                             Add Report
                           </button>
                         </>
-                      ) : (
+                      ) : activeTab === 'prescriptions' ? (
                         <>
                           <button 
                             onClick={() => setShowPrescriptionTable(true)}
@@ -972,7 +1143,15 @@ const Patient = () => {
                             Add Prescription
                           </button>
                         </>
-                      )}
+                      ) : activeTab === 'radiology' ? (
+                        <button 
+                          onClick={() => setShowUploadModal(true)}
+                          className="px-4 sm:px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm flex items-center space-x-2"
+                        >
+                          <Upload className="w-4 h-4" />
+                          <span>Upload DICOM</span>
+                        </button>
+                      ) : null}
                     </div>
                   </div>
                   
@@ -1296,6 +1475,259 @@ const Patient = () => {
               >
                 Add Prescription
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload DICOM Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Upload DICOM Study</h2>
+                  <p className="text-gray-600 text-sm mt-1">Upload DICOM files (ZIP or single file) from CD or folder</p>
+                </div>
+                <button 
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setUploadError(null);
+                    setUploadForm({
+                      modality: '',
+                      body_part: '',
+                      description: '',
+                      source: 'external_cd',
+                      study_date: format(new Date(), 'yyyy-MM-dd'),
+                      file: null
+                    });
+                  }} 
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {uploadError && (
+                <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                  <div className="flex items-center">
+                    <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+                    <p className="text-sm text-red-800">{uploadError}</p>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={async (e) => {
+                e.preventDefault();
+                if (!uploadForm.file) {
+                  setUploadError('Please select a file');
+                  return;
+                }
+                if (!selectedPatientDetails || !selectedPatientDetails.id) {
+                  setUploadError('No patient selected');
+                  return;
+                }
+
+                setUploading(true);
+                setUploadError(null);
+
+                try {
+                  const formData = new FormData();
+                  formData.append('patient_id', selectedPatientDetails.id);
+                  formData.append('file', uploadForm.file);
+                  if (uploadForm.modality) formData.append('modality', uploadForm.modality);
+                  if (uploadForm.body_part) formData.append('body_part', uploadForm.body_part);
+                  if (uploadForm.description) formData.append('description', uploadForm.description);
+                  formData.append('source', uploadForm.source);
+                  if (uploadForm.study_date) formData.append('study_date', uploadForm.study_date);
+
+                  await uploadDicomStudy(formData);
+                  
+                  // Refresh studies list
+                  await loadPatientRadiologyStudies(selectedPatientDetails.id);
+
+                  setShowUploadModal(false);
+                  setUploadForm({
+                    modality: '',
+                    body_part: '',
+                    description: '',
+                    source: 'external_cd',
+                    study_date: format(new Date(), 'yyyy-MM-dd'),
+                    file: null
+                  });
+                } catch (err) {
+                  setUploadError(err.message || 'Failed to upload DICOM study');
+                } finally {
+                  setUploading(false);
+                }
+              }}>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Patient
+                    </label>
+                    <input
+                      type="text"
+                      value={selectedPatientDetails ? `${selectedPatientDetails.fullName || selectedPatientDetails.name || 'Patient'} (${selectedPatientDetails.id})` : ''}
+                      disabled
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-600 text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Modality <span className="text-gray-400">(optional)</span>
+                    </label>
+                    <select
+                      value={uploadForm.modality}
+                      onChange={(e) => setUploadForm({ ...uploadForm, modality: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm"
+                    >
+                      <option value="">Select modality</option>
+                      <option value="CT">CT</option>
+                      <option value="MR">MR</option>
+                      <option value="CR">CR</option>
+                      <option value="DX">DX</option>
+                      <option value="US">US</option>
+                      <option value="MG">MG</option>
+                      <option value="PT">PT</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Body Part <span className="text-gray-400">(optional)</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={uploadForm.body_part}
+                      onChange={(e) => setUploadForm({ ...uploadForm, body_part: e.target.value })}
+                      placeholder="e.g., Head, Chest, Abdomen"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Description <span className="text-gray-400">(optional)</span>
+                    </label>
+                    <textarea
+                      value={uploadForm.description}
+                      onChange={(e) => setUploadForm({ ...uploadForm, description: e.target.value })}
+                      placeholder="Study description or indication"
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Source
+                    </label>
+                    <select
+                      value={uploadForm.source}
+                      onChange={(e) => setUploadForm({ ...uploadForm, source: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm"
+                    >
+                      <option value="external_cd">External CD</option>
+                      <option value="external_clinic">External Clinic</option>
+                      <option value="internal">Internal</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Study Date <span className="text-gray-400">(optional)</span>
+                    </label>
+                    <input
+                      type="date"
+                      value={uploadForm.study_date}
+                      onChange={(e) => setUploadForm({ ...uploadForm, study_date: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      DICOM File <span className="text-red-500">*</span>
+                    </label>
+                    <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-lg hover:border-[#5ACCC3] transition-colors">
+                      <div className="space-y-1 text-center">
+                        <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                        <div className="flex text-sm text-gray-600">
+                          <label htmlFor="file-upload" className="relative cursor-pointer rounded-md font-medium text-[#5ACCC3] hover:text-[#4BB5AC] focus-within:outline-none">
+                            <span>Upload a file</span>
+                            <input
+                              id="file-upload"
+                              name="file-upload"
+                              type="file"
+                              ref={fileInputRef}
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setUploadForm({ ...uploadForm, file });
+                                }
+                              }}
+                              accept=".dcm,.dicom,.zip,application/dicom,application/zip"
+                              className="sr-only"
+                            />
+                          </label>
+                          <p className="pl-1">or drag and drop</p>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          ZIP archive or DICOM file (.dcm, .dicom, .zip)
+                        </p>
+                        {uploadForm.file && (
+                          <p className="text-sm text-gray-700 mt-2">
+                            Selected: {uploadForm.file.name} ({(uploadForm.file.size / 1024 / 1024).toFixed(2)} MB)
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end space-x-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowUploadModal(false);
+                      setUploadError(null);
+                      setUploadForm({
+                        modality: '',
+                        body_part: '',
+                        description: '',
+                        source: 'external_cd',
+                        study_date: format(new Date(), 'yyyy-MM-dd'),
+                        file: null
+                      });
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!uploadForm.file || uploading}
+                    className="px-4 py-2 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4BB5AC] disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                  >
+                    {uploading ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        <span>Upload Study</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>

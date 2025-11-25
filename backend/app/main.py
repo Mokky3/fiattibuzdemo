@@ -69,6 +69,7 @@ from app.portals.doctor.routes.test_orders_referrals import router as doctor_tes
 from app.portals.doctor.routes.settings import router as doctor_settings_router
 from app.portals.doctor.routes.stats import router as doctor_stats_router
 from app.portals.doctor.routes.auth_secure import router as doctor_auth_secure_router
+from app.portals.doctor.routes.imaging import router as doctor_imaging_router
 
 # Import routers from patient portal
 from app.portals.patient.routes.appointments import router as patient_appointments_router
@@ -86,6 +87,7 @@ from app.portals.patient.routes.auth_secure import router as patient_auth_secure
 from app.portals.patient.routes.fhir_export_erase_enhanced import router as patient_fhir_router
 from app.portals.patient.routes.auth_public import router as patient_auth_public_router
 from app.portals.patient.routes.medical_history import router as patient_medical_history_router
+from app.portals.patient.routes.imaging import router as patient_imaging_router
 
 # Unified auth
 from app.portals.auth.routes.public import router as unified_auth_public_router
@@ -526,7 +528,13 @@ app.include_router(
 app.include_router(
     doctor_auth_secure_router,
     prefix="/api/v1/doctor",
-    tags=["Doctor ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Secure Authentication"]
+    tags=["Doctor ÃƒÆ'Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ'Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ'Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ'Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Secure Authentication"]
+)
+
+app.include_router(
+    doctor_imaging_router,
+    prefix="/api/v1/doctor",
+    tags=["Doctor · Medical Imaging"]
 )
 
 # ================================
@@ -617,7 +625,13 @@ app.include_router(
 app.include_router(
     patient_auth_secure_router,
     prefix="/api/v1/patient",
-    tags=["Patient ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Secure Authentication"]
+    tags=["Patient ÃƒÆ'Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ'Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ'Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ'Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Secure Authentication"]
+)
+
+app.include_router(
+    patient_imaging_router,
+    prefix="/api/v1/patient",
+    tags=["Patient · Medical Imaging"]
 )
 
 # ================================

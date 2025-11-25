@@ -24,6 +24,7 @@ const Records = () => {
   const filterCategories = [
     { name: 'Medical card', color: 'bg-emerald-400', active: true },
     { name: 'Consultations', color: 'bg-gray-100', active: false },
+    { name: 'Radiology', color: 'bg-gray-100', active: false },
     { name: 'Dermatologist', color: 'bg-gray-100', active: false },
     { name: 'Cardiologist', color: 'bg-gray-100', active: false },
     { name: 'Psychologist', color: 'bg-gray-100', active: false },
@@ -38,6 +39,7 @@ const Records = () => {
   const filterMap = {
     'Medical card': 'all',
     'Consultations': 'consultation',
+    'Radiology': 'imaging',
     'Dermatologist': 'imaging',
     'Cardiologist': 'consultation',
     'Psychologist': 'consultation',

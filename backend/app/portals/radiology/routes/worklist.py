@@ -47,7 +47,8 @@ def _build_summary(items: List[WorklistStudy]) -> WorklistSummary:
     by_modality: Dict[str, int] = {}
     by_assigned: Dict[str, int] = {}
     for i in items:
-        by_modality[i.modality] = by_modality.get(i.modality, 0) + 1
+        if i.modality:
+            by_modality[i.modality] = by_modality.get(i.modality, 0) + 1
         key = i.assignedRadiologist or "unassigned"
         by_assigned[key] = by_assigned.get(key, 0) + 1
 
@@ -73,32 +74,50 @@ def _to_worklist_schema(study: RadiologyStudyModel, assignment: Optional[Worklis
     if assignment and assignment.assigned_radiologist_id:
         assigned_name = assignment.assigned_radiologist_id  # display name resolution not available yet
 
+    # Use study_date if available, otherwise order_date, otherwise scheduled_date
+    study_date = study.study_date if study.study_date else (study.order_date if study.order_date else study.scheduled_date)
+    
+    # Normalize gender to match schema pattern (M, F, or O)
+    normalized_gender = "O"  # Default to "Other"
+    if study.gender:
+        gender_lower = str(study.gender).lower().strip()
+        if gender_lower in ['male', 'm', 'man']:
+            normalized_gender = "M"
+        elif gender_lower in ['female', 'f', 'woman']:
+            normalized_gender = "F"
+        elif gender_lower in ['other', 'o', 'unknown']:
+            normalized_gender = "O"
+        elif gender_lower in ['m', 'f', 'o']:
+            normalized_gender = gender_lower.upper()
+        else:
+            normalized_gender = "O"  # Default to "Other" if unknown
+    
     return WorklistStudy(
         id=str(study.id),
         accessionNumber=study.accession_number,
-        patientName=study.patient_name or "",
+        patientName=study.patient_name,
         patientId=str(study.patient_id) if study.patient_id else "",
-        mrn=study.mrn or "",
+        mrn=study.mrn,
         age=study.age or 0,
-        gender=study.gender or "O",
+        gender=normalized_gender,
         dob=study.dob,
-        studyDate=study.order_date,
-        studyTime=study.order_date.strftime("%H:%M") if study.order_date else "",
+        studyDate=study_date,
+        studyTime=study_date.strftime("%H:%M") if study_date else "",
         modality=study.modality,
         bodyPart=study.body_part,
         studyDescription=study.study_description,
-        indication=study.indication or "",
+        indication=study.indication,
         priority=study.priority,
-        orderingPhysician=study.ordering_physician or "",
-        technologist=study.technologist or "",
-        status=study.status,
+        orderingPhysician=study.ordering_physician,
+        technologist=study.technologist,
+        status=study.status or "IMPORTED_NO_REPORT",
         readingStatus=(assignment.reading_status if assignment else "unread"),
         imageCount=(assignment.image_count if assignment else 0),
         seriesCount=(assignment.series_count if assignment else 0),
         studySize=(assignment.study_size if assignment else ""),
-        contrast=bool(study.contrast),
-        location=study.location or "",
-        room=study.room or "",
+        contrast=bool(study.contrast) if study.contrast is not None else False,
+        location=study.location,
+        room=study.room,
         protocolName=(assignment.protocol_name if assignment else ""),
         assignedRadiologist=assigned_name,
         priorStudies=0,
@@ -108,6 +127,8 @@ def _to_worklist_schema(study: RadiologyStudyModel, assignment: Optional[Worklis
         estimatedReadTime=(assignment.estimated_read_time if assignment else ""),
         preliminaryFindings=(assignment.preliminary_findings if assignment else None),
         finalReport=None,
+        studyInstanceUID=study.study_instance_uid,
+        orthancStudyId=study.orthanc_study_id,
     )
 
 
@@ -125,50 +146,64 @@ def _filter_in_memory(
     # Keep client-side filters; DB-level filters can be added later
     filtered = items
     if status_filter and status_filter != "all":
-        filtered = [i for i in filtered if i.status == status_filter]
+        filtered = [i for i in filtered if i.readingStatus == status_filter]
     if modality_filter and modality_filter != "all":
-        filtered = [i for i in filtered if i.modality.lower() == modality_filter.lower()]
+        filtered = [i for i in filtered if i.modality and i.modality.lower() == modality_filter.lower()]
     if priority_filter and priority_filter != "all":
-        filtered = [i for i in filtered if i.priority.lower() == priority_filter.lower()]
+        filtered = [i for i in filtered if i.priority and i.priority.lower() == priority_filter.lower()]
     if body_part_filter and body_part_filter != "all":
-        filtered = [i for i in filtered if i.bodyPart.lower() == body_part_filter.lower()]
+        filtered = [i for i in filtered if i.bodyPart and i.bodyPart.lower() == body_part_filter.lower()]
     if physician_filter:
-        filtered = [i for i in filtered if i.orderingPhysician.lower() == physician_filter.lower()]
+        filtered = [i for i in filtered if i.orderingPhysician and i.orderingPhysician.lower() == physician_filter.lower()]
     if search_value:
         needle = search_value.lower()
         filtered = [
             i for i in filtered
-            if needle in i.patientName.lower() or needle in i.accessionNumber.lower() or needle in i.mrn.lower()
+            if (i.patientName and needle in i.patientName.lower()) 
+            or (i.accessionNumber and needle in i.accessionNumber.lower()) 
+            or (i.mrn and needle in i.mrn.lower())
         ]
     # Time range filter
     if time_range and time_range != "all":
         today = _utc_now().date()
-        def within_range(d: date) -> bool:
-            if time_range == "today":
-                return d == today
-            if time_range == "yesterday":
-                return d == today - timedelta(days=1)
-            if time_range == "week":
-                start = today - timedelta(days=6)
-                return start <= d <= today
-            if time_range == "month":
-                start = today.replace(day=1)
-                return start <= d <= today
-            return True
-        filtered = [i for i in filtered if within_range(i.studyDate.astimezone(timezone.utc).date())]
+        def within_range(item: WorklistStudy) -> bool:
+            if not item.studyDate:
+                return False
+            try:
+                if isinstance(item.studyDate, datetime):
+                    d = item.studyDate.astimezone(timezone.utc).date()
+                elif isinstance(item.studyDate, date):
+                    d = item.studyDate
+                else:
+                    return False
+                
+                if time_range == "today":
+                    return d == today
+                if time_range == "yesterday":
+                    return d == today - timedelta(days=1)
+                if time_range == "week":
+                    start = today - timedelta(days=6)
+                    return start <= d <= today
+                if time_range == "month":
+                    start = today.replace(day=1)
+                    return start <= d <= today
+                return True
+            except (AttributeError, TypeError):
+                return False
+        filtered = [i for i in filtered if within_range(i)]
     return filtered
 
 
 def _sort_studies(studies: List[WorklistStudy], sort_by: str, sort_order: str) -> List[WorklistStudy]:
     reverse = sort_order == "desc"
     if sort_by == "priority":
-        return sorted(studies, key=lambda s: _priority_order(s.priority), reverse=True)
+        return sorted(studies, key=lambda s: _priority_order(s.priority or ""), reverse=True)
     if sort_by == "time":
-        return sorted(studies, key=lambda s: s.studyDate, reverse=reverse)
+        return sorted(studies, key=lambda s: s.studyDate or datetime.min.replace(tzinfo=timezone.utc), reverse=reverse)
     if sort_by == "patient":
-        return sorted(studies, key=lambda s: s.patientName.lower(), reverse=reverse)
+        return sorted(studies, key=lambda s: (s.patientName or "").lower(), reverse=reverse)
     if sort_by == "modality":
-        return sorted(studies, key=lambda s: s.modality.lower(), reverse=reverse)
+        return sorted(studies, key=lambda s: (s.modality or "").lower(), reverse=reverse)
     return studies
 
 
