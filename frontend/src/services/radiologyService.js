@@ -1,6 +1,6 @@
 // Radiology service wired to backend API (FastAPI)
 
-import { API_BASE_URL, API_VERSION, API_BASE } from './config/api.js';
+import { API_BASE_URL, API_VERSION, API_BASE } from '../config/api.js';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
