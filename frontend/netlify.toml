@@ -4,6 +4,8 @@
 
 [build.environment]
   NODE_VERSION = "18"
+  # API URL - Set this in Netlify dashboard for production
+  # VITE_API_URL = "https://fiattib-backend-677633413590.us-east4.run.app"
 
 # SPA routing - redirect all routes to index.html
 [[redirects]]
