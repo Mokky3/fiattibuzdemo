@@ -48,7 +48,9 @@ const Dashboard = () => {
         }
 
         // Check backend health
-        const health = await fetch('http://localhost:8000/health').then(r => r.ok).catch(() => false)
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const healthUrl = `${apiBaseUrl}/health`;
+        const health = await fetch(healthUrl).then(r => r.ok).catch(() => false)
         setBackendConnected(health)
 
         if (!health) {

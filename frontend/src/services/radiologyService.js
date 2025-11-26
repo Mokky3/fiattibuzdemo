@@ -1,10 +1,6 @@
 // Radiology service wired to backend API (FastAPI)
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const API_VERSION = '/api/v1';
-
-// Handle the case where VITE_API_URL already includes /api/v1
-const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`;
+import { API_BASE_URL, API_VERSION, API_BASE } from './config/api.js';
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem('token');
@@ -145,10 +141,6 @@ export async function getStudyStats() {
 }
 
 export async function uploadDicomStudy(formData) {
-  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  const API_VERSION = '/api/v1';
-  const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`;
-  
   const token = localStorage.getItem('token');
   const headers = {};
   if (token) {

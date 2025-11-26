@@ -2,11 +2,9 @@
 // Unified API service for Medical Dashboard - FastAPI Backend Integration
 
 import { useState } from 'react';
+import { API_BASE_URL, API_VERSION, API_BASE, getWebSocketUrl } from '../config/api.js';
 
 // Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const API_VERSION = '/api/v1';
-const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`;
 
 // Utility functions
 const getAuthHeaders = () => {
@@ -1859,7 +1857,7 @@ export const patientRecordsAPI = {
   // Download record as PDF or text
   download: async (recordId) => {
     const token = localStorage.getItem('token');
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    const baseUrl = API_BASE;
     const url = `${baseUrl}/patient/records/${recordId}/download`;
     
     const response = await fetch(url, {
@@ -2568,8 +2566,7 @@ const formatDateRange = (date) => {
 export const checkBackendHealth = async () => {
   try {
     // Use the correct health endpoint URL (without /api/v1)
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const healthUrl = baseUrl.includes('/api/v1') ? baseUrl.replace('/api/v1', '') + '/health' : `${baseUrl}/health`;
+    const healthUrl = `${API_BASE_URL}/health`;
     console.log('[HEALTH CHECK] Checking backend health at:', healthUrl);
     const response = await fetch(healthUrl);
     console.log('[HEALTH CHECK] Response status:', response.status);
@@ -2593,7 +2590,7 @@ export const checkDatabaseHealth = async () => {
 // WebSocket connection for real-time updates
 export const connectWebSocket = (onMessage) => {
   const token = localStorage.getItem('token');
-  const wsUrl = `ws://localhost:8000/ws?token=${token}`;
+  const wsUrl = getWebSocketUrl(token);
   
   const ws = new WebSocket(wsUrl);
   

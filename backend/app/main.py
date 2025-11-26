@@ -229,6 +229,8 @@ app.add_middleware(
         # Add your Firebase hosting URL if you're using it too
         "https://fiattib.web.app",
         "https://fiattib.firebaseapp.com",
+        "https://fiattib.uz",  # Production domain
+        "https://www.fiattib.uz",  # Production domain with www
     ],
     allow_origin_regex=r"https://.*\.netlify\.app",  # All Netlify previews
     allow_credentials=True,
@@ -251,6 +253,8 @@ def get_cors_headers(origin: str) -> dict:
         "https://zamez.netlify.app",
         "https://fiattib.web.app",
         "https://fiattib.firebaseapp.com",
+        "https://fiattib.uz",  # Production domain
+        "https://www.fiattib.uz",  # Production domain with www
     ]
     
     if origin and (origin in allowed_origins or origin.endswith(".netlify.app")):

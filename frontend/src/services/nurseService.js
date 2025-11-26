@@ -1,8 +1,8 @@
 // Unified Nurse service layer calling backend API.
 
-const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL)
-  ? `${import.meta.env.VITE_API_BASE_URL}/nurse`
-  : 'http://localhost:8000/api/v1/nurse'
+import { API_BASE } from '../config/api.js';
+
+const API_BASE_NURSE = `${API_BASE}/nurse`
 
 function authHeaders(extra = {}) {
   const token = (typeof localStorage !== 'undefined') ? localStorage.getItem('token') : null
@@ -14,7 +14,7 @@ function authHeaders(extra = {}) {
 }
 
 async function http(path, { method = 'GET', body, headers } = {}) {
-  const url = `${API_BASE}${path}`
+  const url = `${API_BASE_NURSE}${path}`
   const requestHeaders = authHeaders(headers)
   
   console.log(`🔍 [nurseService] Making ${method} request to:`, url)

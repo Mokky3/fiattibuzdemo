@@ -29,7 +29,9 @@ const NurseMessages = () => {
         // Check backend health
         let isConnected = false
         try {
-          const response = await fetch('http://localhost:8000/api/v1/health', { method: 'GET' })
+          const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+          const healthUrl = `${apiBaseUrl}/api/v1/health`;
+          const response = await fetch(healthUrl, { method: 'GET' })
           isConnected = response.ok
           setBackendConnected(isConnected)
         } catch {
