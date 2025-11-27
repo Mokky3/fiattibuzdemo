@@ -71,10 +71,13 @@ app/common/pacs/Viewers/
 app/common/pacs/monai/
 app/common/pacs/nginx/
 app/common/pacs/docker-compose.yml
-# Include OHIF config files
-!app/common/pacs/ohif/app-config.js
-!app/common/pacs/ohif/viewer.js
-!app/common/pacs/config/orthanc.json
+# Exclude OHIF node_modules but include everything else
+app/common/pacs/ohif/node_modules/
+# Include OHIF config files and extensions
+!app/common/pacs/ohif/
+# Include Orthanc config
+!app/common/pacs/config/
+# Include DICOM sample files
 !app/common/pacs/dicom/
 
 # Database migrations and scripts (not needed in container)
@@ -135,7 +138,8 @@ scripts/**
 !openapi.json
 !cloudbuild.yaml
 !Dockerfile
-# Allow OHIF config JSON files
+# Allow OHIF and Orthanc config files (JS and JSON)
+!app/common/pacs/ohif/**/*.js
 !app/common/pacs/ohif/**/*.json
 !app/common/pacs/config/**/*.json
 

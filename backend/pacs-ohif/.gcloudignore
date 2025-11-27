@@ -1,0 +1,5 @@
+# Files to ignore when uploading to Cloud Build
+README.md
+deploy.ps1
+*.md
+

@@ -182,7 +182,7 @@ def _convert_patient_to_lab_format(patient, db: Session = None, organization_id:
             
             # Filter by organization: only show results from orders by doctors in the same organization
             if organization_id:
-                query = query.join(LabOrder, cast(LabResult.lab_order_id, String(36)) == LabOrder.id)\
+                query = query.join(LabOrder, LabResult.lab_order_id == cast(LabOrder.id, PG_UUID))\
                              .join(Doctor, cast(LabOrder.ordered_by, PG_UUID) == Doctor.id)\
                              .join(doctor_hospitals, Doctor.id == doctor_hospitals.c.doctor_id)\
                              .filter(cast(doctor_hospitals.c.hospital_id, PG_UUID) == PyUUID(organization_id) if isinstance(organization_id, str) else organization_id)\
