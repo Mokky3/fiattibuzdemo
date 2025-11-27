@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import Navbar from './Navbar'
 import { patientAPI, patientAppointmentsAPI, patientRecordsAPI, patientPrescriptionsAPI, patientMedicalHistoryAPI } from '../../services/apiService'
 import { handlePatientAuthError } from '../../utils/patientAuth'
@@ -9,11 +10,31 @@ import {
 } from 'lucide-react'
 
 const PatientProfile = () => {
+  const { t } = useTranslation()
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   const [error, setError] = useState('')
   const [activeTab, setActiveTab] = useState('personal')
+
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme')
+    if (saved) return saved === 'dark'
+    return document.documentElement.classList.contains('dark')
+  })
+
+  // Apply theme on mount and when darkMode changes
+  useEffect(() => {
+    const root = document.documentElement
+    if (darkMode) {
+      root.classList.add('dark')
+      localStorage.setItem('theme', 'dark')
+    } else {
+      root.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
+    }
+  }, [darkMode])
   
   // Patient profile data
   const [profile, setProfile] = useState({
@@ -174,7 +195,7 @@ const PatientProfile = () => {
         console.log('[PROFILE] Auth check - token preview:', token ? token.substring(0, 20) + '...' : 'null')
         if (!token) {
           console.error('[PROFILE] No token found - user not authenticated')
-          setError('Please log in to view your profile')
+          setError(t('profile.errorNotLoggedIn'))
           return
         }
         
@@ -227,7 +248,7 @@ const PatientProfile = () => {
           return; // Redirected, exit early
         }
         
-        setError(e?.message || 'Failed to load profile')
+        setError(e?.message || t('profile.errorLoadFailed'))
       } finally {
         setLoading(false)
       }
@@ -323,17 +344,17 @@ const PatientProfile = () => {
       if (handlePatientAuthError(error)) {
         return; // Redirected, exit early
       }
-      setError('Failed to load medical history data')
+      setError(t('profile.errorLoadHistoryFailed'))
     } finally {
       setLoadingData(false)
     }
   }
   
   const tabs = [
-    { id: 'personal', label: 'Personal Info', icon: <User className="h-4 w-4" /> },
-    { id: 'medical', label: 'Medical Info', icon: <Heart className="h-4 w-4" /> },
-    { id: 'insurance', label: 'Insurance', icon: <Shield className="h-4 w-4" /> },
-    { id: 'history', label: 'Medical History', icon: <ClipboardList className="h-4 w-4" /> }
+    { id: 'personal', label: t('profile.personalInfo'), icon: <User className="h-4 w-4" /> },
+    { id: 'medical', label: t('profile.medicalInfo'), icon: <Heart className="h-4 w-4" /> },
+    { id: 'insurance', label: t('profile.insurance'), icon: <Shield className="h-4 w-4" /> },
+    { id: 'history', label: t('profile.medicalHistory'), icon: <ClipboardList className="h-4 w-4" /> }
   ]
 
   const handleEdit = () => {
@@ -402,7 +423,7 @@ const PatientProfile = () => {
         setFormData({ ...profileData })
         setIsEditing(false) // Exit edit mode after successful save
         
-        setSaveStatus('Profile updated successfully!')
+        setSaveStatus(t('profile.profileUpdatedSuccess'))
         setTimeout(() => setSaveStatus(''), 3000)
         
         console.log('[PROFILE] State updated, profile should now show:', profileData)
@@ -537,7 +558,7 @@ const PatientProfile = () => {
         return; // Redirected, exit early
       }
       setSaveStatus('error')
-      setError(error?.message || 'Failed to save changes')
+      setError(error?.message || t('profile.errorSaveFailed'))
     } finally {
       setLoading(false)
     }
@@ -556,7 +577,7 @@ const PatientProfile = () => {
 
 
   const renderPersonalInfo = () => (
-    <div className="bg-white rounded-xl shadow-lg p-6">
+    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
       <div className="flex items-start">
         {/* Profile Image */}
         <div className="relative mr-6">
@@ -570,8 +591,10 @@ const PatientProfile = () => {
             )}
           </div>
           {isEditing && (
-            <label className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-md cursor-pointer hover:bg-gray-50">
-              <Camera className="h-5 w-5 text-gray-600" />
+            <label className={`absolute bottom-0 right-0 rounded-full p-2 shadow-md cursor-pointer transition-colors ${
+              darkMode ? 'bg-gray-700 hover:bg-gray-600' : 'bg-white hover:bg-gray-50'
+            }`}>
+              <Camera className={`h-5 w-5 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
               <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
             </label>
           )}
@@ -582,130 +605,146 @@ const PatientProfile = () => {
           {isEditing ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.fullName')}</label>
                 <input
                   type="text"
                   value={formData.fullName}
                   onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.email')}</label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.phone')}</label>
                 <input
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => handlePhoneChange('phone', e.target.value)}
                   maxLength={15}
-                  placeholder="Enter phone number (numbers only)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  placeholder={t('profile.phonePlaceholder')}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400' : 'border-gray-300'
+                  }`}
                 />
-                <p className="text-xs text-gray-500 mt-1">{formData.phone.length}/15 digits</p>
+                <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{formData.phone.length}/15 {t('profile.digits')}</p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date of Birth</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.dateOfBirth')}</label>
                 <input
                   type="date"
                   value={formData.dateOfBirth}
                   onChange={(e) => setFormData({ ...formData, dateOfBirth: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Gender</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.gender')}</label>
                 <select
                   value={formData.gender}
                   onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
                 >
                   <option value="">—</option>
-                  <option value="male">Male</option>
-                  <option value="female">Female</option>
-                  <option value="other">Other</option>
+                  <option value="male">{t('profile.male')}</option>
+                  <option value="female">{t('profile.female')}</option>
+                  <option value="other">{t('profile.other')}</option>
                 </select>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.address')}</label>
                 <input
                   type="text"
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Contact</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.emergencyContact')}</label>
                 <input
                   type="text"
                   value={formData.emergencyContact}
                   onChange={(e) => setFormData({ ...formData, emergencyContact: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Emergency Phone</label>
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.emergencyPhone')}</label>
                 <input
                   type="tel"
                   value={formData.emergencyPhone}
                   onChange={(e) => handlePhoneChange('emergencyPhone', e.target.value)}
                   maxLength={15}
-                  placeholder="Enter phone number (numbers only)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  placeholder={t('profile.phonePlaceholder')}
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400' : 'border-gray-300'
+                  }`}
                 />
-                <p className="text-xs text-gray-500 mt-1">{formData.emergencyPhone.length}/15 digits</p>
+                <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{formData.emergencyPhone.length}/15 {t('profile.digits')}</p>
               </div>
             </div>
           ) : (
             <>
-              <h2 className="text-2xl font-bold text-gray-800">{profile.fullName}</h2>
-              <p className="text-emerald-600 font-medium mb-4">Patient ID: {profile.patientId}</p>
+              <h2 className={`text-2xl font-bold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{profile.fullName}</h2>
+              <p className={`font-medium mb-4 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{t('profile.patientId')}: {profile.patientId}</p>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div className="flex items-center text-gray-600">
-                  <Mail className="h-4 w-4 mr-2 text-gray-400" />
+              <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                <div className="flex items-center">
+                  <Mail className={`h-4 w-4 mr-2 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
                   {profile.email}
                 </div>
-                <div className="flex items-center text-gray-600">
-                  <Phone className="h-4 w-4 mr-2 text-gray-400" />
+                <div className="flex items-center">
+                  <Phone className={`h-4 w-4 mr-2 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
                   {profile.phone}
                 </div>
-                <div className="flex items-center text-gray-600">
-                  <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                  Born: {profile.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString() : '—'}
+                <div className="flex items-center">
+                  <Calendar className={`h-4 w-4 mr-2 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
+                  {t('profile.born')}: {profile.dateOfBirth ? new Date(profile.dateOfBirth).toLocaleDateString() : '—'}
                 </div>
-                <div className="flex items-center text-gray-600">
-                  <MapPin className="h-4 w-4 mr-2 text-gray-400" />
+                <div className="flex items-center">
+                  <MapPin className={`h-4 w-4 mr-2 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
                   {profile.address}
                 </div>
-                <div className="flex items-center text-gray-600">
-                  <Users className="h-4 w-4 mr-2 text-gray-400" />
-                  Emergency: {profile.emergencyContact}
+                <div className="flex items-center">
+                  <Users className={`h-4 w-4 mr-2 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
+                  {t('profile.emergency')}: {profile.emergencyContact}
                 </div>
-                <div className="flex items-center text-gray-600">
-                  <Phone className="h-4 w-4 mr-2 text-gray-400" />
+                <div className="flex items-center">
+                  <Phone className={`h-4 w-4 mr-2 ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
                   {profile.emergencyPhone}
                 </div>
               </div>
               
-              <div className="mt-4 pt-4 border-t border-gray-100">
-                <p className="text-sm text-gray-500">
-                  Registered on: {profile.registrationDate ? new Date(profile.registrationDate).toLocaleDateString() : '—'}
+              <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-100'}`}>
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {t('profile.registeredOn')}: {profile.registrationDate ? new Date(profile.registrationDate).toLocaleDateString() : '—'}
                 </p>
               </div>
             </>
@@ -718,105 +757,115 @@ const PatientProfile = () => {
   const renderMedicalInfo = () => (
     <div className="space-y-6">
       {/* Vital Statistics */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Activity className="h-5 w-5 mr-2 text-emerald-500" />
-          Vital Statistics
+          {t('profile.vitalStatistics')}
         </h3>
         
         {isEditing ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Height</label>
+              <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.height')}</label>
               <input
                 type="text"
                 value={medicalFormData.height}
                 onChange={(e) => setMedicalFormData({ ...medicalFormData, height: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                }`}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Weight</label>
+              <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.weight')}</label>
               <input
                 type="text"
                 value={medicalFormData.weight}
                 onChange={(e) => setMedicalFormData({ ...medicalFormData, weight: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                }`}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Blood Pressure</label>
+              <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.bloodPressure')}</label>
               <input
                 type="text"
                 value={medicalFormData.bloodPressure}
                 onChange={(e) => setMedicalFormData({ ...medicalFormData, bloodPressure: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                }`}
               />
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="bg-emerald-50 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-emerald-600">{medicalInfo.height}</p>
-              <p className="text-sm text-gray-600 mt-1">Height</p>
+            <div className={`rounded-lg p-4 text-center ${darkMode ? 'bg-emerald-900/30' : 'bg-emerald-50'}`}>
+              <p className={`text-2xl font-bold ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{medicalInfo.height}</p>
+              <p className={`text-sm mt-1 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.height')}</p>
             </div>
-            <div className="bg-emerald-50 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-emerald-600">{medicalInfo.weight}</p>
-              <p className="text-sm text-gray-600 mt-1">Weight</p>
+            <div className={`rounded-lg p-4 text-center ${darkMode ? 'bg-emerald-900/30' : 'bg-emerald-50'}`}>
+              <p className={`text-2xl font-bold ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{medicalInfo.weight}</p>
+              <p className={`text-sm mt-1 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.weight')}</p>
             </div>
-            <div className="bg-emerald-50 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-emerald-600">{medicalInfo.bmi}</p>
-              <p className="text-sm text-gray-600 mt-1">BMI (Normal)</p>
+            <div className={`rounded-lg p-4 text-center ${darkMode ? 'bg-emerald-900/30' : 'bg-emerald-50'}`}>
+              <p className={`text-2xl font-bold ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{medicalInfo.bmi}</p>
+              <p className={`text-sm mt-1 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.bmi')} ({t('profile.normal')})</p>
             </div>
-            <div className="bg-emerald-50 rounded-lg p-4 text-center">
-              <p className="text-2xl font-bold text-emerald-600">{medicalInfo.bloodPressure}</p>
-              <p className="text-sm text-gray-600 mt-1">Blood Pressure</p>
+            <div className={`rounded-lg p-4 text-center ${darkMode ? 'bg-emerald-900/30' : 'bg-emerald-50'}`}>
+              <p className={`text-2xl font-bold ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{medicalInfo.bloodPressure}</p>
+              <p className={`text-sm mt-1 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.bloodPressure')}</p>
             </div>
           </div>
         )}
       </div>
 
       {/* Blood Information */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Droplets className="h-5 w-5 mr-2 text-red-500" />
-          Blood Information
+          {t('profile.bloodInformation')}
         </h3>
         
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-            <span className="text-gray-600">Blood Group</span>
-            <span className="font-semibold text-gray-800">{medicalInfo.bloodGroup}</span>
+          <div className={`flex justify-between items-center p-3 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+            <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>{t('profile.bloodGroup')}</span>
+            <span className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{medicalInfo.bloodGroup}</span>
           </div>
-          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-            <span className="text-gray-600">Blood Rh</span>
-            <span className="font-semibold text-gray-800">{medicalInfo.bloodRh}</span>
+          <div className={`flex justify-between items-center p-3 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+            <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>{t('profile.bloodRh')}</span>
+            <span className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{medicalInfo.bloodRh}</span>
           </div>
-          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-            <span className="text-gray-600">Allergies</span>
-            <span className="font-semibold text-gray-800">{medicalInfo.allergies.join(', ')}</span>
+          <div className={`flex justify-between items-center p-3 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+            <span className={darkMode ? 'text-gray-300' : 'text-gray-600'}>{t('profile.allergies')}</span>
+            <span className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{medicalInfo.allergies.join(', ')}</span>
           </div>
         </div>
       </div>
 
       {/* Immunizations */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Shield className="h-5 w-5 mr-2 text-blue-500" />
-          Immunization Records
+          {t('profile.immunizationRecords')}
         </h3>
         
         <div className="space-y-3">
           {medicalInfo.immunizations.map((vaccine, index) => (
-            <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+            <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
               <div>
-                <p className="font-medium text-gray-800">{vaccine.name}</p>
-                <p className="text-sm text-gray-600">Date: {new Date(vaccine.date).toLocaleDateString()}</p>
+                <p className={`font-medium ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{vaccine.name}</p>
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.date')}: {new Date(vaccine.date).toLocaleDateString()}</p>
               </div>
               <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                 vaccine.status === 'Completed' 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-yellow-100 text-yellow-800'
+                  ? darkMode
+                    ? 'bg-green-900/50 text-green-300'
+                    : 'bg-green-100 text-green-800'
+                  : darkMode
+                    ? 'bg-yellow-900/50 text-yellow-300'
+                    : 'bg-yellow-100 text-yellow-800'
               }`}>
                 {vaccine.status}
               </span>
@@ -828,10 +877,10 @@ const PatientProfile = () => {
   )
 
   const renderInsuranceInfo = () => (
-    <div className="bg-white rounded-xl shadow-lg p-6">
-      <h3 className="text-lg font-semibold text-gray-800 mb-6 flex items-center">
+    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+      <h3 className={`text-lg font-semibold mb-6 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
         <Shield className="h-5 w-5 mr-2 text-emerald-500" />
-        Insurance Information
+        {t('profile.insuranceInformation')}
       </h3>
       
       {isEditing && activeTab === 'insurance' ? (
@@ -839,62 +888,72 @@ const PatientProfile = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Insurance Provider</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.insuranceProvider')}</label>
                 <input
                   type="text"
                   value={insuranceFormData.provider}
                   onChange={(e) => setInsuranceFormData({...insuranceFormData, provider: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="Enter insurance provider"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
+                  placeholder={t('profile.enterInsuranceProvider')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Policy Number</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.policyNumber')}</label>
                 <input
                   type="text"
                   value={insuranceFormData.policyNumber}
                   onChange={(e) => setInsuranceFormData({...insuranceFormData, policyNumber: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="Enter policy number"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
+                  placeholder={t('profile.enterPolicyNumber')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Group Number</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.groupNumber')}</label>
                 <input
                   type="text"
                   value={insuranceFormData.groupNumber}
                   onChange={(e) => setInsuranceFormData({...insuranceFormData, groupNumber: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  placeholder="Enter group number"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
+                  placeholder={t('profile.enterGroupNumber')}
                 />
               </div>
             </div>
             
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Coverage Type</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.coverageType')}</label>
                 <select
                   value={insuranceFormData.coverageType}
                   onChange={(e) => setInsuranceFormData({...insuranceFormData, coverageType: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
                 >
-                  <option value="">Select coverage type</option>
+                  <option value="">{t('profile.selectCoverageType')}</option>
                   <option value="HMO">HMO</option>
                   <option value="PPO">PPO</option>
                   <option value="EPO">EPO</option>
                   <option value="POS">POS</option>
                   <option value="Medicare">Medicare</option>
                   <option value="Medicaid">Medicaid</option>
-                  <option value="Other">Other</option>
+                  <option value="Other">{t('profile.other')}</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Valid Until</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.validUntil')}</label>
                 <input
                   type="date"
                   value={insuranceFormData.validUntil}
                   onChange={(e) => setInsuranceFormData({...insuranceFormData, validUntil: e.target.value})}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                  className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                  }`}
                 />
               </div>
             </div>
@@ -904,44 +963,52 @@ const PatientProfile = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-4">
             <div>
-              <p className="text-sm text-gray-600">Insurance Provider</p>
-              <p className="font-semibold text-gray-800">{insurance.provider || 'Not provided'}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.insuranceProvider')}</p>
+              <p className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{insurance.provider || t('profile.notProvided')}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Policy Number</p>
-              <p className="font-semibold text-gray-800">{insurance.policyNumber || 'Not provided'}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.policyNumber')}</p>
+              <p className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{insurance.policyNumber || t('profile.notProvided')}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Group Number</p>
-              <p className="font-semibold text-gray-800">{insurance.groupNumber || 'Not provided'}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.groupNumber')}</p>
+              <p className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{insurance.groupNumber || t('profile.notProvided')}</p>
             </div>
           </div>
           
           <div className="space-y-4">
             <div>
-              <p className="text-sm text-gray-600">Coverage Type</p>
-              <p className="font-semibold text-gray-800">{insurance.coverageType || 'Not provided'}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.coverageType')}</p>
+              <p className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{insurance.coverageType || t('profile.notProvided')}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Valid Until</p>
-              <p className="font-semibold text-gray-800">
-                {insurance.validUntil ? new Date(insurance.validUntil).toLocaleDateString() : 'Not provided'}
+              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.validUntil')}</p>
+              <p className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+                {insurance.validUntil ? new Date(insurance.validUntil).toLocaleDateString() : t('profile.notProvided')}
               </p>
             </div>
             <div>
-              <p className="text-sm text-gray-600">Status</p>
-              <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
-                {insurance.provider ? 'Active' : 'Not configured'}
+              <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.status')}</p>
+              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                insurance.provider 
+                  ? darkMode
+                    ? 'bg-green-900/50 text-green-300'
+                    : 'bg-green-100 text-green-800'
+                  : darkMode
+                    ? 'bg-gray-700 text-gray-300'
+                    : 'bg-gray-100 text-gray-800'
+              }`}>
+                {insurance.provider ? t('profile.active') : t('profile.notConfigured')}
               </span>
             </div>
           </div>
         </div>
       )}
       
-      <div className="mt-6 p-4 bg-emerald-50 rounded-lg">
-        <p className="text-sm text-emerald-800">
+      <div className={`mt-6 p-4 rounded-lg ${darkMode ? 'bg-emerald-900/30' : 'bg-emerald-50'}`}>
+        <p className={`text-sm ${darkMode ? 'text-emerald-300' : 'text-emerald-800'}`}>
           <AlertCircle className="inline h-4 w-4 mr-1" />
-          {insurance.provider ? 'Your insurance is active and covers comprehensive medical services' : 'Please add your insurance information to ensure proper coverage'}
+          {insurance.provider ? t('profile.insuranceActiveMessage') : t('profile.insuranceAddMessage')}
         </p>
       </div>
     </div>
@@ -991,75 +1058,87 @@ const PatientProfile = () => {
     return (
     <div className="space-y-6">
       {/* Recent Visits */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Stethoscope className="h-5 w-5 mr-2 text-emerald-500" />
-            Recent Visits & Reports
+            {t('profile.recentVisitsReports')}
         </h3>
         
         {loadingData ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500 mb-3"></div>
-            <p>Loading visit history...</p>
+            <p>{t('profile.loadingVisitHistory')}</p>
           </div>
           ) : recentVisits.length > 0 ? (
           <div className="space-y-4">
               {recentVisits.map((visit, index) => (
-                <div key={visit.id || visit.fhirId || visit.fhir_resource_id || index} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div key={visit.id || visit.fhirId || visit.fhir_resource_id || index} className={`flex items-center justify-between p-4 rounded-lg transition-colors ${
+                  darkMode ? 'bg-gray-700/50 hover:bg-gray-700' : 'bg-gray-50 hover:bg-gray-100'
+                }`}>
                   <div className="flex-1">
-                    <p className="font-medium text-gray-800">
-                      {visit.title || visit.description || visit.summary || 'Visit'}
+                    <p className={`font-medium ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+                      {visit.title || visit.description || visit.summary || t('profile.visit')}
                     </p>
-                  <p className="text-sm text-gray-600">
-                      {visit.hospital || visit.clinic || 'Hospital'} • {visit.date || 'Date not available'}
-                      {visit.doctor && ` • Dr. ${visit.doctor}`}
+                  <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                      {visit.hospital || visit.clinic || t('profile.hospital')} • {visit.date || t('profile.dateNotAvailable')}
+                      {visit.doctor && ` • ${t('profile.dr')} ${visit.doctor}`}
                   </p>
                     {(visit.recordType || visit.type || visit.record_type) && (
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className={`text-xs mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                         {visit.recordType || visit.type || visit.record_type}
                       </p>
                     )}
                 </div>
-                <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium">
-                    {visit.status || 'Completed'}
+                <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                  darkMode 
+                    ? 'bg-green-900/50 text-green-300' 
+                    : 'bg-green-100 text-green-800'
+                }`}>
+                    {visit.status || t('profile.completed')}
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            <Stethoscope className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>No visit history found</p>
+          <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            <Stethoscope className={`h-12 w-12 mx-auto mb-3 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+            <p>{t('profile.noVisitHistory')}</p>
           </div>
         )}
         
           <button 
             onClick={() => window.location.href = '/patient/records'}
-            className="mt-4 w-full text-center text-emerald-600 hover:text-emerald-700 font-medium"
+            className={`mt-4 w-full text-center font-medium ${
+              darkMode 
+                ? 'text-emerald-400 hover:text-emerald-300' 
+                : 'text-emerald-600 hover:text-emerald-700'
+            }`}
           >
-          View All History
+          {t('profile.viewAllHistory')}
         </button>
       </div>
 
       {/* Allergies */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <AlertCircle className="h-5 w-5 mr-2 text-red-500" />
-          Allergies
+          {t('profile.allergies')}
         </h3>
         
         {isEditing && activeTab === 'history' ? (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Known Allergies</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.knownAllergies')}</label>
               <textarea
                 value={medicalHistoryFormData.allergies.join(', ')}
                 onChange={(e) => setMedicalHistoryFormData({
                   ...medicalHistoryFormData,
                   allergies: e.target.value.split(',').map(a => a.trim()).filter(a => a)
                 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="Enter allergies separated by commas (e.g., Penicillin, Shellfish, Pollen)"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400' : 'border-gray-300'
+                }`}
+                placeholder={t('profile.allergiesPlaceholder')}
                 rows={3}
               />
             </div>
@@ -1068,20 +1147,26 @@ const PatientProfile = () => {
           <div className="space-y-3">
             {medicalInfo.allergies.length > 0 ? (
               medicalInfo.allergies.map((allergy, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${
+                  darkMode ? 'bg-red-900/30' : 'bg-red-50'
+                }`}>
                   <div className="flex items-center">
                     <AlertCircle className="h-4 w-4 text-red-500 mr-2" />
-                    <span className="font-medium text-gray-800">{allergy}</span>
+                    <span className={`font-medium ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{allergy}</span>
                   </div>
-                  <span className="px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium">
-                    Allergy
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    darkMode 
+                      ? 'bg-red-900/50 text-red-300' 
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {t('profile.allergy')}
                   </span>
                 </div>
               ))
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                <AlertCircle className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                <p>No known allergies</p>
+              <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                <AlertCircle className={`h-12 w-12 mx-auto mb-3 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+                <p>{t('profile.noKnownAllergies')}</p>
               </div>
             )}
           </div>
@@ -1089,24 +1174,26 @@ const PatientProfile = () => {
       </div>
 
       {/* Chronic Conditions */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Heart className="h-5 w-5 mr-2 text-blue-500" />
-          Chronic Conditions
+          {t('profile.chronicConditions')}
         </h3>
         
         {isEditing && activeTab === 'history' ? (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Chronic Conditions</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('profile.chronicConditions')}</label>
               <textarea
                 value={medicalHistoryFormData.chronicConditions.join(', ')}
                 onChange={(e) => setMedicalHistoryFormData({
                   ...medicalHistoryFormData,
                   chronicConditions: e.target.value.split(',').map(c => c.trim()).filter(c => c)
                 })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="Enter chronic conditions separated by commas (e.g., Diabetes, Hypertension, Asthma)"
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400' : 'border-gray-300'
+                }`}
+                placeholder={t('profile.chronicConditionsPlaceholder')}
                 rows={3}
               />
             </div>
@@ -1115,20 +1202,26 @@ const PatientProfile = () => {
           <div className="space-y-3">
             {medicalInfo.chronicConditions.length > 0 ? (
               medicalInfo.chronicConditions.map((condition, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+                <div key={index} className={`flex items-center justify-between p-3 rounded-lg ${
+                  darkMode ? 'bg-blue-900/30' : 'bg-blue-50'
+                }`}>
                   <div className="flex items-center">
                     <Heart className="h-4 w-4 text-blue-500 mr-2" />
-                    <span className="font-medium text-gray-800">{condition}</span>
+                    <span className={`font-medium ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{condition}</span>
                   </div>
-                  <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
-                    Chronic
+                  <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                    darkMode 
+                      ? 'bg-blue-900/50 text-blue-300' 
+                      : 'bg-blue-100 text-blue-800'
+                  }`}>
+                    {t('profile.chronic')}
                   </span>
                 </div>
               ))
             ) : (
-              <div className="text-center py-8 text-gray-500">
-                <Heart className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-                <p>No chronic conditions recorded</p>
+              <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                <Heart className={`h-12 w-12 mx-auto mb-3 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+                <p>{t('profile.noChronicConditions')}</p>
               </div>
             )}
           </div>
@@ -1136,59 +1229,65 @@ const PatientProfile = () => {
       </div>
 
       {/* Current Medications */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Pill className="h-5 w-5 mr-2 text-orange-500" />
-          Current Medications
+          {t('profile.currentMedications')}
         </h3>
         
         {loadingData ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mb-3"></div>
-            <p>Loading medications...</p>
+            <p>{t('profile.loadingMedications')}</p>
           </div>
         ) : prescriptions.length > 0 ? (
           <div className="space-y-3">
             {prescriptions.slice(0, 5).map((medication, index) => (
-              <div key={medication.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div key={medication.id || index} className={`flex items-center justify-between p-3 rounded-lg ${
+                darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
+              }`}>
                 <div>
-                  <p className="font-medium text-gray-800">{medication.medicineName || medication.knownAs}</p>
-                  <p className="text-sm text-gray-600">
+                  <p className={`font-medium ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{medication.medicineName || medication.knownAs}</p>
+                  <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
                     {medication.dosage} • {medication.frequency}
                   </p>
-                  <p className="text-xs text-gray-500">
-                    Prescribed by {medication.prescribedBy} • {medication.prescribedDate}
+                  <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                    {t('profile.prescribedBy')} {medication.prescribedBy} • {medication.prescribedDate}
                   </p>
                 </div>
                 <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                   medication.status === 'active' 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-gray-100 text-gray-800'
+                    ? darkMode
+                      ? 'bg-green-900/50 text-green-300'
+                      : 'bg-green-100 text-green-800'
+                    : darkMode
+                      ? 'bg-gray-700 text-gray-300'
+                      : 'bg-gray-100 text-gray-800'
                 }`}>
-                  {medication.status || 'Active'}
+                  {medication.status || t('profile.active')}
                 </span>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            <Pill className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>No active medications</p>
+          <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            <Pill className={`h-12 w-12 mx-auto mb-3 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+            <p>{t('profile.noActiveMedications')}</p>
           </div>
         )}
       </div>
 
       {/* Lab Results */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <FileText className="h-5 w-5 mr-2 text-purple-500" />
-          Recent Lab Results
+          {t('profile.recentLabResults')}
         </h3>
         
         {loadingData ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-purple-500 mb-3"></div>
-            <p>Loading lab results...</p>
+            <p>{t('profile.loadingLabResults')}</p>
           </div>
         ) : records.length > 0 ? (
           <div className="space-y-3">
@@ -1197,26 +1296,32 @@ const PatientProfile = () => {
               record.recordType?.toLowerCase().includes('diagnostic') ||
               record.description?.toLowerCase().includes('lab')
             ).slice(0, 5).map((result, index) => (
-              <div key={result.id || index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+              <div key={result.id || index} className={`flex items-center justify-between p-3 rounded-lg ${
+                darkMode ? 'bg-gray-700/50' : 'bg-gray-50'
+              }`}>
                 <div>
-                  <p className="font-medium text-gray-800">{result.description || result.recordType || 'Lab Test'}</p>
-                  <p className="text-sm text-gray-600">
-                    {result.date ? new Date(result.date).toLocaleDateString() : 'Date not available'}
+                  <p className={`font-medium ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{result.description || result.recordType || t('profile.labTest')}</p>
+                  <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                    {result.date ? new Date(result.date).toLocaleDateString() : t('profile.dateNotAvailable')}
                   </p>
                   {result.doctor && (
-                    <p className="text-xs text-gray-500">Ordered by {result.doctor}</p>
+                    <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('profile.orderedBy')} {result.doctor}</p>
                   )}
                 </div>
-                <button className="text-emerald-600 hover:text-emerald-700 font-medium text-sm">
-                  View Report
+                <button className={`font-medium text-sm ${
+                  darkMode 
+                    ? 'text-emerald-400 hover:text-emerald-300' 
+                    : 'text-emerald-600 hover:text-emerald-700'
+                }`}>
+                  {t('profile.viewReport')}
                 </button>
               </div>
             ))}
           </div>
         ) : (
-          <div className="text-center py-8 text-gray-500">
-            <FileText className="h-12 w-12 mx-auto mb-3 text-gray-300" />
-            <p>No lab results found</p>
+          <div className={`text-center py-8 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            <FileText className={`h-12 w-12 mx-auto mb-3 ${darkMode ? 'text-gray-600' : 'text-gray-300'}`} />
+            <p>{t('profile.noLabResults')}</p>
           </div>
         )}
       </div>
@@ -1225,15 +1330,15 @@ const PatientProfile = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
+    <div className={`min-h-screen bg-gradient-to-br ${darkMode ? 'from-gray-900 to-gray-800' : 'from-emerald-50 to-teal-50'}`}>
       <Navbar />
       
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-800">My Profile</h1>
+            <h1 className={`text-3xl font-bold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{t('profile.myProfile')}</h1>
             {profile.email && (
-              <p className="text-sm text-gray-600 mt-1">Logged in as: {profile.email}</p>
+              <p className={`text-sm mt-1 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('profile.loggedInAs')}: {profile.email}</p>
             )}
           </div>
           
@@ -1241,10 +1346,14 @@ const PatientProfile = () => {
             {!isEditing && (activeTab === 'personal' || activeTab === 'medical' || activeTab === 'insurance' || activeTab === 'history') && (
               <button
                 onClick={handleEdit}
-                className="flex items-center px-4 py-2 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors"
+                className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                  darkMode 
+                    ? 'bg-emerald-600 hover:bg-emerald-700' 
+                    : 'bg-emerald-400 hover:bg-emerald-500'
+                } text-white`}
               >
                 <Edit2 className="h-4 w-4 mr-2" />
-                Edit Profile
+                {t('profile.editProfile')}
               </button>
             )}
           </div>
@@ -1252,33 +1361,51 @@ const PatientProfile = () => {
 
         {/* Save Status and Error Messages */}
         {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
+          <div className={`mb-4 p-3 border rounded-lg ${
+            darkMode 
+              ? 'bg-red-900/30 border-red-700 text-red-300' 
+              : 'bg-red-100 border-red-400 text-red-700'
+          }`}>
             {error}
           </div>
         )}
         {saveStatus === 'success' && (
-          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center">
+          <div className={`mb-4 p-3 border rounded-lg flex items-center ${
+            darkMode 
+              ? 'bg-green-900/30 border-green-700 text-green-300' 
+              : 'bg-green-100 border-green-400 text-green-700'
+          }`}>
             <AlertCircle className="h-5 w-5 mr-2" />
-            Profile updated successfully!
+            {t('profile.profileUpdatedSuccess')}
           </div>
         )}
         {saveStatus === 'error' && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg flex items-center">
+          <div className={`mb-4 p-3 border rounded-lg flex items-center ${
+            darkMode 
+              ? 'bg-red-900/30 border-red-700 text-red-300' 
+              : 'bg-red-100 border-red-400 text-red-700'
+          }`}>
             <AlertCircle className="h-5 w-5 mr-2" />
-            Error updating profile. Please try again.
+            {t('profile.errorUpdateFailed')}
           </div>
         )}
 
         {/* Tab Navigation */}
-        <div className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm">
+        <div className={`flex space-x-1 mb-8 rounded-lg p-1 shadow-sm ${
+          darkMode ? 'bg-gray-800' : 'bg-white'
+        }`}>
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
                 activeTab === tab.id
-                  ? 'bg-emerald-400 text-white shadow-md'
-                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                  ? darkMode
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-emerald-400 text-white shadow-md'
+                  : darkMode
+                    ? 'text-gray-300 hover:text-gray-100 hover:bg-gray-700'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
               }`}
             >
               <span className="mr-2">{tab.icon}</span>
@@ -1300,25 +1427,33 @@ const PatientProfile = () => {
           <div className="mt-6 flex justify-end space-x-3">
             <button
               onClick={handleCancel}
-              className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+              className={`px-6 py-2 border rounded-lg transition-colors ${
+                darkMode 
+                  ? 'border-gray-600 text-gray-300 hover:bg-gray-700' 
+                  : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+              }`}
             >
               <X className="inline h-4 w-4 mr-2" />
-              Cancel
+              {t('profile.cancel')}
             </button>
             <button
               onClick={handleSave}
               disabled={loading}
-              className="px-6 py-2 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50"
+              className={`px-6 py-2 rounded-lg transition-colors disabled:opacity-50 ${
+                darkMode 
+                  ? 'bg-emerald-600 hover:bg-emerald-700' 
+                  : 'bg-emerald-400 hover:bg-emerald-500'
+              } text-white`}
             >
               {loading ? (
                 <>
                   <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Saving...
+                  {t('profile.saving')}
                 </>
               ) : (
                 <>
                   <Save className="inline h-4 w-4 mr-2" />
-                  Save Changes
+                  {t('profile.saveChanges')}
                 </>
               )}
             </button>

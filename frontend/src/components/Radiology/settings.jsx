@@ -1,10 +1,30 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, Filter, Settings, Bell, Shield, Database, Users, Monitor, Printer, Wifi, Server, Clock, Mail, Phone, Globe, Save, X, Check, AlertTriangle, Info, Plus, Trash2, Edit, Eye, Camera } from 'lucide-react';
 // Import the radiology header component
 import RadiologyHeader from './header';
 import { getGeneralSettings, updateGeneralSettings, getNotificationSettings, updateNotificationSettings } from '../../services/radiologyService';
 
 const RadiologySettingsModule = () => {
+  const { t } = useTranslation();
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
+  
   const [activeTab, setActiveTab] = useState('general');
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -46,7 +66,7 @@ const RadiologySettingsModule = () => {
       } catch (err) {
         console.error('Error fetching general settings:', err);
         if (mounted) {
-          setError(err.message || 'Failed to load general settings');
+          setError(err.message || t('failedToLoadGeneralSettings'));
         }
       } finally {
         if (mounted) setLoading(false);
@@ -89,7 +109,7 @@ const RadiologySettingsModule = () => {
       } catch (err) {
         console.error('Error fetching notification settings:', err);
         if (mounted) {
-          setError(err.message || 'Failed to load notification settings');
+          setError(err.message || t('failedToLoadNotificationSettings'));
         }
       } finally {
         if (mounted) setLoading(false);
@@ -323,12 +343,12 @@ const RadiologySettingsModule = () => {
         setTimeout(() => {
           setShowSaveDialog(false);
           setHasChanges(false);
-          alert(`${section} settings saved successfully!`);
+          alert(t('settingsSavedSuccessfully', { section }));
         }, 1000);
       }
     } catch (err) {
       console.error(`Error saving ${section} settings:`, err);
-      setError(err.message || `Failed to save ${section} settings`);
+      setError(err.message || t('failedToSaveSettingsPleaseTryAgain', { section }));
       setShowSaveDialog(false);
     } finally {
       setSaving(false);
@@ -336,21 +356,30 @@ const RadiologySettingsModule = () => {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'active': return 'text-green-600 bg-green-50 border-green-200';
-      case 'maintenance': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-      case 'offline': return 'text-red-600 bg-red-50 border-red-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+    if (darkMode) {
+      switch (status) {
+        case 'active': return 'text-green-300 bg-green-900 bg-opacity-30 border-green-700';
+        case 'maintenance': return 'text-yellow-300 bg-yellow-900 bg-opacity-30 border-yellow-700';
+        case 'offline': return 'text-red-300 bg-red-900 bg-opacity-30 border-red-700';
+        default: return 'text-gray-300 bg-gray-700 bg-opacity-30 border-gray-600';
+      }
+    } else {
+      switch (status) {
+        case 'active': return 'text-green-600 bg-green-50 border-green-200';
+        case 'maintenance': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+        case 'offline': return 'text-red-600 bg-red-50 border-red-200';
+        default: return 'text-gray-600 bg-gray-50 border-gray-200';
+      }
     }
   };
 
   const getModalityIcon = (type) => {
     switch (type) {
-      case 'CT': return <Monitor className="w-4 h-4 text-blue-600" />;
-      case 'MRI': return <Monitor className="w-4 h-4 text-purple-600" />;
-      case 'XR': return <Camera className="w-4 h-4 text-gray-600" />;
-      case 'US': return <Eye className="w-4 h-4 text-green-600" />;
-      default: return <Monitor className="w-4 h-4" />;
+      case 'CT': return <Monitor className={`w-4 h-4 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />;
+      case 'MRI': return <Monitor className={`w-4 h-4 ${darkMode ? 'text-purple-400' : 'text-purple-600'}`} />;
+      case 'XR': return <Camera className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />;
+      case 'US': return <Eye className={`w-4 h-4 ${darkMode ? 'text-green-400' : 'text-green-600'}`} />;
+      default: return <Monitor className={`w-4 h-4 ${darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'}`} />;
     }
   };
 
@@ -359,8 +388,12 @@ const RadiologySettingsModule = () => {
       return (
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading general settings...</p>
+            <div className={`animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4 ${
+              darkMode ? 'border-[#79CAC2]' : 'border-teal-500'
+            }`}></div>
+            <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+              {t('loadingGeneralSettings')}
+            </p>
           </div>
         </div>
       );
@@ -370,25 +403,45 @@ const RadiologySettingsModule = () => {
       <div className="space-y-6">
         {/* Error Display */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className={`border rounded-lg p-4 ${
+            darkMode
+              ? 'bg-red-900 bg-opacity-30 border-red-700'
+              : 'bg-red-50 border-red-200'
+          }`}>
             <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+              <AlertTriangle className={`w-5 h-5 mr-2 ${
+                darkMode ? 'text-red-400' : 'text-red-500'
+              }`} />
               <div>
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <p className="text-sm text-red-600 mt-1">{error}</p>
+                <h3 className={`text-sm font-medium ${
+                  darkMode ? 'text-red-300' : 'text-red-800'
+                }`}>{t('error')}</h3>
+                <p className={`text-sm mt-1 ${
+                  darkMode ? 'text-red-300' : 'text-red-600'
+                }`}>{error}</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Department Information */}
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Radiology Department Information
+        <div className={`rounded-lg border p-6 ${
+          darkMode
+            ? 'bg-[#0D2026] border-[#133037]'
+            : 'bg-white border-gray-200'
+        }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('radiologyDepartmentInformation')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Department Name</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('departmentName')}</label>
             <input
               type="text"
               value={generalSettings.departmentName}
@@ -396,11 +449,17 @@ const RadiologySettingsModule = () => {
                 setGeneralSettings({...generalSettings, departmentName: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Department Code</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('departmentCode')}</label>
             <input
               type="text"
               value={generalSettings.departmentCode}
@@ -408,11 +467,17 @@ const RadiologySettingsModule = () => {
                 setGeneralSettings({...generalSettings, departmentCode: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('address')}</label>
             <input
               type="text"
               value={generalSettings.address}
@@ -420,11 +485,17 @@ const RadiologySettingsModule = () => {
                 setGeneralSettings({...generalSettings, address: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('phone')}</label>
             <input
               type="tel"
               value={generalSettings.phone}
@@ -432,11 +503,17 @@ const RadiologySettingsModule = () => {
                 setGeneralSettings({...generalSettings, phone: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('email')}</label>
             <input
               type="email"
               value={generalSettings.email}
@@ -444,59 +521,89 @@ const RadiologySettingsModule = () => {
                 setGeneralSettings({...generalSettings, email: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
         </div>
       </div>
 
       {/* Regional Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Regional Settings
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('regionalSettings')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('timezone')}</label>
             <select
               value={generalSettings.timezone}
               onChange={(e) => {
                 setGeneralSettings({...generalSettings, timezone: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
-              <option value="America/New_York">Eastern Time (ET)</option>
-              <option value="America/Chicago">Central Time (CT)</option>
-              <option value="America/Denver">Mountain Time (MT)</option>
-              <option value="America/Los_Angeles">Pacific Time (PT)</option>
+              <option value="America/New_York">{t('easternTimeET')}</option>
+              <option value="America/Chicago">{t('centralTimeCT')}</option>
+              <option value="America/Denver">{t('mountainTimeMT')}</option>
+              <option value="America/Los_Angeles">{t('pacificTimePT')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('language')}</label>
             <select
               value={generalSettings.language}
               onChange={(e) => {
                 setGeneralSettings({...generalSettings, language: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
-              <option value="en">English</option>
-              <option value="es">Spanish</option>
-              <option value="fr">French</option>
-              <option value="de">German</option>
+              <option value="en">{t('english')}</option>
+              <option value="es">{t('spanish')}</option>
+              <option value="fr">{t('french')}</option>
+              <option value="de">{t('german')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('dateFormat')}</label>
             <select
               value={generalSettings.dateFormat}
               onChange={(e) => {
                 setGeneralSettings({...generalSettings, dateFormat: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
               <option value="MM/DD/YYYY">MM/DD/YYYY</option>
               <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -504,32 +611,48 @@ const RadiologySettingsModule = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('currency')}</label>
             <select
               value={generalSettings.currency}
               onChange={(e) => {
                 setGeneralSettings({...generalSettings, currency: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
-              <option value="USD">USD - US Dollar</option>
-              <option value="EUR">EUR - Euro</option>
-              <option value="GBP">GBP - British Pound</option>
-              <option value="CAD">CAD - Canadian Dollar</option>
+              <option value="USD">USD - {t('usDollar')}</option>
+              <option value="EUR">EUR - {t('euro')}</option>
+              <option value="GBP">GBP - {t('britishPound')}</option>
+              <option value="CAD">CAD - {t('canadianDollar')}</option>
             </select>
           </div>
         </div>
       </div>
 
       {/* Operating Hours */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Operating Hours
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('operatingHours')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('startTime')}</label>
             <input
               type="time"
               value={generalSettings.operatingHours.start}
@@ -540,11 +663,17 @@ const RadiologySettingsModule = () => {
                 });
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('endTime')}</label>
             <input
               type="time"
               value={generalSettings.operatingHours.end}
@@ -555,12 +684,18 @@ const RadiologySettingsModule = () => {
                 });
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
         </div>
         <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Operating Days</label>
+          <label className={`block text-sm font-medium mb-2 ${
+            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+          }`}>{t('operatingDays')}</label>
           <div className="flex flex-wrap gap-2">
             {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
               <label key={day} className="flex items-center space-x-2">
@@ -577,9 +712,15 @@ const RadiologySettingsModule = () => {
                     });
                     setHasChanges(true);
                   }}
-                  className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                  className={`rounded focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'border-[#133037] text-[#79CAC2] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 text-teal-600 focus:ring-teal-500'
+                  }`}
                 />
-                <span className="text-sm text-gray-700 capitalize">{day}</span>
+                <span className={`text-sm capitalize ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                }`}>{t(day)}</span>
               </label>
             ))}
           </div>
@@ -590,17 +731,23 @@ const RadiologySettingsModule = () => {
         <button
           onClick={() => handleSaveSettings('General')}
           disabled={!hasChanges || saving}
-          className="bg-teal-500 hover:bg-teal-600 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+          className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 ${
+            darkMode
+              ? 'bg-[#79CAC2] hover:bg-[#58B4AA] disabled:bg-gray-700 text-[#050C0F]'
+              : 'bg-teal-500 hover:bg-teal-600 disabled:bg-gray-300 text-white'
+          }`}
         >
           {saving ? (
             <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              Saving...
+              <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${
+                darkMode ? 'border-[#050C0F]' : 'border-white'
+              }`}></div>
+              {t('saving')}
             </>
           ) : (
             <>
               <Save className="w-4 h-4" />
-              Save Changes
+              {t('saveChanges')}
             </>
           )}
         </button>
@@ -755,8 +902,12 @@ const RadiologySettingsModule = () => {
       return (
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading notification settings...</p>
+            <div className={`animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4 ${
+              darkMode ? 'border-[#79CAC2]' : 'border-teal-500'
+            }`}></div>
+            <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+              {t('loadingNotificationSettings')}
+            </p>
           </div>
         </div>
       );
@@ -766,34 +917,56 @@ const RadiologySettingsModule = () => {
       <div className="space-y-6">
         {/* Error Display */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className={`border rounded-lg p-4 ${
+            darkMode
+              ? 'bg-red-900 bg-opacity-30 border-red-700'
+              : 'bg-red-50 border-red-200'
+          }`}>
             <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-red-500 mr-2" />
+              <AlertTriangle className={`w-5 h-5 mr-2 ${
+                darkMode ? 'text-red-400' : 'text-red-500'
+              }`} />
               <div>
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <p className="text-sm text-red-600 mt-1">{error}</p>
+                <h3 className={`text-sm font-medium ${
+                  darkMode ? 'text-red-300' : 'text-red-800'
+                }`}>{t('error')}</h3>
+                <p className={`text-sm mt-1 ${
+                  darkMode ? 'text-red-300' : 'text-red-600'
+                }`}>{error}</p>
               </div>
             </div>
           </div>
         )}
 
         {/* Notification Methods */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Notification Methods
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('notificationMethods')}
         </h3>
         <div className="space-y-4">
           {[
-            { key: 'emailNotifications', label: 'Email Notifications', icon: Mail },
-            { key: 'smsNotifications', label: 'SMS Notifications', icon: Phone },
-            { key: 'pushNotifications', label: 'Push Notifications', icon: Bell }
+            { key: 'emailNotifications', label: t('emailNotifications'), icon: Mail },
+            { key: 'smsNotifications', label: t('smsNotifications'), icon: Phone },
+            { key: 'pushNotifications', label: t('pushNotifications'), icon: Bell }
           ].map(method => {
             const Icon = method.icon;
             return (
               <div key={method.key} className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <Icon className="w-5 h-5 text-gray-400" />
-                  <div className="font-medium text-gray-900">{method.label}</div>
+                  <Icon className={`w-5 h-5 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                  }`} />
+                  <div className={`font-medium ${
+                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                  }`}>{method.label}</div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
@@ -805,7 +978,11 @@ const RadiologySettingsModule = () => {
                     }}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+                  <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                    darkMode
+                      ? 'bg-gray-700 peer-focus:ring-4 peer-focus:ring-[#79CAC2] peer-checked:bg-[#79CAC2] after:border-gray-600'
+                      : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 peer-checked:bg-teal-500 after:border-gray-300'
+                  }`}></div>
                 </label>
               </div>
             );
@@ -814,15 +991,27 @@ const RadiologySettingsModule = () => {
       </div>
 
       {/* Critical Alerts */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-red-500 pl-3">
-          Critical Findings Alerts
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-red-500'
+            : 'text-gray-900 border-red-500'
+        }`}>
+          {t('criticalFindingsAlerts')}
         </h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900">Enable Critical Findings Alerts</div>
-              <div className="text-sm text-gray-500">Send immediate notifications for critical radiology findings</div>
+              <div className={`font-medium ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('enableCriticalFindingsAlerts')}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{t('sendImmediateNotificationsForCriticalRadiologyFindings')}</div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -837,13 +1026,19 @@ const RadiologySettingsModule = () => {
                 }}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+              <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                darkMode
+                  ? 'bg-gray-700 peer-focus:ring-4 peer-focus:ring-red-400 peer-checked:bg-red-500 after:border-gray-600'
+                  : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 peer-checked:bg-red-500 after:border-gray-300'
+              }`}></div>
             </label>
           </div>
 
           {notificationSettings.criticalAlerts?.enabled && (
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Alert Recipients</label>
+              <label className={`block text-sm font-medium mb-2 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+              }`}>{t('alertRecipients')}</label>
               <div className="space-y-2">
                 {(notificationSettings.criticalAlerts?.recipients || []).map((recipient, index) => (
                   <div key={index} className="flex items-center space-x-2">
@@ -859,7 +1054,11 @@ const RadiologySettingsModule = () => {
                         });
                         setHasChanges(true);
                       }}
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className={`flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                        darkMode
+                          ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                          : 'border-gray-300 focus:ring-teal-500'
+                      }`}
                     />
                     <button
                       onClick={() => {
@@ -870,7 +1069,11 @@ const RadiologySettingsModule = () => {
                         });
                         setHasChanges(true);
                       }}
-                      className="text-red-600 hover:text-red-700 p-2"
+                      className={`p-2 transition-colors ${
+                        darkMode
+                          ? 'text-red-400 hover:text-red-300'
+                          : 'text-red-600 hover:text-red-700'
+                      }`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -887,10 +1090,14 @@ const RadiologySettingsModule = () => {
                     });
                     setHasChanges(true);
                   }}
-                  className="flex items-center space-x-2 text-teal-600 hover:text-teal-700"
+                  className={`flex items-center space-x-2 transition-colors ${
+                    darkMode
+                      ? 'text-[#79CAC2] hover:text-[#58B4AA]'
+                      : 'text-teal-600 hover:text-teal-700'
+                  }`}
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Add Recipient</span>
+                  <span>{t('addRecipient')}</span>
                 </button>
               </div>
             </div>
@@ -902,17 +1109,23 @@ const RadiologySettingsModule = () => {
         <button
           onClick={() => handleSaveSettings('Notifications')}
           disabled={!hasChanges || saving}
-          className="bg-teal-500 hover:bg-teal-600 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+          className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 ${
+            darkMode
+              ? 'bg-[#79CAC2] hover:bg-[#58B4AA] disabled:bg-gray-700 text-[#050C0F]'
+              : 'bg-teal-500 hover:bg-teal-600 disabled:bg-gray-300 text-white'
+          }`}
         >
           {saving ? (
             <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              Saving...
+              <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${
+                darkMode ? 'border-[#050C0F]' : 'border-white'
+              }`}></div>
+              {t('saving')}
             </>
           ) : (
             <>
               <Save className="w-4 h-4" />
-              Save Changes
+              {t('saveChanges')}
             </>
           )}
         </button>
@@ -1241,40 +1454,58 @@ const RadiologySettingsModule = () => {
   );
 
   const tabs = [
-    { id: 'general', label: 'General', icon: Settings, component: GeneralSection, locked: false },
-    { id: 'system', label: 'System', icon: Server, component: SystemSection, locked: true },
-    { id: 'notifications', label: 'Notifications', icon: Bell, component: NotificationSection, locked: false },
-    { id: 'equipment', label: 'Equipment', icon: Monitor, component: EquipmentSection, locked: true },
-    { id: 'users', label: 'Users', icon: Users, component: UserSection, locked: true },
-    { id: 'integrations', label: 'Integrations', icon: Globe, component: IntegrationSection, locked: true }
+    { id: 'general', label: t('general'), icon: Settings, component: GeneralSection, locked: false },
+    { id: 'system', label: t('system'), icon: Server, component: SystemSection, locked: true },
+    { id: 'notifications', label: t('notifications'), icon: Bell, component: NotificationSection, locked: false },
+    { id: 'equipment', label: t('equipment'), icon: Monitor, component: EquipmentSection, locked: true },
+    { id: 'users', label: t('users'), icon: Users, component: UserSection, locked: true },
+    { id: 'integrations', label: t('integrations'), icon: Globe, component: IntegrationSection, locked: true }
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       {/* Header */}
       <RadiologyHeader />
 
       {/* Page Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className={`border-b ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Radiology Settings</h1>
-              <p className="text-gray-600 mt-1">Configure your radiology information system</p>
+              <h1 className={`text-2xl font-bold ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('radiologySettings')}</h1>
+              <p className={`mt-1 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+              }`}>{t('configureYourRadiologyInformationSystem')}</p>
             </div>
             <div className="flex items-center space-x-3">
               {hasChanges && (
-                <div className="flex items-center space-x-2 text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">
+                <div className={`flex items-center space-x-2 px-3 py-1 rounded-full ${
+                  darkMode
+                    ? 'text-yellow-400 bg-yellow-900 bg-opacity-30'
+                    : 'text-yellow-600 bg-yellow-50'
+                }`}>
                   <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm">Unsaved changes</span>
+                  <span className="text-sm">{t('unsavedChanges')}</span>
                 </div>
               )}
               <button
                 onClick={() => setShowSaveDialog(true)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  darkMode
+                    ? 'bg-[#133037] hover:bg-[#07181D] text-[#C1D9DD]'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
               >
                 <Settings className="w-4 h-4" />
-                Export Settings
+                {t('exportSettings')}
               </button>
             </div>
           </div>
@@ -1295,16 +1526,24 @@ const RadiologySettingsModule = () => {
                     onClick={() => !tab.locked && setActiveTab(tab.id)}
                     className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors relative ${
                       activeTab === tab.id
-                        ? 'bg-teal-50 text-teal-700 border-r-2 border-teal-500'
+                        ? darkMode
+                          ? 'bg-[#133037] text-[#79CAC2] border-r-2 border-[#79CAC2]'
+                          : 'bg-teal-50 text-teal-700 border-r-2 border-teal-500'
                         : tab.locked
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        ? darkMode
+                          ? 'text-[#133037] cursor-not-allowed'
+                          : 'text-gray-400 cursor-not-allowed'
+                        : darkMode
+                          ? 'text-[#C1D9DD] hover:bg-[#133037] hover:text-[#F5FEFF]'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                   >
                     <Icon className="w-5 h-5" />
-                    <span className="font-medium">{tab.label}</span>
+                    <span className="font-medium">{t(tab.id === 'general' ? 'general' : tab.id === 'system' ? 'system' : tab.id === 'notifications' ? 'notifications' : tab.id === 'equipment' ? 'equipment' : tab.id === 'users' ? 'users' : 'integrations')}</span>
                     {tab.locked && (
-                      <Shield className="w-4 h-4 ml-auto text-gray-400" />
+                      <Shield className={`w-4 h-4 ml-auto ${
+                        darkMode ? 'text-[#133037]' : 'text-gray-400'
+                      }`} />
                     )}
                   </button>
                 );
@@ -1322,18 +1561,34 @@ const RadiologySettingsModule = () => {
       {/* Save Dialog */}
       {showSaveDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+          <div className={`rounded-lg p-6 max-w-sm w-full mx-4 ${
+            darkMode ? 'bg-[#0D2026]' : 'bg-white'
+          }`}>
             <div className="flex items-center space-x-3 mb-4">
-              <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                <Check className="w-6 h-6 text-teal-600" />
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                darkMode
+                  ? 'bg-[#133037]'
+                  : 'bg-teal-100'
+              }`}>
+                <Check className={`w-6 h-6 ${
+                  darkMode ? 'text-[#79CAC2]' : 'text-teal-600'
+                }`} />
               </div>
               <div>
-                <h3 className="font-medium text-gray-900">Saving Settings</h3>
-                <p className="text-sm text-gray-500">Please wait...</p>
+                <h3 className={`font-medium ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{t('savingSettings')}</h3>
+                <p className={`text-sm ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                }`}>{t('pleaseWait')}</p>
               </div>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-teal-500 h-2 rounded-full animate-pulse" style={{ width: '75%' }}></div>
+            <div className={`w-full rounded-full h-2 ${
+              darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+            }`}>
+              <div className={`h-2 rounded-full animate-pulse ${
+                darkMode ? 'bg-[#79CAC2]' : 'bg-teal-500'
+              }`} style={{ width: '75%' }}></div>
             </div>
           </div>
         </div>

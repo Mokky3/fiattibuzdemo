@@ -1,10 +1,12 @@
 // src/components/Nurse/profile.jsx
 
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import NurseHeader from './header';
 import { getProfile, saveProfile } from '../../services/nurseService';
 
 const NurseProfile = () => {
+  const { t } = useTranslation();
   const [nurse, setNurse] = useState({
     fullName: '',
     email: '',
@@ -17,6 +19,23 @@ const NurseProfile = () => {
   const [isEditing, setIsEditing] = useState(false)
   const [editingData, setEditingData] = useState({})
   const [saving, setSaving] = useState(false)
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     let active = true
@@ -105,7 +124,7 @@ const NurseProfile = () => {
       console.log('✅ [NurseProfile] Profile saved successfully')
     } catch (error) {
       console.error('❌ [NurseProfile] Error saving profile:', error)
-      alert('Failed to save profile. Please try again.')
+      alert(t('failedToSaveProfile'))
     } finally {
       setSaving(false)
     }
@@ -123,40 +142,66 @@ const NurseProfile = () => {
   const currentUser = JSON.parse(localStorage.getItem('user') || '{}')
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       <NurseHeader />
-      <div className="p-6 max-w-xl mx-auto bg-white shadow rounded mt-6">
+      <div className={`p-6 max-w-xl mx-auto shadow rounded mt-6 transition-colors ${
+        darkMode ? 'bg-[#0D2026] border border-[#133037]' : 'bg-white'
+      }`}>
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-2xl font-semibold">Nurse Profile</h2>
+          <h2 className={`text-2xl font-semibold ${
+            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+          }`}>{t('nurseProfile')}</h2>
           {!loading && isAuthenticated && !isEditing && (
             <button
               onClick={handleEdit}
-              className="px-4 py-2 bg-[#5ACCC3] text-white rounded hover:bg-[#4AB3A8] transition-colors"
+              className={`px-4 py-2 rounded transition-colors ${
+                darkMode
+                  ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                  : 'bg-[#5ACCC3] text-white hover:bg-[#4AB3A8]'
+              }`}
             >
-              Edit Profile
+              {t('editProfile')}
             </button>
           )}
         </div>
         
         {/* Authentication Status */}
-        <div className="mb-6 p-4 bg-gray-100 rounded-lg">
-          <h3 className="text-lg font-medium mb-2">Authentication Status</h3>
-          <div className="space-y-1 text-sm">
-            <div><strong>Authenticated:</strong> {isAuthenticated ? '✅ Yes' : '❌ No'}</div>
-            <div><strong>User Role:</strong> {currentUser.role || 'Unknown'}</div>
-            <div><strong>User ID:</strong> {currentUser.id || 'Unknown'}</div>
-            <div><strong>Token Exists:</strong> {localStorage.getItem('token') ? '✅ Yes' : '❌ No'}</div>
+        <div className={`mb-6 p-4 rounded-lg transition-colors ${
+          darkMode ? 'bg-[#07181D]' : 'bg-gray-100'
+        }`}>
+          <h3 className={`text-lg font-medium mb-2 ${
+            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+          }`}>{t('authenticationStatus')}</h3>
+          <div className={`space-y-1 text-sm ${
+            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+          }`}>
+            <div><strong>{t('authenticated')}:</strong> {isAuthenticated ? '✅ ' + t('yes') : '❌ ' + t('no')}</div>
+            <div><strong>{t('userRole')}:</strong> {currentUser.role || t('unknown')}</div>
+            <div><strong>{t('userId')}:</strong> {currentUser.id || t('unknown')}</div>
+            <div><strong>{t('tokenExists')}:</strong> {localStorage.getItem('token') ? '✅ ' + t('yes') : '❌ ' + t('no')}</div>
           </div>
           {!isAuthenticated && (
-            <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded">
-              <p className="text-red-700 text-sm">
-                <strong>Not authenticated!</strong> Please log in again.
+            <div className={`mt-3 p-3 border rounded transition-colors ${
+              darkMode
+                ? 'bg-red-900 bg-opacity-30 border-red-500'
+                : 'bg-red-100 border-red-300'
+            }`}>
+              <p className={`text-sm ${
+                darkMode ? 'text-red-300' : 'text-red-700'
+              }`}>
+                <strong>{t('notAuthenticated')}!</strong> {t('pleaseLogInAgain')}
               </p>
               <button 
                 onClick={() => window.location.href = '/signin?returnUrl=/nurse/profile'}
-                className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                className={`mt-2 px-4 py-2 rounded transition-colors ${
+                  darkMode
+                    ? 'bg-red-600 text-white hover:bg-red-700'
+                    : 'bg-red-600 text-white hover:bg-red-700'
+                }`}
               >
-                Go to Login
+                {t('goToLogin')}
               </button>
             </div>
           )}
@@ -166,53 +211,83 @@ const NurseProfile = () => {
         {loading ? (
           <div className="space-y-4">
             <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5ACCC3] mr-3"></div>
-              <span className="text-gray-600">Loading profile data...</span>
+              <div className={`animate-spin rounded-full h-8 w-8 border-b-2 mr-3 ${
+                darkMode ? 'border-[#79CAC2]' : 'border-[#5ACCC3]'
+              }`}></div>
+              <span className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'}>{t('loadingProfileData')}</span>
             </div>
           </div>
         ) : isEditing ? (
           <div className="space-y-4">
             {/* Editable Fields */}
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-lg font-medium text-blue-900 mb-3">Editable Information</h3>
+            <div className={`p-4 rounded-lg transition-colors ${
+              darkMode ? 'bg-blue-900 bg-opacity-30' : 'bg-blue-50'
+            }`}>
+              <h3 className={`text-lg font-medium mb-3 ${
+                darkMode ? 'text-blue-300' : 'text-blue-900'
+              }`}>{t('editableInformation')}</h3>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
+                  <label className={`block text-sm font-medium mb-1 ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                  }`}>{t('fullName')}</label>
                   <input
                     type="text"
                     value={editingData.fullName || ''}
                     onChange={(e) => handleInputChange('fullName', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors ${
+                      darkMode
+                        ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                        : 'bg-white border-gray-300 text-gray-900 focus:ring-[#5ACCC3]'
+                    }`}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label className={`block text-sm font-medium mb-1 ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                  }`}>{t('email')}</label>
                   <input
                     type="email"
                     value={editingData.email || ''}
                     onChange={(e) => handleInputChange('email', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors ${
+                      darkMode
+                        ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                        : 'bg-white border-gray-300 text-gray-900 focus:ring-[#5ACCC3]'
+                    }`}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                  <label className={`block text-sm font-medium mb-1 ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                  }`}>{t('phone')}</label>
                   <input
                     type="tel"
                     value={editingData.phone || ''}
                     onChange={(e) => handleInputChange('phone', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 transition-colors ${
+                      darkMode
+                        ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                        : 'bg-white border-gray-300 text-gray-900 focus:ring-[#5ACCC3]'
+                    }`}
                   />
                 </div>
               </div>
             </div>
 
             {/* Read-only Fields */}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-lg font-medium text-gray-700 mb-3">System Information (Read-only)</h3>
-              <div className="space-y-2 text-sm">
-                <div><strong>Department:</strong> {nurse.department || 'Not provided'}</div>
-                <div><strong>License Number:</strong> {nurse.licenseNumber || 'Not provided'}</div>
-                <div><strong>Experience:</strong> {nurse.experience || 'Not provided'}</div>
+            <div className={`p-4 rounded-lg transition-colors ${
+              darkMode ? 'bg-[#07181D]' : 'bg-gray-50'
+            }`}>
+              <h3 className={`text-lg font-medium mb-3 ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-700'
+              }`}>{t('systemInformationReadOnly')}</h3>
+              <div className={`space-y-2 text-sm ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+              }`}>
+                <div><strong>{t('department')}:</strong> {nurse.department || t('notProvided')}</div>
+                <div><strong>{t('licenseNumber')}:</strong> {nurse.licenseNumber || t('notProvided')}</div>
+                <div><strong>{t('experience')}:</strong> {nurse.experience || t('notProvided')}</div>
               </div>
             </div>
             
@@ -221,27 +296,37 @@ const NurseProfile = () => {
               <button
                 onClick={handleSave}
                 disabled={saving}
-                className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                className={`px-6 py-2 rounded transition-colors disabled:cursor-not-allowed ${
+                  darkMode
+                    ? 'bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-600'
+                    : 'bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-400'
+                }`}
               >
-                {saving ? 'Saving...' : 'Save Changes'}
+                {saving ? t('saving') + '...' : t('saveChanges')}
               </button>
               <button
                 onClick={handleCancel}
                 disabled={saving}
-                className="px-6 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+                className={`px-6 py-2 rounded transition-colors disabled:cursor-not-allowed ${
+                  darkMode
+                    ? 'bg-[#133037] text-[#C1D9DD] hover:bg-[#1a3d44] disabled:bg-gray-600'
+                    : 'bg-gray-500 text-white hover:bg-gray-600 disabled:bg-gray-400'
+                }`}
               >
-                Cancel
+                {t('cancel')}
               </button>
             </div>
           </div>
         ) : (
-          <div className="space-y-2">
-            <div><strong>Full Name:</strong> {nurse.fullName || 'Not provided'}</div>
-            <div><strong>Email:</strong> {nurse.email || 'Not provided'}</div>
-            <div><strong>Phone:</strong> {nurse.phone || 'Not provided'}</div>
-            <div><strong>Department:</strong> {nurse.department || 'Not provided'}</div>
-            <div><strong>License Number:</strong> {nurse.licenseNumber || 'Not provided'}</div>
-            <div><strong>Experience:</strong> {nurse.experience || 'Not provided'}</div>
+          <div className={`space-y-2 ${
+            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+          }`}>
+            <div><strong>{t('fullName')}:</strong> {nurse.fullName || t('notProvided')}</div>
+            <div><strong>{t('email')}:</strong> {nurse.email || t('notProvided')}</div>
+            <div><strong>{t('phone')}:</strong> {nurse.phone || t('notProvided')}</div>
+            <div><strong>{t('department')}:</strong> {nurse.department || t('notProvided')}</div>
+            <div><strong>{t('licenseNumber')}:</strong> {nurse.licenseNumber || t('notProvided')}</div>
+            <div><strong>{t('experience')}:</strong> {nurse.experience || t('notProvided')}</div>
           </div>
         )}
       </div>

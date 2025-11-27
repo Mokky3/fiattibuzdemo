@@ -1,10 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, Filter, Calendar, Clock, Edit, Monitor, Camera, Eye, FileText, Phone, Mail, MapPin, X, CheckCircle, AlertCircle, ChevronDown, ChevronUp, Upload, Loader } from 'lucide-react';
 import { format, parseISO, isSameDay } from 'date-fns';
 import RadiologyHeader from './header';
 import { getStudies, updateStudy, deleteStudy, uploadDicomStudy, searchPatients } from '../../services/radiologyService';
 
 const RadiologyStudies = () => {
+  const { t } = useTranslation();
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
+  
   const [activeTab, setActiveTab] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedStudy, setSelectedStudy] = useState(null);
@@ -84,7 +104,7 @@ const RadiologyStudies = () => {
         }));
       } catch (err) {
         console.error('Error fetching studies data:', err);
-        setError(err.message || 'Failed to load studies');
+        setError(err.message || t('failedToLoadStudies'));
         setStudies([]);
         setStudyStats({
           total: 0,
@@ -221,7 +241,7 @@ const RadiologyStudies = () => {
       }
     } catch (err) {
       console.error('Error saving study:', err);
-      setSaveError(err.message || 'Failed to save study');
+      setSaveError(err.message || t('failedToSaveStudy'));
     } finally {
       setSavingStudy(false);
     }
@@ -325,30 +345,48 @@ const RadiologyStudies = () => {
   ];
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'in_progress': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'completed': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    if (darkMode) {
+      switch (status) {
+        case 'scheduled': return 'bg-blue-900 bg-opacity-30 text-blue-300 border-blue-700';
+        case 'in_progress': return 'bg-yellow-900 bg-opacity-30 text-yellow-300 border-yellow-700';
+        case 'completed': return 'bg-green-900 bg-opacity-30 text-green-300 border-green-700';
+        default: return 'bg-gray-700 bg-opacity-30 text-gray-300 border-gray-600';
+      }
+    } else {
+      switch (status) {
+        case 'scheduled': return 'bg-blue-100 text-blue-800 border-blue-200';
+        case 'in_progress': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+        case 'completed': return 'bg-green-100 text-green-800 border-green-200';
+        default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      }
     }
   };
 
   const getPriorityColor = (priority) => {
-    switch (priority) {
-      case 'STAT': return 'bg-red-100 text-red-800 border-red-200';
-      case 'Urgent': return 'bg-orange-100 text-orange-800 border-orange-200';
-      case 'Routine': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    if (darkMode) {
+      switch (priority) {
+        case 'STAT': return 'bg-red-900 bg-opacity-30 text-red-300 border-red-700';
+        case 'Urgent': return 'bg-orange-900 bg-opacity-30 text-orange-300 border-orange-700';
+        case 'Routine': return 'bg-green-900 bg-opacity-30 text-green-300 border-green-700';
+        default: return 'bg-gray-700 bg-opacity-30 text-gray-300 border-gray-600';
+      }
+    } else {
+      switch (priority) {
+        case 'STAT': return 'bg-red-100 text-red-800 border-red-200';
+        case 'Urgent': return 'bg-orange-100 text-orange-800 border-orange-200';
+        case 'Routine': return 'bg-green-100 text-green-800 border-green-200';
+        default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      }
     }
   };
 
   const getModalityIcon = (modality) => {
     switch (modality) {
-      case 'CT': return <Monitor className="w-4 h-4 text-blue-600" />;
-      case 'MRI': return <Monitor className="w-4 h-4 text-purple-600" />;
-      case 'XR': return <Camera className="w-4 h-4 text-gray-600" />;
-      case 'US': return <Eye className="w-4 h-4 text-green-600" />;
-      default: return <FileText className="w-4 h-4" />;
+      case 'CT': return <Monitor className={`w-4 h-4 ${darkMode ? 'text-blue-400' : 'text-blue-600'}`} />;
+      case 'MRI': return <Monitor className={`w-4 h-4 ${darkMode ? 'text-purple-400' : 'text-purple-600'}`} />;
+      case 'XR': return <Camera className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`} />;
+      case 'US': return <Eye className={`w-4 h-4 ${darkMode ? 'text-green-400' : 'text-green-600'}`} />;
+      default: return <FileText className={`w-4 h-4 ${darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'}`} />;
     }
   };
 
@@ -356,14 +394,20 @@ const RadiologyStudies = () => {
   const filteredStudies = studies;
 
   const StudyCard = ({ study }) => (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all">
+    <div className={`rounded-lg shadow-sm border p-6 hover:shadow-md transition-all ${
+      darkMode
+        ? 'bg-[#0D2026] border-[#133037]'
+        : 'bg-white border-gray-100'
+    }`}>
       <div className="flex items-start justify-between">
         <div className="flex items-start space-x-4 flex-1">
           <div className="flex flex-col items-center space-y-2">
             {study.modality && (
               <div className="flex items-center space-x-1">
                 {getModalityIcon(study.modality)}
-                <span className="text-xs font-medium text-gray-600">{study.modality}</span>
+                <span className={`text-xs font-medium ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                }`}>{study.modality}</span>
               </div>
             )}
             {study.priority && (
@@ -375,84 +419,129 @@ const RadiologyStudies = () => {
 
           <div className="flex-1">
             <div className="flex items-center space-x-3 mb-2">
-              <h3 className="font-semibold text-gray-900">{study.patientName || 'Unknown Patient'}</h3>
+              <h3 className={`font-semibold ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{study.patientName || t('unknownPatient')}</h3>
               {(study.age || study.gender) && (
-                <span className="text-sm text-gray-500">
+                <span className={`text-sm ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                }`}>
                   ({study.age || '?'}{study.gender || ''})
                 </span>
               )}
               {study.mrn && (
-                <span className="text-sm text-gray-400">MRN: {study.mrn}</span>
+                <span className={`text-sm ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                }`}>{t('mrn')}: {study.mrn}</span>
               )}
             </div>
             {study.studyDescription && (
-              <p className="text-gray-700 font-medium mb-1">{study.studyDescription}</p>
+              <p className={`font-medium mb-1 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+              }`}>{study.studyDescription}</p>
             )}
-            <p className="text-gray-600 text-sm mb-2">{study.indication || 'No indication provided'}</p>
-            <div className="flex items-center space-x-4 text-sm text-gray-500">
-              {study.accessionNumber && <span>Acc: {study.accessionNumber}</span>}
-              <span>Scheduled: {study.scheduledDate ? format(parseISO(study.scheduledDate), 'MMM d, HH:mm') : 'N/A'}</span>
+            <p className={`text-sm mb-2 ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+            }`}>{study.indication || t('noIndicationProvided')}</p>
+            <div className={`flex items-center space-x-4 text-sm ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+            }`}>
+              {study.accessionNumber && <span>{t('acc')}: {study.accessionNumber}</span>}
+              <span>{t('scheduled')}: {study.scheduledDate ? format(parseISO(study.scheduledDate), 'MMM d, HH:mm') : t('nA')}</span>
               {study.location && <span>{study.location}</span>}
-              {study.contrast && <span className="text-yellow-600">Contrast</span>}
+              {study.contrast && <span className={darkMode ? 'text-yellow-400' : 'text-yellow-600'}>{t('contrast')}</span>}
             </div>
           </div>
         </div>
 
         <div className="flex flex-col items-end space-y-3">
           <span className={`px-3 py-1 rounded-lg text-sm border ${getStatusColor(study.status)}`}>
-            {study.status}
+            {study.status === 'scheduled' ? t('scheduled') :
+             study.status === 'in_progress' ? t('inProgress') :
+             study.status === 'completed' ? t('completed') :
+             study.status}
           </span>
           <div className="flex space-x-2">
             <button
               onClick={() => setExpandedStudy(expandedStudy === study.id ? null : study.id)}
-              className="px-3 py-1 text-sm text-gray-600 border border-gray-300 rounded hover:bg-gray-50"
+              className={`px-3 py-1 text-sm border rounded transition-colors ${
+                darkMode
+                  ? 'text-[#C1D9DD] border-[#133037] hover:bg-[#133037]'
+                  : 'text-gray-600 border-gray-300 hover:bg-gray-50'
+              }`}
             >
-              {expandedStudy === study.id ? 'Less' : 'Details'}
+              {expandedStudy === study.id ? t('less') : t('details')}
             </button>
             <button
               onClick={() => setSelectedStudy(study)}
-              className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg flex items-center space-x-1"
+              className={`px-4 py-2 rounded-lg flex items-center space-x-1 transition-colors ${
+                darkMode
+                  ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                  : 'bg-teal-500 hover:bg-teal-600 text-white'
+              }`}
             >
               <Edit className="w-4 h-4" />
-              <span>Manage</span>
+              <span>{t('manage')}</span>
             </button>
           </div>
         </div>
       </div>
 
       {expandedStudy === study.id && (
-        <div className="mt-4 pt-4 border-t border-gray-200">
+        <div className={`mt-4 pt-4 border-t ${
+          darkMode ? 'border-[#133037]' : 'border-gray-200'
+        }`}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
-              <h4 className="font-medium text-gray-900 mb-2">Patient Details</h4>
-              <div className="space-y-1 text-gray-600">
+              <h4 className={`font-medium mb-2 ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('patientDetails')}</h4>
+              <div className={`space-y-1 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+              }`}>
                 <div className="flex items-center space-x-2">
-                  <Phone className="w-3 h-3" />
+                  <Phone className={`w-3 h-3 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                  }`} />
                   <span>{study.phone}</span>
                 </div>
                 <div className="flex items-center space-x-2">
-                  <Mail className="w-3 h-3" />
+                  <Mail className={`w-3 h-3 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                  }`} />
                   <span>{study.email}</span>
                 </div>
-                <div>Insurance: {study.insurance}</div>
-                <div>Auth: {study.authorization}</div>
+                <div>{t('insurance')}: {study.insurance}</div>
+                <div>{t('auth')}: {study.authorization}</div>
               </div>
             </div>
             <div>
-              <h4 className="font-medium text-gray-900 mb-2">Clinical Info</h4>
-              <div className="space-y-1 text-gray-600">
-                <div>Physician: {study.orderingPhysician}</div>
-                <div>Room: {study.room}</div>
-                <div>Duration: {study.duration} min</div>
-                <div>CPT: {study.cptCode}</div>
+              <h4 className={`font-medium mb-2 ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('clinicalInfo')}</h4>
+              <div className={`space-y-1 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+              }`}>
+                <div>{t('physician')}: {study.orderingPhysician}</div>
+                <div>{t('room')}: {study.room}</div>
+                <div>{t('duration')}: {study.duration} {t('min')}</div>
+                <div>{t('cpt')}: {study.cptCode}</div>
               </div>
             </div>
             <div>
-              <h4 className="font-medium text-gray-900 mb-2">Notes</h4>
-              <p className="text-gray-600 text-sm">{study.notes}</p>
+              <h4 className={`font-medium mb-2 ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('notes')}</h4>
+              <p className={`text-sm ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+              }`}>{study.notes}</p>
               {study.preparation && (
-                <div className="mt-2 p-2 bg-blue-50 rounded text-xs">
-                  <strong>Prep:</strong> {study.preparation}
+                <div className={`mt-2 p-2 rounded text-xs ${
+                  darkMode
+                    ? 'bg-blue-900 bg-opacity-30'
+                    : 'bg-blue-50'
+                }`}>
+                  <strong>{t('prep')}:</strong> {study.preparation}
                 </div>
               )}
             </div>
@@ -467,12 +556,20 @@ const RadiologyStudies = () => {
 
     return (
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-screen overflow-y-auto">
-          <div className="p-6 border-b border-gray-200">
+        <div className={`rounded-lg shadow-xl max-w-5xl w-full max-h-screen overflow-y-auto ${
+          darkMode ? 'bg-[#0D2026]' : 'bg-white'
+        }`}>
+          <div className={`p-6 border-b ${
+            darkMode ? 'border-[#133037]' : 'border-gray-200'
+          }`}>
             <div className="flex items-center justify-between">
               <div>
-                <h2 className="text-xl font-bold text-gray-900">Edit Study</h2>
-                <p className="text-gray-600">{study.patientName || 'Study Management'}</p>
+                <h2 className={`text-xl font-bold ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{t('editStudy')}</h2>
+                <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+                  {study.patientName || t('studyManagement')}
+                </p>
               </div>
               <button 
                 onClick={() => {
@@ -480,7 +577,11 @@ const RadiologyStudies = () => {
                   setEditFormData(null);
                   setSaveError(null);
                 }} 
-                className="text-gray-400 hover:text-gray-600"
+                className={`transition-colors ${
+                  darkMode
+                    ? 'text-[#8AA2A7] hover:text-[#C1D9DD]'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
               >
                 <X className="w-6 h-6" />
               </button>
@@ -488,10 +589,16 @@ const RadiologyStudies = () => {
           </div>
 
           {saveError && (
-            <div className="p-4 bg-red-50 border-l-4 border-red-500 m-6">
+            <div className={`p-4 border-l-4 m-6 ${
+              darkMode
+                ? 'bg-red-900 bg-opacity-30 border-red-700'
+                : 'bg-red-50 border-red-500'
+            }`}>
               <div className="flex items-center">
-                <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-                <p className="text-red-700">{saveError}</p>
+                <AlertCircle className={`w-5 h-5 mr-2 ${
+                  darkMode ? 'text-red-400' : 'text-red-500'
+                }`} />
+                <p className={darkMode ? 'text-red-300' : 'text-red-700'}>{saveError}</p>
               </div>
             </div>
           )}
@@ -499,56 +606,90 @@ const RadiologyStudies = () => {
           <div className="p-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-900 mb-3">Patient Information</h3>
+                <div className={`rounded-lg p-4 ${
+                  darkMode ? 'bg-[#07181D]' : 'bg-gray-50'
+                }`}>
+                  <h3 className={`font-semibold mb-3 ${
+                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                  }`}>{t('patientInformation')}</h3>
                   <div className="space-y-3 text-sm">
                     <div>
-                      <label className="block text-gray-600 mb-1">Patient Name</label>
+                      <label className={`block mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                      }`}>{t('patientName')}</label>
                       <input
                         type="text"
                         value={editFormData.patientName || ''}
                         disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                        className={`w-full px-3 py-2 border rounded-lg cursor-not-allowed ${
+                          darkMode
+                            ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                            : 'bg-gray-100 border-gray-300 text-gray-600'
+                        }`}
                       />
                     </div>
                     <div>
-                      <label className="block text-gray-600 mb-1">MRN</label>
+                      <label className={`block mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                      }`}>{t('mrn')}</label>
                       <input
                         type="text"
                         value={editFormData.mrn || ''}
                         disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                        className={`w-full px-3 py-2 border rounded-lg cursor-not-allowed ${
+                          darkMode
+                            ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                            : 'bg-gray-100 border-gray-300 text-gray-600'
+                        }`}
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-gray-600 mb-1">Age</label>
+                        <label className={`block mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                        }`}>{t('age')}</label>
                         <input
                           type="number"
                           min="0"
                           max="120"
                           value={editFormData.age || ''}
                           disabled
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                          className={`w-full px-3 py-2 border rounded-lg cursor-not-allowed ${
+                            darkMode
+                              ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                              : 'bg-gray-100 border-gray-300 text-gray-600'
+                          }`}
                         />
                       </div>
                       <div>
-                        <label className="block text-gray-600 mb-1">Gender</label>
+                        <label className={`block mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                        }`}>{t('gender')}</label>
                         <input
                           type="text"
-                          value={editFormData.gender === 'M' ? 'Male' : editFormData.gender === 'F' ? 'Female' : 'Other'}
+                          value={editFormData.gender === 'M' ? t('male') : editFormData.gender === 'F' ? t('female') : t('other')}
                           disabled
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                          className={`w-full px-3 py-2 border rounded-lg cursor-not-allowed ${
+                            darkMode
+                              ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                              : 'bg-gray-100 border-gray-300 text-gray-600'
+                          }`}
                         />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-gray-600 mb-1">Date of Birth</label>
+                      <label className={`block mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                      }`}>{t('dateOfBirth')}</label>
                       <input
                         type="date"
                         value={editFormData.dob || ''}
                         disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600 cursor-not-allowed"
+                        className={`w-full px-3 py-2 border rounded-lg cursor-not-allowed ${
+                          darkMode
+                            ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                            : 'bg-gray-100 border-gray-300 text-gray-600'
+                        }`}
                       />
                     </div>
                   </div>
@@ -556,45 +697,73 @@ const RadiologyStudies = () => {
               </div>
 
               <div className="space-y-4">
-                <div className="bg-gray-50 rounded-lg p-4">
-                  <h3 className="font-semibold text-gray-900 mb-3">Study Details</h3>
+                <div className={`rounded-lg p-4 ${
+                  darkMode ? 'bg-[#07181D]' : 'bg-gray-50'
+                }`}>
+                  <h3 className={`font-semibold mb-3 ${
+                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                  }`}>{t('studyDetails')}</h3>
                   <div className="space-y-3 text-sm">
                     <div>
-                      <label className="block text-gray-600 mb-1">Modality</label>
+                      <label className={`block mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                      }`}>{t('modality')}</label>
                       <input
                         type="text"
                         value={editFormData.modality || ''}
                         onChange={(e) => setEditFormData({...editFormData, modality: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                            : 'border-gray-300 focus:ring-teal-500'
+                        }`}
                       />
                     </div>
                     <div>
-                      <label className="block text-gray-600 mb-1">Body Part</label>
+                      <label className={`block mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                      }`}>{t('bodyPart')}</label>
                       <input
                         type="text"
                         value={editFormData.bodyPart || ''}
                         onChange={(e) => setEditFormData({...editFormData, bodyPart: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                            : 'border-gray-300 focus:ring-teal-500'
+                        }`}
                       />
                     </div>
                     <div>
-                      <label className="block text-gray-600 mb-1">Study Description</label>
+                      <label className={`block mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                      }`}>{t('studyDescription')}</label>
                       <input
                         type="text"
                         value={editFormData.studyDescription || ''}
                         onChange={(e) => setEditFormData({...editFormData, studyDescription: e.target.value})}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                            : 'border-gray-300 focus:ring-teal-500'
+                        }`}
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-gray-600 mb-1">Duration (min)</label>
+                        <label className={`block mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                        }`}>{t('durationMin')}</label>
                         <input
                           type="number"
                           min="0"
                           value={editFormData.duration || 0}
                           onChange={(e) => setEditFormData({...editFormData, duration: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                          className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                            darkMode
+                              ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                              : 'border-gray-300 focus:ring-teal-500'
+                          }`}
                         />
                       </div>
                       <div className="flex items-end">
@@ -603,9 +772,13 @@ const RadiologyStudies = () => {
                             type="checkbox"
                             checked={editFormData.contrast || false}
                             onChange={(e) => setEditFormData({...editFormData, contrast: e.target.checked})}
-                            className="w-4 h-4 text-teal-600 border-gray-300 rounded focus:ring-teal-500"
+                            className={`w-4 h-4 rounded focus:ring-2 transition-colors ${
+                              darkMode
+                                ? 'text-[#79CAC2] border-[#133037] focus:ring-[#79CAC2]'
+                                : 'text-teal-600 border-gray-300 focus:ring-teal-500'
+                            }`}
                           />
-                          <span className="text-gray-600">Contrast</span>
+                          <span className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{t('contrast')}</span>
                         </label>
                       </div>
                     </div>
@@ -616,71 +789,105 @@ const RadiologyStudies = () => {
 
             <div className="mt-6 space-y-4">
               <div>
-                <label className="block text-gray-600 mb-1">Preparation Instructions</label>
+                <label className={`block mb-1 ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>{t('preparationInstructions')}</label>
                 <textarea
                   value={editFormData.preparation || ''}
                   onChange={(e) => setEditFormData({...editFormData, preparation: e.target.value})}
                   rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 focus:ring-teal-500'
+                  }`}
                 />
               </div>
               <div>
-                <label className="block text-gray-600 mb-1">Notes</label>
+                <label className={`block mb-1 ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>{t('notes')}</label>
                 <textarea
                   value={editFormData.notes || ''}
                   onChange={(e) => setEditFormData({...editFormData, notes: e.target.value})}
                   rows="3"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 focus:ring-teal-500'
+                  }`}
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-gray-600 mb-1">Order Date</label>
+                  <label className={`block mb-1 ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                  }`}>{t('orderDate')}</label>
                   <input
                     type="datetime-local"
                     value={editFormData.orderDate || ''}
                     onChange={(e) => setEditFormData({...editFormData, orderDate: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                      darkMode
+                        ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                        : 'border-gray-300 focus:ring-teal-500'
+                    }`}
                   />
                 </div>
                 <div>
-                  <label className="block text-gray-600 mb-1">Scheduled Date</label>
+                  <label className={`block mb-1 ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                  }`}>{t('scheduledDate')}</label>
                   <input
                     type="datetime-local"
                     value={editFormData.scheduledDate || ''}
                     onChange={(e) => setEditFormData({...editFormData, scheduledDate: e.target.value})}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                      darkMode
+                        ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                        : 'border-gray-300 focus:ring-teal-500'
+                    }`}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
+            <div className={`flex justify-end space-x-3 mt-6 pt-6 border-t ${
+              darkMode ? 'border-[#133037]' : 'border-gray-200'
+            }`}>
               <button
                 onClick={() => {
                   setSelectedStudy(null);
                   setEditFormData(null);
                   setSaveError(null);
                 }}
-                className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50"
+                className={`border px-4 py-2 rounded-lg transition-colors ${
+                  darkMode
+                    ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
                 disabled={savingStudy}
               >
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 onClick={handleSaveStudy}
                 disabled={savingStudy}
-                className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`px-4 py-2 rounded-lg flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                  darkMode
+                    ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                    : 'bg-teal-500 hover:bg-teal-600 text-white'
+                }`}
               >
                 {savingStudy ? (
                   <>
                     <Loader className="w-4 h-4 animate-spin" />
-                    <span>Saving...</span>
+                    <span>{t('saving')}</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle className="w-4 h-4" />
-                    <span>Save Changes</span>
+                    <span>{t('saveChanges')}</span>
                   </>
                 )}
               </button>
@@ -694,42 +901,82 @@ const RadiologyStudies = () => {
   // Info Boxes Component (for sidebar)
   const InfoBoxes = () => (
     <div className="space-y-4">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+      <div className={`rounded-lg shadow-sm border p-4 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-100'
+      }`}>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-gray-600 text-xs">Today's Studies</p>
-          <Calendar className="w-4 h-4 text-blue-600" />
+          <p className={`text-xs ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+          }`}>{t('todaysStudies')}</p>
+          <Calendar className={`w-4 h-4 ${
+            darkMode ? 'text-blue-400' : 'text-blue-600'
+          }`} />
         </div>
-        <p className="text-2xl font-bold text-blue-600">
+        <p className={`text-2xl font-bold ${
+          darkMode ? 'text-blue-400' : 'text-blue-600'
+        }`}>
           {studyStats.scheduledToday || 0}
         </p>
       </div>
       
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+      <div className={`rounded-lg shadow-sm border p-4 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-100'
+      }`}>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-gray-600 text-xs">STAT Studies</p>
-          <AlertCircle className="w-4 h-4 text-red-600" />
+          <p className={`text-xs ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+          }`}>{t('statStudies')}</p>
+          <AlertCircle className={`w-4 h-4 ${
+            darkMode ? 'text-red-400' : 'text-red-600'
+          }`} />
         </div>
-        <p className="text-2xl font-bold text-red-600">
+        <p className={`text-2xl font-bold ${
+          darkMode ? 'text-red-400' : 'text-red-600'
+        }`}>
           {studyStats.statPriority || studyStats.priorityCounts?.STAT || 0}
         </p>
       </div>
       
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+      <div className={`rounded-lg shadow-sm border p-4 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-100'
+      }`}>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-gray-600 text-xs">In Progress</p>
-          <Clock className="w-4 h-4 text-yellow-600" />
+          <p className={`text-xs ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+          }`}>{t('inProgress')}</p>
+          <Clock className={`w-4 h-4 ${
+            darkMode ? 'text-yellow-400' : 'text-yellow-600'
+          }`} />
         </div>
-        <p className="text-2xl font-bold text-yellow-600">
+        <p className={`text-2xl font-bold ${
+          darkMode ? 'text-yellow-400' : 'text-yellow-600'
+        }`}>
           {studyStats.statusCounts?.in_progress || 0}
         </p>
       </div>
       
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+      <div className={`rounded-lg shadow-sm border p-4 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-100'
+      }`}>
         <div className="flex items-center justify-between mb-2">
-          <p className="text-gray-600 text-xs">Completed</p>
-          <CheckCircle className="w-4 h-4 text-green-600" />
+          <p className={`text-xs ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+          }`}>{t('completed')}</p>
+          <CheckCircle className={`w-4 h-4 ${
+            darkMode ? 'text-green-400' : 'text-green-600'
+          }`} />
         </div>
-        <p className="text-2xl font-bold text-green-600">
+        <p className={`text-2xl font-bold ${
+          darkMode ? 'text-green-400' : 'text-green-600'
+        }`}>
           {studyStats.statusCounts?.completed || 0}
         </p>
       </div>
@@ -737,7 +984,9 @@ const RadiologyStudies = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       <RadiologyHeader />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -751,21 +1000,33 @@ const RadiologyStudies = () => {
           {/* Main Content Area */}
           <div className="flex-1">
             {/* Header */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-6">
+            <div className={`rounded-lg shadow-sm border p-6 mb-6 ${
+              darkMode
+                ? 'bg-[#0D2026] border-[#133037]'
+                : 'bg-white border-gray-100'
+            }`}>
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
             <div className="flex items-center space-x-4">
-              <div className="flex bg-gray-100 rounded-lg p-1">
+              <div className={`flex rounded-lg p-1 ${
+                darkMode ? 'bg-[#07181D]' : 'bg-gray-100'
+              }`}>
                 {[
-                  { key: 'all', label: 'All', count: studyStats.total || 0 },
-                  { key: 'scheduled', label: 'Scheduled', count: studyStats.statusCounts?.scheduled || 0 },
-                  { key: 'in_progress', label: 'In Progress', count: studyStats.statusCounts?.in_progress || 0 },
-                  { key: 'completed', label: 'Completed', count: studyStats.statusCounts?.completed || 0 }
+                  { key: 'all', label: t('all'), count: studyStats.total || 0 },
+                  { key: 'scheduled', label: t('scheduled'), count: studyStats.statusCounts?.scheduled || 0 },
+                  { key: 'in_progress', label: t('inProgress'), count: studyStats.statusCounts?.in_progress || 0 },
+                  { key: 'completed', label: t('completed'), count: studyStats.statusCounts?.completed || 0 }
                 ].map(tab => (
                   <button
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
                     className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                      activeTab === tab.key ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'
+                      activeTab === tab.key
+                        ? darkMode
+                          ? 'bg-[#133037] text-[#79CAC2] shadow-sm'
+                          : 'bg-white text-teal-700 shadow-sm'
+                        : darkMode
+                          ? 'text-[#C1D9DD] hover:text-[#F5FEFF]'
+                          : 'text-gray-600 hover:text-gray-900'
                     }`}
                   >
                     {tab.label} ({tab.count})
@@ -776,10 +1037,14 @@ const RadiologyStudies = () => {
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setShowUploadModal(true)}
-                  className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2"
+                  className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                    darkMode
+                      ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                      : 'bg-teal-500 hover:bg-teal-600 text-white'
+                  }`}
                 >
                   <Upload className="w-4 h-4" />
-                  <span>Upload DICOM</span>
+                  <span>{t('uploadDICOM')}</span>
                 </button>
               </div>
             </div>
@@ -787,11 +1052,17 @@ const RadiologyStudies = () => {
 
           <div className="mt-4 flex flex-col lg:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+              <Search className={`w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+              }`} />
               <input
                 type="text"
-                placeholder="Search by patient name, MRN, accession number..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                placeholder={t('searchByPatientNameMRNAccessionNumber')}
+                className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                  darkMode
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                    : 'border-gray-300 focus:ring-teal-500'
+                }`}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -799,49 +1070,69 @@ const RadiologyStudies = () => {
             
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              className={`flex items-center space-x-2 px-4 py-2 border rounded-lg transition-colors ${
+                darkMode
+                  ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                  : 'border-gray-300 hover:bg-gray-50'
+              }`}
             >
               <Filter className="w-4 h-4" />
-              <span>Filters</span>
+              <span>{t('filters')}</span>
               {showFilters ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </button>
           </div>
 
           {showFilters && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div className={`mt-4 p-4 rounded-lg border ${
+              darkMode
+                ? 'bg-[#07181D] border-[#133037]'
+                : 'bg-gray-50 border-gray-200'
+            }`}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <select
                   value={filters.modality}
                   onChange={(e) => setFilters(prev => ({ ...prev, modality: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'bg-[#0D2026] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 focus:ring-teal-500'
+                  }`}
                 >
-                  <option value="all">All Modalities</option>
+                  <option value="all">{t('allModalities')}</option>
                   <option value="CT">CT</option>
                   <option value="MRI">MRI</option>
-                  <option value="XR">X-Ray</option>
-                  <option value="US">Ultrasound</option>
+                  <option value="XR">{t('xRay')}</option>
+                  <option value="US">{t('ultrasound')}</option>
                 </select>
                 
                 <select
                   value={filters.status}
                   onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'bg-[#0D2026] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 focus:ring-teal-500'
+                  }`}
                 >
-                  <option value="all">All Status</option>
-                  <option value="scheduled">Scheduled</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="completed">Completed</option>
+                  <option value="all">{t('allStatus')}</option>
+                  <option value="scheduled">{t('scheduled')}</option>
+                  <option value="in_progress">{t('inProgress')}</option>
+                  <option value="completed">{t('completed')}</option>
                 </select>
                 
                 <select
                   value={filters.priority}
                   onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'bg-[#0D2026] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 focus:ring-teal-500'
+                  }`}
                 >
-                  <option value="all">All Priorities</option>
+                  <option value="all">{t('allPriorities')}</option>
                   <option value="STAT">STAT</option>
-                  <option value="Urgent">Urgent</option>
-                  <option value="Routine">Routine</option>
+                  <option value="Urgent">{t('urgent')}</option>
+                  <option value="Routine">{t('routine')}</option>
                 </select>
               </div>
             </div>
@@ -851,19 +1142,33 @@ const RadiologyStudies = () => {
         {/* Loading State */}
         {loading && (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500"></div>
-            <span className="ml-3 text-gray-600">Loading studies...</span>
+            <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${
+              darkMode ? 'border-[#79CAC2]' : 'border-teal-500'
+            }`}></div>
+            <span className={`ml-3 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+            }`}>{t('loadingStudies')}</span>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className={`border rounded-lg p-4 mb-6 ${
+            darkMode
+              ? 'bg-red-900 bg-opacity-30 border-red-700'
+              : 'bg-red-50 border-red-200'
+          }`}>
             <div className="flex items-center">
-              <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
+              <AlertCircle className={`w-5 h-5 mr-2 ${
+                darkMode ? 'text-red-400' : 'text-red-500'
+              }`} />
               <div>
-                <h3 className="text-sm font-medium text-red-800">Error loading studies</h3>
-                <p className="text-sm text-red-600 mt-1">{error}</p>
+                <h3 className={`text-sm font-medium ${
+                  darkMode ? 'text-red-300' : 'text-red-800'
+                }`}>{t('errorLoadingStudies')}</h3>
+                <p className={`text-sm mt-1 ${
+                  darkMode ? 'text-red-300' : 'text-red-600'
+                }`}>{error}</p>
               </div>
             </div>
           </div>
@@ -871,21 +1176,35 @@ const RadiologyStudies = () => {
 
                 {/* Studies List */}
             {!loading && !error && (
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+              <div className={`rounded-lg shadow-sm border p-6 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037]'
+                  : 'bg-white border-gray-100'
+              }`}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-900">
-                {activeTab === 'all' ? 'All Studies' : `${activeTab.replace('_', ' ')} Studies`}
+              <h2 className={`text-lg font-semibold ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>
+                {activeTab === 'all' ? t('allStudies') : `${t(activeTab.replace('_', ''))} ${t('studies')}`}
               </h2>
-              <span className="text-gray-500 text-sm">
-                {filteredStudies.length} of {pagination.total} studies
+              <span className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>
+                {filteredStudies.length} {t('of')} {pagination.total} {t('studies')}
               </span>
             </div>
 
             {filteredStudies.length === 0 ? (
               <div className="text-center py-12">
-                <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500 font-medium">No studies found</p>
-                <p className="text-gray-400 text-sm">Try adjusting your filters or search terms</p>
+                <FileText className={`w-12 h-12 mx-auto mb-4 ${
+                  darkMode ? 'text-[#133037]' : 'text-gray-400'
+                }`} />
+                <p className={`font-medium ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-500'
+                }`}>{t('noStudiesFound')}</p>
+                <p className={`text-sm ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                }`}>{t('tryAdjustingYourFiltersOrSearchTerms')}</p>
               </div>
             ) : (
               <>
@@ -897,27 +1216,41 @@ const RadiologyStudies = () => {
                 
                 {/* Pagination */}
                 {pagination.total > pagination.size && (
-                  <div className="flex items-center justify-between mt-6 pt-6 border-t border-gray-200">
-                    <div className="text-sm text-gray-500">
-                      Showing {((pagination.page - 1) * pagination.size) + 1} to {Math.min(pagination.page * pagination.size, pagination.total)} of {pagination.total} studies
+                  <div className={`flex items-center justify-between mt-6 pt-6 border-t ${
+                    darkMode ? 'border-[#133037]' : 'border-gray-200'
+                  }`}>
+                    <div className={`text-sm ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                    }`}>
+                      {t('showing')} {((pagination.page - 1) * pagination.size) + 1} {t('to')} {Math.min(pagination.page * pagination.size, pagination.total)} {t('of')} {pagination.total} {t('studies')}
                     </div>
                     <div className="flex items-center space-x-2">
                       <button
                         onClick={() => setPagination(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
                         disabled={pagination.page === 1}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        className={`px-3 py-2 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                          darkMode
+                            ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
                       >
-                        Previous
+                        {t('previous')}
                       </button>
-                      <span className="px-3 py-2 text-sm text-gray-700">
-                        Page {pagination.page} of {Math.ceil(pagination.total / pagination.size)}
+                      <span className={`px-3 py-2 text-sm ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                      }`}>
+                        {t('page')} {pagination.page} {t('of')} {Math.ceil(pagination.total / pagination.size)}
                       </span>
                       <button
                         onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
                         disabled={pagination.page >= Math.ceil(pagination.total / pagination.size)}
-                        className="px-3 py-2 border border-gray-300 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                        className={`px-3 py-2 border rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                          darkMode
+                            ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                            : 'border-gray-300 hover:bg-gray-50'
+                        }`}
                       >
-                        Next
+                        {t('next')}
                       </button>
                     </div>
                   </div>
@@ -932,12 +1265,20 @@ const RadiologyStudies = () => {
             {/* Upload DICOM Modal */}
             {showUploadModal && (
               <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
-                  <div className="p-6 border-b border-gray-200">
+                <div className={`rounded-lg shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto ${
+                  darkMode ? 'bg-[#0D2026]' : 'bg-white'
+                }`}>
+                  <div className={`p-6 border-b ${
+                    darkMode ? 'border-[#133037]' : 'border-gray-200'
+                  }`}>
                     <div className="flex items-center justify-between">
                 <div>
-                  <h2 className="text-xl font-bold text-gray-900">Upload DICOM Study</h2>
-                  <p className="text-gray-600 text-sm mt-1">Upload DICOM files (ZIP or single file) from CD or folder</p>
+                  <h2 className={`text-xl font-bold ${
+                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                  }`}>{t('uploadDICOMStudy')}</h2>
+                  <p className={`text-sm mt-1 ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                  }`}>{t('uploadDICOMFilesZIPOrSingleFileFromCDOrFolder')}</p>
                 </div>
                 <button 
                   onClick={() => {
@@ -956,7 +1297,11 @@ const RadiologyStudies = () => {
                     setPatientSearchResults([]);
                     setShowPatientDropdown(false);
                   }} 
-                  className="text-gray-400 hover:text-gray-600"
+                  className={`transition-colors ${
+                    darkMode
+                      ? 'text-[#8AA2A7] hover:text-[#C1D9DD]'
+                      : 'text-gray-400 hover:text-gray-600'
+                  }`}
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -965,10 +1310,18 @@ const RadiologyStudies = () => {
 
                   <div className="p-6">
               {uploadError && (
-                <div className="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className={`mb-4 border rounded-lg p-4 ${
+                  darkMode
+                    ? 'bg-red-900 bg-opacity-30 border-red-700'
+                    : 'bg-red-50 border-red-200'
+                }`}>
                   <div className="flex items-center">
-                    <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-                    <p className="text-sm text-red-800">{uploadError}</p>
+                    <AlertCircle className={`w-5 h-5 mr-2 ${
+                      darkMode ? 'text-red-400' : 'text-red-500'
+                    }`} />
+                    <p className={`text-sm ${
+                      darkMode ? 'text-red-300' : 'text-red-800'
+                    }`}>{uploadError}</p>
                   </div>
                 </div>
               )}
@@ -976,11 +1329,11 @@ const RadiologyStudies = () => {
               <form onSubmit={async (e) => {
                 e.preventDefault();
                 if (!uploadForm.file) {
-                  setUploadError('Please select a file');
+                  setUploadError(t('pleaseSelectAFile'));
                   return;
                 }
                 if (!uploadForm.patient_id) {
-                  setUploadError('Please enter patient ID');
+                  setUploadError(t('pleaseEnterPatientID'));
                   return;
                 }
 
@@ -1026,15 +1379,17 @@ const RadiologyStudies = () => {
                     file: null
                   });
                 } catch (err) {
-                  setUploadError(err.message || 'Failed to upload DICOM study');
+                  setUploadError(err.message || t('failedToUploadDICOMStudy'));
                 } finally {
                   setUploading(false);
                 }
               }}>
                 <div className="space-y-4">
                   <div className="relative">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Patient <span className="text-red-500">*</span>
+                    <label className={`block text-sm font-medium mb-1 ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>
+                      {t('patient')} <span className="text-red-500">*</span>
                     </label>
                     <div className="relative">
                       <input
@@ -1072,33 +1427,57 @@ const RadiologyStudies = () => {
                           // Delay to allow click on dropdown item
                           setTimeout(() => setShowPatientDropdown(false), 200);
                         }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                        placeholder="Search by name, ID, phone, or email"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                            : 'border-gray-300 focus:ring-teal-500'
+                        }`}
+                        placeholder={t('searchByNameIDPhoneOrEmail')}
                       />
                       {searchingPatients && (
                         <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                          <Loader className="w-4 h-4 animate-spin text-gray-400" />
+                          <Loader className={`w-4 h-4 animate-spin ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                          }`} />
                         </div>
                       )}
                       {showPatientDropdown && patientSearchResults.length > 0 && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                        <div className={`absolute z-10 w-full mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto ${
+                          darkMode
+                            ? 'bg-[#0D2026] border-[#133037]'
+                            : 'bg-white border-gray-300'
+                        }`}>
                           {patientSearchResults.map((patient) => (
                             <div
                               key={patient.id}
                               onClick={() => {
                                 setUploadForm(prev => ({ ...prev, patient_id: patient.id }));
-                                setPatientSearchQuery(patient.fullName || `Patient ${patient.id.substring(0, 8)}`);
+                                setPatientSearchQuery(patient.fullName || `${t('patient')} ${patient.id.substring(0, 8)}`);
                                 setShowPatientDropdown(false);
                               }}
-                              className="px-4 py-3 hover:bg-teal-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                              className={`px-4 py-3 cursor-pointer border-b last:border-b-0 transition-colors ${
+                                darkMode
+                                  ? 'hover:bg-[#133037] border-[#133037]'
+                                  : 'hover:bg-teal-50 border-gray-100'
+                              }`}
                             >
                               <div className="flex items-center justify-between">
                                 <div className="flex-1">
-                                  <div className="font-medium text-gray-900">{patient.fullName}</div>
-                                  <div className="text-sm text-gray-500 mt-1">
-                                    {patient.phone && <span className="flex items-center"><Phone className="w-3 h-3 mr-1" />{patient.phone}</span>}
-                                    {patient.email && <span className="flex items-center mt-1"><Mail className="w-3 h-3 mr-1" />{patient.email}</span>}
-                                    <span className="text-xs text-gray-400 mt-1 block">ID: {patient.id.substring(0, 8)}...</span>
+                                  <div className={`font-medium ${
+                                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                                  }`}>{patient.fullName}</div>
+                                  <div className={`text-sm mt-1 ${
+                                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                                  }`}>
+                                    {patient.phone && <span className="flex items-center"><Phone className={`w-3 h-3 mr-1 ${
+                                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                                    }`} />{patient.phone}</span>}
+                                    {patient.email && <span className="flex items-center mt-1"><Mail className={`w-3 h-3 mr-1 ${
+                                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                                    }`} />{patient.email}</span>}
+                                    <span className={`text-xs mt-1 block ${
+                                      darkMode ? 'text-[#133037]' : 'text-gray-400'
+                                    }`}>{t('id')}: {patient.id.substring(0, 8)}...</span>
                                   </div>
                                 </div>
                               </div>
@@ -1107,8 +1486,12 @@ const RadiologyStudies = () => {
                         </div>
                       )}
                       {showPatientDropdown && patientSearchResults.length === 0 && patientSearchQuery.length >= 2 && !searchingPatients && (
-                        <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg p-4 text-center text-gray-500">
-                          No patients found
+                        <div className={`absolute z-10 w-full mt-1 border rounded-lg shadow-lg p-4 text-center ${
+                          darkMode
+                            ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                            : 'bg-white border-gray-300 text-gray-500'
+                        }`}>
+                          {t('noPatientsFound')}
                         </div>
                       )}
                     </div>
@@ -1116,13 +1499,19 @@ const RadiologyStudies = () => {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Modality</label>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                      }`}>{t('modality')}</label>
                       <select
                         value={uploadForm.modality}
                         onChange={(e) => setUploadForm(prev => ({ ...prev, modality: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                            : 'border-gray-300 focus:ring-teal-500'
+                        }`}
                       >
-                        <option value="">Select modality</option>
+                        <option value="">{t('selectModality')}</option>
                         <option value="CT">CT</option>
                         <option value="MR">MRI</option>
                         <option value="CR">CR</option>
@@ -1133,66 +1522,102 @@ const RadiologyStudies = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Body Part</label>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                      }`}>{t('bodyPart')}</label>
                       <input
                         type="text"
                         value={uploadForm.body_part}
                         onChange={(e) => setUploadForm(prev => ({ ...prev, body_part: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
-                        placeholder="e.g., Chest, Head, Abdomen"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                            : 'border-gray-300 focus:ring-teal-500'
+                        }`}
+                        placeholder={t('egChestHeadAbdomen')}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <label className={`block text-sm font-medium mb-1 ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('description')}</label>
                     <textarea
                       value={uploadForm.description}
                       onChange={(e) => setUploadForm(prev => ({ ...prev, description: e.target.value }))}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                        darkMode
+                          ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                          : 'border-gray-300 focus:ring-teal-500'
+                      }`}
                       rows="3"
-                      placeholder="Study description"
+                      placeholder={t('studyDescription')}
                     />
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Source</label>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                      }`}>{t('source')}</label>
                       <select
                         value={uploadForm.source}
                         onChange={(e) => setUploadForm(prev => ({ ...prev, source: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                            : 'border-gray-300 focus:ring-teal-500'
+                        }`}
                       >
-                        <option value="external_cd">External CD</option>
-                        <option value="external_clinic">External Clinic</option>
-                        <option value="internal">Internal</option>
+                        <option value="external_cd">{t('externalCD')}</option>
+                        <option value="external_clinic">{t('externalClinic')}</option>
+                        <option value="internal">{t('internal')}</option>
                       </select>
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Study Date</label>
+                      <label className={`block text-sm font-medium mb-1 ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                      }`}>{t('studyDate')}</label>
                       <input
                         type="date"
                         value={uploadForm.study_date}
                         onChange={(e) => setUploadForm(prev => ({ ...prev, study_date: e.target.value }))}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                            : 'border-gray-300 focus:ring-teal-500'
+                        }`}
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      DICOM File <span className="text-red-500">*</span>
+                    <label className={`block text-sm font-medium mb-1 ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>
+                      {t('dicomFile')} <span className="text-red-500">*</span>
                     </label>
                     <div
                       onClick={() => fileInputRef.current?.click()}
-                      className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-teal-500 transition-colors"
+                      className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
+                        darkMode
+                          ? 'border-[#133037] hover:border-[#79CAC2]'
+                          : 'border-gray-300 hover:border-teal-500'
+                      }`}
                     >
                       {uploadForm.file ? (
                         <div>
-                          <FileText className="w-12 h-12 text-teal-500 mx-auto mb-2" />
-                          <p className="text-sm font-medium text-gray-900">{uploadForm.file.name}</p>
-                          <p className="text-xs text-gray-500 mt-1">
+                          <FileText className={`w-12 h-12 mx-auto mb-2 ${
+                            darkMode ? 'text-[#79CAC2]' : 'text-teal-500'
+                          }`} />
+                          <p className={`text-sm font-medium ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{uploadForm.file.name}</p>
+                          <p className={`text-xs mt-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>
                             {(uploadForm.file.size / 1024 / 1024).toFixed(2)} MB
                           </p>
                           <button
@@ -1201,19 +1626,29 @@ const RadiologyStudies = () => {
                               e.stopPropagation();
                               setUploadForm(prev => ({ ...prev, file: null }));
                             }}
-                            className="mt-2 text-sm text-red-600 hover:text-red-800"
+                            className={`mt-2 text-sm transition-colors ${
+                              darkMode
+                                ? 'text-red-400 hover:text-red-300'
+                                : 'text-red-600 hover:text-red-800'
+                            }`}
                           >
-                            Remove
+                            {t('remove')}
                           </button>
                         </div>
                       ) : (
                         <div>
-                          <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                          <p className="text-sm text-gray-600">
-                            Click to upload or drag and drop
+                          <Upload className={`w-12 h-12 mx-auto mb-2 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                          }`} />
+                          <p className={`text-sm ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                          }`}>
+                            {t('clickToUploadOrDragAndDrop')}
                           </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            ZIP file or DICOM files (.dcm, .dicom)
+                          <p className={`text-xs mt-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>
+                            {t('zipFileOrDICOMFiles')}
                           </p>
                         </div>
                       )}
@@ -1233,7 +1668,9 @@ const RadiologyStudies = () => {
                   </div>
                 </div>
 
-                <div className="flex justify-end space-x-3 mt-6 pt-6 border-t border-gray-200">
+                <div className={`flex justify-end space-x-3 mt-6 pt-6 border-t ${
+                  darkMode ? 'border-[#133037]' : 'border-gray-200'
+                }`}>
                   <button
                     type="button"
                     onClick={() => {
@@ -1252,25 +1689,33 @@ const RadiologyStudies = () => {
                       setPatientSearchResults([]);
                       setShowPatientDropdown(false);
                     }}
-                    className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50"
+                    className={`border px-4 py-2 rounded-lg transition-colors ${
+                      darkMode
+                        ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
                     disabled={uploading}
                   >
-                    Cancel
+                    {t('cancel')}
                   </button>
                   <button
                     type="submit"
                     disabled={uploading || !uploadForm.file || !uploadForm.patient_id}
-                    className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className={`px-4 py-2 rounded-lg flex items-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                      darkMode
+                        ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                        : 'bg-teal-500 hover:bg-teal-600 text-white'
+                    }`}
                   >
                     {uploading ? (
                       <>
                         <Loader className="w-4 h-4 animate-spin" />
-                        <span>Uploading...</span>
+                        <span>{t('uploading')}</span>
                       </>
                     ) : (
                       <>
                         <Upload className="w-4 h-4" />
-                        <span>Upload DICOM</span>
+                        <span>{t('uploadDICOM')}</span>
                       </>
                     )}
                   </button>

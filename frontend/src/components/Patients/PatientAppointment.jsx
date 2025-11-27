@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Navbar from './Navbar';
 import { 
   Calendar,
@@ -11,15 +12,37 @@ import {
   X
 } from 'lucide-react';
 import DoctorSearchModal from './DoctorSearchModal';
-import { patientAppointmentsAPI, patientHospitalsAPI } from '../../services/apiService';
+import { patientAppointmentsAPI, patientHospitalsAPI, patientRecordsAPI } from '../../services/apiService';
+import { handlePatientAuthError } from '../../utils/patientAuth';
 
 const PatientAppointment = () => {
+  const { t } = useTranslation();
   const location = useLocation();
+  const navigate = useNavigate();
   const today = new Date();
   const [currentDate, setCurrentDate] = useState(new Date(today.getFullYear(), today.getMonth(), 1)); // Current month
   const [showDoctorModal, setShowDoctorModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount and when darkMode changes
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
   const [formData, setFormData] = useState({
     hospital: '',
     appointmentDate: '',
@@ -42,18 +65,28 @@ const PatientAppointment = () => {
   const [appointmentToCancel, setAppointmentToCancel] = useState(null);
 
   const monthNames = [
-    'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
-    'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'
+    t('patientDashboard.monthJanuary'),
+    t('patientDashboard.monthFebruary'),
+    t('patientDashboard.monthMarch'),
+    t('patientDashboard.monthApril'),
+    t('patientDashboard.monthMay'),
+    t('patientDashboard.monthJune'),
+    t('patientDashboard.monthJuly'),
+    t('patientDashboard.monthAugust'),
+    t('patientDashboard.monthSeptember'),
+    t('patientDashboard.monthOctober'),
+    t('patientDashboard.monthNovember'),
+    t('patientDashboard.monthDecember')
   ];
 
   const [hospitals, setHospitals] = useState([]);
 
   const appointmentTypes = [
-    'General Consultation',
-    'Yearly Check Up',
-    'Follow-up Visit',
-    'Emergency Consultation',
-    'Specialist Consultation'
+    t('patientAppointment.typeGeneralConsultation'),
+    t('patientAppointment.typeYearlyCheckUp'),
+    t('patientAppointment.typeFollowUpVisit'),
+    t('patientAppointment.typeEmergencyConsultation'),
+    t('patientAppointment.typeSpecialistConsultation')
   ];
 
   const getDaysInMonth = (date) => {
@@ -96,19 +129,19 @@ const PatientAppointment = () => {
     
     // Frontend validation
     if (!formData.hospital) {
-      setError('Please select a hospital');
+      setError(t('patientAppointment.errorSelectHospital'));
       return;
     }
     if (!formData.appointmentDate) {
-      setError('Please select an appointment date');
+      setError(t('patientAppointment.errorSelectDate'));
       return;
     }
     if (!formData.appointmentTime) {
-      setError('Please select an appointment time');
+      setError(t('patientAppointment.errorSelectTime'));
       return;
     }
     if (!formData.appointmentType) {
-      setError('Please select an appointment type');
+      setError(t('patientAppointment.errorSelectType'));
       return;
     }
     
@@ -125,14 +158,14 @@ const PatientAppointment = () => {
       };
       const res = await patientAppointmentsAPI.create(payload);
       // success toast / popup
-      window.alert('Appointment booked successfully');
+      window.alert(t('patientAppointment.successBooked'));
       // refresh lists
       await fetchAppointments();
       // reset form
       setFormData({ hospital: '', appointmentDate: '', appointmentTime: '', appointmentType: '', additionalNote: '', doctor_id: '' });
       setError(''); // Clear any previous errors
     } catch (err) {
-      setError(err?.message || 'Failed to book appointment');
+      setError(err?.message || t('patientAppointment.errorBookFailed'));
     } finally {
       setLoading(false);
     }
@@ -190,7 +223,7 @@ const PatientAppointment = () => {
         return; // Redirected, exit early
       }
       
-      setError(e?.message || 'Failed to load appointments');
+      setError(e?.message || t('patientAppointment.errorLoadFailed'));
     } finally {
       setLoading(false);
     }
@@ -222,9 +255,9 @@ const PatientAppointment = () => {
       await fetchAppointments();
       setShowCancelModal(false);
       setAppointmentToCancel(null);
-      window.alert('Appointment cancelled successfully');
+      window.alert(t('patientAppointment.successCancelled'));
     } catch (e) {
-      setError(e?.message || 'Failed to cancel appointment');
+      setError(e?.message || t('patientAppointment.errorCancelFailed'));
     } finally {
       setLoading(false);
     }
@@ -241,7 +274,7 @@ const PatientAppointment = () => {
       await patientAppointmentsAPI.update(appointmentId, { status: 'noshow' });
       await fetchAppointments();
     } catch (e) {
-      setError(e?.message || 'Failed to mark as no-show');
+      setError(e?.message || t('patientAppointment.errorNoShowFailed'));
     } finally {
       setLoading(false);
     }
@@ -281,7 +314,7 @@ const PatientAppointment = () => {
 
   const handleReschedule = async () => {
     if (!rescheduleAppointment || !rescheduleData.appointmentDate || !rescheduleData.appointmentTime) {
-      setError('Please provide both date and time');
+      setError(t('patientAppointment.errorProvideDateAndTime'));
       return;
     }
     
@@ -295,7 +328,65 @@ const PatientAppointment = () => {
       await fetchAppointments();
       closeRescheduleModal();
     } catch (e) {
-      setError(e?.message || 'Failed to reschedule');
+      setError(e?.message || t('patientAppointment.errorRescheduleFailed'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSummaryClick = async (appointment) => {
+    try {
+      setLoading(true);
+      setError('');
+      
+      // Parse appointment date from format "DD.MM.YYYY" to "YYYY-MM-DD" for API search
+      let searchDate = '';
+      if (appointment.date) {
+        const [day, month, year] = appointment.date.split('.');
+        if (day && month && year) {
+          searchDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+      }
+      
+      // Fetch records to find the one associated with this appointment
+      const records = await patientRecordsAPI.list({ recordType: 'all', page: 1, size: 100 });
+      const recordsList = records?.items || records || [];
+      
+      // Find record matching the appointment date
+      let matchingRecord = null;
+      if (searchDate) {
+        matchingRecord = recordsList.find(record => {
+          // Check if record date matches appointment date
+          const recordDate = record.date || record.record_date;
+          if (!recordDate) return false;
+          
+          // Normalize record date to YYYY-MM-DD format
+          let normalizedRecordDate = '';
+          if (recordDate.includes('.')) {
+            const [d, m, y] = recordDate.split('.');
+            normalizedRecordDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+          } else if (recordDate.includes('-')) {
+            normalizedRecordDate = recordDate.split('T')[0]; // Remove time if present
+          } else {
+            normalizedRecordDate = recordDate;
+          }
+          
+          return normalizedRecordDate === searchDate || normalizedRecordDate.startsWith(searchDate);
+        });
+      }
+      
+      // If found, navigate to record summary
+      if (matchingRecord && matchingRecord.id) {
+        navigate(`/patient/records/${matchingRecord.id}`, { state: { record: matchingRecord } });
+      } else {
+        // If no record found, show error or navigate to records page with date filter
+        setError(t('patientAppointment.noRecordFound'));
+        // Optionally navigate to records page
+        // navigate('/patient/records');
+      }
+    } catch (e) {
+      console.error('Error fetching record for appointment:', e);
+      setError(e?.message || t('patientAppointment.errorLoadRecord'));
     } finally {
       setLoading(false);
     }
@@ -307,41 +398,49 @@ const PatientAppointment = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
+    <div className={`min-h-screen bg-gradient-to-br ${darkMode ? 'from-gray-900 to-gray-800' : 'from-emerald-50 to-teal-50'}`}>
       {/* Navigation Bar */}
       <Navbar />
 
       <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
         {error && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">{error}</div>
+          <div className={`mb-4 p-3 rounded-lg ${darkMode ? 'bg-red-900/30 border-red-700 text-red-300' : 'bg-red-100 border-red-400 text-red-700'} border`}>{error}</div>
         )}
         <div className="flex gap-6">
           {/* Left Sidebar - Calendar */}
           <div className="w-80 flex-shrink-0">
-            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+            <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-4 sm:p-6`}>
               <div className="flex items-center justify-between mb-4 sm:mb-6">
                 <button
                   onClick={() => navigateMonth(-1)}
-                  className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  aria-label="Previous month"
+                  className={`p-1 sm:p-2 rounded-full transition-colors ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                  aria-label={t('patientDashboard.previousMonth')}
                 >
-                  <ChevronLeft className="h-4 w-4 text-gray-600" />
+                  <ChevronLeft className={`h-4 w-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
                 </button>
-                <h2 className="text-base sm:text-lg font-semibold text-gray-800">
+                <h2 className={`text-base sm:text-lg font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
                   {monthNames[currentDate.getMonth()]}
                 </h2>
                 <button
                   onClick={() => navigateMonth(1)}
-                  className="p-1 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  aria-label="Next month"
+                  className={`p-1 sm:p-2 rounded-full transition-colors ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                  aria-label={t('patientDashboard.nextMonth')}
                 >
-                  <ChevronRight className="h-4 w-4 text-gray-600" />
+                  <ChevronRight className={`h-4 w-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`} />
                 </button>
               </div>
               
               <div className="grid grid-cols-7 gap-1 mb-2 sm:mb-4">
-                {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, idx) => (
-                  <div key={`${day}-${idx}`} className="text-center text-xs sm:text-sm font-medium text-gray-500 py-1 sm:py-2">
+                {[
+                  t('patientDashboard.calendarDayMon'),
+                  t('patientDashboard.calendarDayTue'),
+                  t('patientDashboard.calendarDayWed'),
+                  t('patientDashboard.calendarDayThu'),
+                  t('patientDashboard.calendarDayFri'),
+                  t('patientDashboard.calendarDaySat'),
+                  t('patientDashboard.calendarDaySun')
+                ].map((day, idx) => (
+                  <div key={`${day}-${idx}`} className={`text-center text-xs sm:text-sm font-medium py-1 sm:py-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
                     {day}
                   </div>
                 ))}
@@ -353,8 +452,10 @@ const PatientAppointment = () => {
                     key={index}
                     className={`
                       text-center py-1 sm:py-2 text-xs sm:text-sm rounded-lg cursor-pointer transition-colors
-                      ${day === null ? '' : 'hover:bg-emerald-50'}
-                      ${day && currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear() && day === today.getDate() ? 'bg-emerald-400 text-white font-semibold' : 'text-gray-700'}
+                      ${day === null ? '' : darkMode ? 'hover:bg-emerald-900/30' : 'hover:bg-emerald-50'}
+                      ${day && currentDate.getMonth() === today.getMonth() && currentDate.getFullYear() === today.getFullYear() && day === today.getDate() 
+                        ? darkMode ? 'bg-emerald-600 text-white font-semibold' : 'bg-emerald-400 text-white font-semibold' 
+                        : darkMode ? 'text-gray-300' : 'text-gray-700'}
                     `}
                     role="button"
                     tabIndex={0}
@@ -374,125 +475,153 @@ const PatientAppointment = () => {
           {/* Main Content Area - Appointment Content */}
           <div className="flex-1 min-w-0 space-y-6">
             {/* Book an Appointment Form */}
-            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
-              <h2 className="text-lg sm:text-xl font-semibold text-emerald-400 mb-4 sm:mb-6">Book an appointment</h2>
+            <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-4 sm:p-6`}>
+              <h2 className={`text-lg sm:text-xl font-semibold mb-4 sm:mb-6 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('patientAppointment.bookAppointment')}</h2>
               
               <form onSubmit={handleSubmit} className="space-y-4 sm:space-y-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Hospital</label>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('patientAppointment.hospital')}</label>
                     <div className="relative">
                       <select
                         value={formData.hospital}
                         onChange={(e) => handleInputChange('hospital', e.target.value)}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent appearance-none bg-white text-sm sm:text-base"
+                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent appearance-none text-sm sm:text-base ${
+                          darkMode 
+                            ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                            : 'bg-white border-gray-200'
+                        }`}
                       >
-                        <option value="">Select hospital</option>
+                        <option value="">{t('patientAppointment.selectHospital')}</option>
                         {hospitals.map((h) => (
                           <option key={h.id} value={h.name}>{h.name}</option>
                         ))}
                       </select>
-                      <ChevronDown className="absolute right-3 top-2.5 sm:top-3.5 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <ChevronDown className={`absolute right-3 top-2.5 sm:top-3.5 h-4 w-4 pointer-events-none ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Appointment date</label>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('patientAppointment.appointmentDate')}</label>
                     <input
                       type="date"
                       value={formData.appointmentDate}
                       onChange={(e) => handleInputChange('appointmentDate', e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base"
+                      className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base ${
+                        darkMode 
+                          ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                          : 'border-gray-200'
+                      }`}
                       placeholder="dd/mm/yyyy"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Appointment time</label>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('patientAppointment.appointmentTime')}</label>
                     <input
                       type="time"
                       step="900" /* 15 minutes */
                       value={formData.appointmentTime}
                       onChange={(e) => handleInputChange('appointmentTime', e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base"
+                      className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base ${
+                        darkMode 
+                          ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                          : 'border-gray-200'
+                      }`}
                     />
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Appointment type</label>
+                    <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('patientAppointment.appointmentType')}</label>
                     <div className="relative">
                       <select
                         value={formData.appointmentType}
                         onChange={(e) => handleInputChange('appointmentType', e.target.value)}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent appearance-none bg-white text-sm sm:text-base"
+                        className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent appearance-none text-sm sm:text-base ${
+                          darkMode 
+                            ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                            : 'bg-white border-gray-200'
+                        }`}
                       >
-                        <option value="">Select type</option>
+                        <option value="">{t('patientAppointment.selectType')}</option>
                         {appointmentTypes.map((type) => (
                           <option key={type} value={type}>{type}</option>
                         ))}
                       </select>
-                      <ChevronDown className="absolute right-3 top-2.5 sm:top-3.5 h-4 w-4 text-gray-400 pointer-events-none" />
+                      <ChevronDown className={`absolute right-3 top-2.5 sm:top-3.5 h-4 w-4 pointer-events-none ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
                     </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Additional note (optional)</label>
+                  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('patientAppointment.additionalNote')}</label>
                   <textarea
                     value={formData.additionalNote}
                     onChange={(e) => handleInputChange('additionalNote', e.target.value)}
                     rows={4}
-                    className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent resize-none text-sm sm:text-base"
-                    placeholder="Value"
+                    className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent resize-none text-sm sm:text-base ${
+                      darkMode 
+                        ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                        : 'border-gray-200'
+                    }`}
+                    placeholder={t('patientAppointment.additionalNotePlaceholder')}
                   />
                 </div>
 
                 <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4">
                   <button
                     type="submit"
-                    className="bg-emerald-400 text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg hover:bg-emerald-500 transition-colors font-medium text-sm sm:text-base"
+                    className={`${darkMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-emerald-400 hover:bg-emerald-500'} text-white px-6 sm:px-8 py-2 sm:py-3 rounded-lg transition-colors font-medium text-sm sm:text-base`}
                   >
-                    Submit
+                    {t('patientAppointment.submit')}
                   </button>
                   <button
                     type="button"
                     onClick={openDoctorModal}
-                    className="border border-gray-300 text-gray-700 px-6 sm:px-8 py-2 sm:py-3 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm sm:text-base"
+                    className={`border rounded-lg px-6 sm:px-8 py-2 sm:py-3 transition-colors font-medium text-sm sm:text-base ${
+                      darkMode 
+                        ? 'border-gray-600 text-gray-200 hover:bg-gray-700' 
+                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
                   >
-                    Search a doctor
+                    {t('patientAppointment.searchDoctor')}
                   </button>
                   <button
                     type="button"
-                    className="border border-gray-300 text-gray-700 px-6 sm:px-8 py-2 sm:py-3 rounded-lg hover:bg-gray-50 transition-colors font-medium text-sm sm:text-base"
+                    className={`border rounded-lg px-6 sm:px-8 py-2 sm:py-3 transition-colors font-medium text-sm sm:text-base ${
+                      darkMode 
+                        ? 'border-gray-600 text-gray-200 hover:bg-gray-700' 
+                        : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
                   >
-                    Yearly look up
+                    {t('patientAppointment.yearlyLookup')}
                   </button>
                 </div>
               </form>
             </div>
 
             {/* Upcoming Appointments */}
-            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
-              <h3 className="text-base sm:text-lg font-semibold text-emerald-400 mb-4 sm:mb-6">Upcoming appointment</h3>
+            <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-4 sm:p-6`}>
+              <h3 className={`text-base sm:text-lg font-semibold mb-4 sm:mb-6 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('patientAppointment.upcomingAppointment')}</h3>
               
               {loading && (
-                <div className="text-sm text-gray-500 py-4">Loading upcoming appointments...</div>
+                <div className={`text-sm py-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('patientAppointment.loadingUpcoming')}</div>
               )}
               {!loading && upcomingAppointments.length === 0 && (
-                <div className="text-sm text-gray-500 py-4 text-center">No upcoming appointments scheduled.</div>
+                <div className={`text-sm py-4 text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('patientAppointment.noUpcoming')}</div>
               )}
               {!loading && upcomingAppointments.length > 0 && upcomingAppointments.map((appointment) => (
-                <div key={appointment.id} className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                <div key={appointment.id} className={`${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'} rounded-lg p-3 sm:p-4`}>
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                     <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
                       <div className="text-center sm:text-left">
-                        <div className="text-base sm:text-lg font-semibold text-gray-800">{appointment.date}</div>
-                        <div className="text-xs sm:text-sm text-emerald-500">in {appointment.daysUntil} days</div>
+                        <div className={`text-base sm:text-lg font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{appointment.date}</div>
+                        <div className={`text-xs sm:text-sm ${darkMode ? 'text-emerald-400' : 'text-emerald-500'}`}>{t('patientAppointment.inDays', { days: appointment.daysUntil })}</div>
                       </div>
-                      <div className="text-xl sm:text-2xl font-bold text-gray-800">{appointment.time}</div>
+                      <div className={`text-xl sm:text-2xl font-bold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{appointment.time}</div>
                       <div className="flex-1">
-                        <div className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">{appointment.description}</div>
-                        <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm text-gray-600">
+                        <div className={`font-semibold mb-1 text-sm sm:text-base ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{appointment.description}</div>
+                        <div className={`flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                           <span className="text-red-500">{appointment.hospital}</span>
                           <span>{appointment.room}</span>
                           <span>{appointment.type}</span>
@@ -500,12 +629,12 @@ const PatientAppointment = () => {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button onClick={() => openRescheduleModal(appointment)} className="bg-emerald-400 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-emerald-500 transition-colors flex items-center justify-center sm:justify-start space-x-2 text-sm">
+                      <button onClick={() => openRescheduleModal(appointment)} className={`${darkMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-emerald-400 hover:bg-emerald-500'} text-white px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center justify-center sm:justify-start space-x-2 text-sm`}>
                         <Edit3 className="h-3 w-3 sm:h-4 sm:w-4" />
-                        <span>reschedule</span>
+                        <span>{t('patientAppointment.reschedule')}</span>
                       </button>
-                      <button onClick={() => handleCancelClick(appointment)} className="bg-red-500 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-600 transition-colors text-sm">cancel</button>
-                      <button onClick={() => handleNoShow(appointment.id)} className="bg-gray-500 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors text-sm">no-show</button>
+                      <button onClick={() => handleCancelClick(appointment)} className="bg-red-500 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-red-600 transition-colors text-sm">{t('patientAppointment.cancel')}</button>
+                      <button onClick={() => handleNoShow(appointment.id)} className={`${darkMode ? 'bg-gray-600 hover:bg-gray-700' : 'bg-gray-500 hover:bg-gray-600'} text-white px-3 sm:px-4 py-2 rounded-lg transition-colors text-sm`}>{t('patientAppointment.noShow')}</button>
                     </div>
                   </div>
                 </div>
@@ -513,36 +642,39 @@ const PatientAppointment = () => {
             </div>
 
             {/* Past Appointments */}
-            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
-              <h3 className="text-base sm:text-lg font-semibold text-emerald-400 mb-4 sm:mb-6">Past appointments</h3>
+            <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-4 sm:p-6`}>
+              <h3 className={`text-base sm:text-lg font-semibold mb-4 sm:mb-6 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('patientAppointment.pastAppointments')}</h3>
               
               {loading && (
-                <div className="text-sm text-gray-500 py-4">Loading past appointments...</div>
+                <div className={`text-sm py-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('patientAppointment.loadingPast')}</div>
               )}
               {!loading && pastAppointments.length === 0 && (
-                <div className="text-sm text-gray-500 py-4 text-center">No past appointments found.</div>
+                <div className={`text-sm py-4 text-center ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('patientAppointment.noPast')}</div>
               )}
               {!loading && pastAppointments.length > 0 && pastAppointments.map((appointment) => (
-                <div key={appointment.id} className="bg-gray-50 rounded-lg p-3 sm:p-4">
+                <div key={appointment.id} className={`${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'} rounded-lg p-3 sm:p-4`}>
                   <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
                     <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-4">
                       <div className="text-center sm:text-left">
-                        <div className="text-base sm:text-lg font-semibold text-gray-800">{appointment.date}</div>
-                        <div className="text-xs sm:text-sm text-gray-500">past</div>
+                        <div className={`text-base sm:text-lg font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{appointment.date}</div>
+                        <div className={`text-xs sm:text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('patientAppointment.past')}</div>
                       </div>
-                      <div className="text-xl sm:text-2xl font-bold text-gray-800">{appointment.time}</div>
+                      <div className={`text-xl sm:text-2xl font-bold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{appointment.time}</div>
                       <div className="flex-1">
-                        <div className="font-semibold text-gray-800 mb-1 text-sm sm:text-base">{appointment.description}</div>
-                        <div className="flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm text-gray-600">
+                        <div className={`font-semibold mb-1 text-sm sm:text-base ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{appointment.description}</div>
+                        <div className={`flex flex-col sm:flex-row sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-xs sm:text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                           <span className="text-red-500">{appointment.hospital}</span>
                           <span>{appointment.room}</span>
                           <span>{appointment.type}</span>
                         </div>
                       </div>
                     </div>
-                    <button className="bg-emerald-400 text-white px-3 sm:px-4 py-2 rounded-lg hover:bg-emerald-500 transition-colors flex items-center justify-center sm:justify-start space-x-2 text-sm">
+                    <button 
+                      onClick={() => handleSummaryClick(appointment)}
+                      className={`${darkMode ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-emerald-400 hover:bg-emerald-500'} text-white px-3 sm:px-4 py-2 rounded-lg transition-colors flex items-center justify-center sm:justify-start space-x-2 text-sm`}
+                    >
                       <FileText className="h-3 w-3 sm:h-4 sm:w-4" />
-                      <span>summary</span>
+                      <span>{t('patientAppointment.summary')}</span>
                     </button>
                   </div>
                 </div>
@@ -564,60 +696,72 @@ const PatientAppointment = () => {
       {/* Reschedule Modal */}
       {showRescheduleModal && (
         <div className="fixed inset-0 bg-transparent backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 border-2 border-emerald-400">
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-2xl max-w-md w-full p-6 border-2 ${darkMode ? 'border-emerald-600' : 'border-emerald-400'}`}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-semibold text-gray-800">Reschedule Appointment</h3>
+              <h3 className={`text-xl font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{t('patientAppointment.rescheduleAppointment')}</h3>
               <button
                 onClick={closeRescheduleModal}
-                className="p-1 hover:bg-gray-100 rounded-full transition-colors"
-                aria-label="Close modal"
+                className={`p-1 rounded-full transition-colors ${darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-100'}`}
+                aria-label={t('patientAppointment.closeModal')}
               >
-                <X className="h-5 w-5 text-gray-500" />
+                <X className={`h-5 w-5 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />
               </button>
             </div>
 
             {rescheduleAppointment && (
-              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm text-gray-600 mb-1">Current appointment:</p>
-                <p className="font-medium text-gray-800">
-                  {rescheduleAppointment.date} at {rescheduleAppointment.time}
+              <div className={`mb-4 p-3 rounded-lg ${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                <p className={`text-sm mb-1 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('patientAppointment.currentAppointment')}:</p>
+                <p className={`font-medium ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+                  {rescheduleAppointment.date} {t('patientAppointment.at')} {rescheduleAppointment.time}
                 </p>
                 {rescheduleAppointment.description && (
-                  <p className="text-sm text-gray-600 mt-1">{rescheduleAppointment.description}</p>
+                  <p className={`text-sm mt-1 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>{rescheduleAppointment.description}</p>
                 )}
               </div>
             )}
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  New Appointment Date
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                  {t('patientAppointment.newAppointmentDate')}
                 </label>
                 <input
                   type="date"
                   value={rescheduleData.appointmentDate}
                   onChange={(e) => setRescheduleData(prev => ({ ...prev, appointmentDate: e.target.value }))}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                      : 'border-gray-200'
+                  }`}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  New Appointment Time
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                  {t('patientAppointment.newAppointmentTime')}
                 </label>
                 <input
                   type="time"
                   step="900"
                   value={rescheduleData.appointmentTime}
                   onChange={(e) => setRescheduleData(prev => ({ ...prev, appointmentTime: e.target.value }))}
-                  className="w-full px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+                  className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                      : 'border-gray-200'
+                  }`}
                 />
               </div>
             </div>
 
             {error && (
-              <div className="mt-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg text-sm">
+              <div className={`mt-4 p-3 rounded-lg text-sm border ${
+                darkMode 
+                  ? 'bg-red-900/30 border-red-700 text-red-300' 
+                  : 'bg-red-100 border-red-400 text-red-700'
+              }`}>
                 {error}
               </div>
             )}
@@ -626,16 +770,24 @@ const PatientAppointment = () => {
               <button
                 onClick={closeRescheduleModal}
                 disabled={loading}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+                className={`px-4 py-2 border rounded-lg transition-colors disabled:opacity-50 ${
+                  darkMode 
+                    ? 'border-gray-600 text-gray-200 hover:bg-gray-700' 
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
               >
-                Cancel
+                {t('patientAppointment.cancel')}
               </button>
               <button
                 onClick={handleReschedule}
                 disabled={loading || !rescheduleData.appointmentDate || !rescheduleData.appointmentTime}
-                className="px-4 py-2 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode 
+                    ? 'bg-emerald-600 hover:bg-emerald-700' 
+                    : 'bg-emerald-400 hover:bg-emerald-500'
+                } text-white`}
               >
-                {loading ? 'Rescheduling...' : 'Reschedule'}
+                {loading ? t('patientAppointment.rescheduling') : t('patientAppointment.reschedule')}
               </button>
             </div>
           </div>
@@ -645,53 +797,57 @@ const PatientAppointment = () => {
       {/* Cancel Confirmation Modal */}
       {showCancelModal && appointmentToCancel && (
         <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-2xl max-w-md w-full p-6`}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-800">Cancel Appointment</h3>
+              <h3 className={`text-xl font-bold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{t('patientAppointment.cancelAppointment')}</h3>
               <button
                 onClick={handleCancelCancel}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
+                className={`transition-colors ${darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
             
             <div className="mb-6">
-              <p className="text-gray-700 mb-4">
-                Are you sure you want to cancel this appointment?
+              <p className={`mb-4 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                {t('patientAppointment.confirmCancel')}
               </p>
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                <p className="text-sm text-gray-600">
-                  <strong>Date:</strong> {appointmentToCancel.date}
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-gray-50'} rounded-lg p-4 space-y-2`}>
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <strong>{t('patientAppointment.date')}:</strong> {appointmentToCancel.date}
                 </p>
-                <p className="text-sm text-gray-600">
-                  <strong>Time:</strong> {appointmentToCancel.time}
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <strong>{t('patientAppointment.time')}:</strong> {appointmentToCancel.time}
                 </p>
-                <p className="text-sm text-gray-600">
-                  <strong>Hospital:</strong> {appointmentToCancel.hospital}
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <strong>{t('patientAppointment.hospital')}:</strong> {appointmentToCancel.hospital}
                 </p>
-                <p className="text-sm text-gray-600">
-                  <strong>Type:</strong> {appointmentToCancel.type}
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <strong>{t('patientAppointment.type')}:</strong> {appointmentToCancel.type}
                 </p>
               </div>
-              <p className="text-sm text-red-600 mt-4">
-                This action cannot be undone. The appointment will be marked as cancelled.
+              <p className={`text-sm mt-4 ${darkMode ? 'text-red-400' : 'text-red-600'}`}>
+                {t('patientAppointment.cancelWarning')}
               </p>
             </div>
 
             <div className="flex gap-3">
               <button
                 onClick={handleCancelCancel}
-                className="flex-1 bg-gray-200 text-gray-800 px-4 py-2 rounded-lg hover:bg-gray-300 transition-colors font-medium"
+                className={`flex-1 px-4 py-2 rounded-lg transition-colors font-medium ${
+                  darkMode 
+                    ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' 
+                    : 'bg-gray-200 text-gray-800 hover:bg-gray-300'
+                }`}
               >
-                Keep Appointment
+                {t('patientAppointment.keepAppointment')}
               </button>
               <button
                 onClick={handleCancelConfirm}
                 disabled={loading}
                 className="flex-1 bg-red-500 text-white px-4 py-2 rounded-lg hover:bg-red-600 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? 'Cancelling...' : 'Yes, Cancel Appointment'}
+                {loading ? t('patientAppointment.cancelling') : t('patientAppointment.yesCancel')}
               </button>
             </div>
           </div>

@@ -1,14 +1,33 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Header } from './Header';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { doctorPatientsAPI, medicationsAPI, checkBackendHealth } from '../../services/apiService';
 import { uploadDicomStudy, getStudies } from '../../services/radiologyService';
 import { Upload, Monitor, FileText, X, Loader, AlertCircle, Calendar, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 
 const Patient = () => {
+  const { t } = useTranslation();
   const [selectedPatient, setSelectedPatient] = useState(0);
   const [activeTab, setActiveTab] = useState('reports');
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
   
   // Radiology tab state
   const [patientRadiologyStudies, setPatientRadiologyStudies] = useState([]);
@@ -447,20 +466,34 @@ const Patient = () => {
     if (reportsLoading) {
       return (
         <div className="flex justify-center items-center h-48">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5ACCC3]"></div>
-          <span className="ml-3 text-gray-600">Loading reports...</span>
+          <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${
+            darkMode ? 'border-[#79CAC2]' : 'border-[#5ACCC3]'
+          }`}></div>
+          <span className={`ml-3 ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+          }`}>{t('loadingReports')}</span>
         </div>
       );
     }
 
     if (!backendConnected) {
       return (
-        <div className="flex flex-col items-center justify-center h-[300px] text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className={`flex flex-col items-center justify-center h-[300px] rounded-lg border-2 border-dashed transition-colors ${
+          darkMode
+            ? 'text-[#8AA2A7] bg-[#10262D] border-[#133037]'
+            : 'text-gray-400 bg-gray-50 border-gray-200'
+        }`}>
+          <svg className={`w-12 h-12 mb-4 ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-300'
+          }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-lg font-medium">Backend Not Connected</p>
-          <p className="text-sm text-gray-400 mt-1">Please ensure the backend server is running.</p>
+          <p className={`text-lg font-medium ${
+            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+          }`}>{t('backendNotConnected')}</p>
+          <p className={`text-sm mt-1 ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+          }`}>{t('pleaseEnsureBackendServerIsRunning')}</p>
         </div>
       );
     }
@@ -469,49 +502,79 @@ const Patient = () => {
       return (
         <div className="space-y-4">
           {patientReports.map((report) => (
-            <div key={report.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div key={report.id} className={`border rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow duration-200 ${
+              darkMode
+                ? 'bg-[#10262D] border-[#133037]'
+                : 'bg-white border-gray-200'
+            }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-8">
                   <div className="text-center min-w-[80px]">
-                    <div className="text-lg font-semibold text-gray-900">{report.time}</div>
-                    <div className="text-xs text-gray-500 font-medium">{report.date}</div>
+                    <div className={`text-lg font-semibold ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{report.time}</div>
+                    <div className={`text-xs font-medium ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                    }`}>{report.date}</div>
                   </div>
                   
                   <div className="min-w-[140px]">
-                    <div className="font-semibold text-gray-900">{patients[selectedPatient]?.first_name} {patients[selectedPatient]?.last_name}</div>
-                    <div className="text-xs text-gray-500">{patients[selectedPatient]?.patient_code}</div>
+                    <div className={`font-semibold ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{patients[selectedPatient]?.first_name} {patients[selectedPatient]?.last_name}</div>
+                    <div className={`text-xs ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                    }`}>{patients[selectedPatient]?.patient_code}</div>
                   </div>
                   
                   <div className="min-w-[160px]">
-                    <div className="font-semibold text-gray-900">{report.problem}</div>
+                    <div className={`font-semibold ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{report.problem}</div>
                     {report.diagnosis && (
-                      <div className="text-xs text-green-600 font-medium">Diagnosis: {report.diagnosis}</div>
+                      <div className={`text-xs font-medium ${
+                        darkMode ? 'text-[#4ADE80]' : 'text-green-600'
+                      }`}>{t('diagnosis')}: {report.diagnosis}</div>
                     )}
                   </div>
                   
                   <div className="flex-1 min-w-[200px]">
-                    <div className="text-gray-600 text-sm leading-relaxed">{report.description}</div>
+                    <div className={`text-sm leading-relaxed ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>{report.description}</div>
                     {report.treatment && (
-                      <div className="text-xs text-blue-600 mt-1">Treatment: {report.treatment}</div>
+                      <div className={`text-xs mt-1 ${
+                        darkMode ? 'text-[#79CAC2]' : 'text-blue-600'
+                      }`}>{t('treatment')}: {report.treatment}</div>
                     )}
                   </div>
                   
                   <div className="min-w-[120px]">
-                    <div className="text-gray-600 text-sm font-medium">{report.doctor_name}</div>
+                    <div className={`text-sm font-medium ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>{report.doctor_name}</div>
                   </div>
                 </div>
                 
                 <div className="flex items-center space-x-2">
                   <button 
                     onClick={() => handleViewReport(report.id)}
-                    className="px-4 py-2 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm"
+                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors duration-200 shadow-sm ${
+                      darkMode
+                        ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                        : 'bg-[#5ACCC3] text-white hover:bg-[#4BB5AC]'
+                    }`}
                   >
-                    View
+                    {t('view')}
                   </button>
                   <button 
                     onClick={() => handleEditReport(report.id)}
-                    className="p-2 text-gray-600 hover:text-[#5ACCC3] transition-colors duration-200"
-                    title="Edit report"
+                    className={`p-2 transition-colors duration-200 ${
+                      darkMode
+                        ? 'text-[#8AA2A7] hover:text-[#79CAC2]'
+                        : 'text-gray-600 hover:text-[#5ACCC3]'
+                    }`}
+                    title={t('editReport')}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -519,8 +582,12 @@ const Patient = () => {
                   </button>
                   <button 
                     onClick={() => handleDeleteReport(report.id)}
-                    className="p-2 text-gray-600 hover:text-red-600 transition-colors duration-200"
-                    title="Delete report"
+                    className={`p-2 transition-colors duration-200 ${
+                      darkMode
+                        ? 'text-[#8AA2A7] hover:text-[#FB7185]'
+                        : 'text-gray-600 hover:text-red-600'
+                    }`}
+                    title={t('deleteReport')}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -535,12 +602,22 @@ const Patient = () => {
     }
 
     return (
-      <div className="flex flex-col items-center justify-center h-[300px] text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-        <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className={`flex flex-col items-center justify-center h-[300px] rounded-lg border-2 border-dashed transition-colors ${
+        darkMode
+          ? 'text-[#8AA2A7] bg-[#10262D] border-[#133037]'
+          : 'text-gray-400 bg-gray-50 border-gray-200'
+      }`}>
+        <svg className={`w-12 h-12 mb-4 ${
+          darkMode ? 'text-[#8AA2A7]' : 'text-gray-300'
+        }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
         </svg>
-        <p className="text-lg font-medium">No reports found</p>
-        <p className="text-sm text-gray-400 mt-1">This patient doesn't have any reports yet.</p>
+        <p className={`text-lg font-medium ${
+          darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+        }`}>{t('noReportsFound')}</p>
+        <p className={`text-sm mt-1 ${
+          darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+        }`}>{t('thisPatientDoesntHaveAnyReportsYet')}</p>
       </div>
     );
   };
@@ -549,20 +626,34 @@ const Patient = () => {
     if (prescriptionsLoading) {
       return (
         <div className="flex justify-center items-center h-48">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5ACCC3]"></div>
-          <span className="ml-3 text-gray-600">Loading prescriptions...</span>
+          <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${
+            darkMode ? 'border-[#79CAC2]' : 'border-[#5ACCC3]'
+          }`}></div>
+          <span className={`ml-3 ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+          }`}>{t('loadingPrescriptions')}</span>
         </div>
       );
     }
 
     if (!backendConnected) {
       return (
-        <div className="flex flex-col items-center justify-center h-[300px] text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-          <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className={`flex flex-col items-center justify-center h-[300px] rounded-lg border-2 border-dashed transition-colors ${
+          darkMode
+            ? 'text-[#8AA2A7] bg-[#10262D] border-[#133037]'
+            : 'text-gray-400 bg-gray-50 border-gray-200'
+        }`}>
+          <svg className={`w-12 h-12 mb-4 ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-300'
+          }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p className="text-lg font-medium">Backend Not Connected</p>
-          <p className="text-sm text-gray-400 mt-1">Please ensure the backend server is running.</p>
+          <p className={`text-lg font-medium ${
+            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+          }`}>{t('backendNotConnected')}</p>
+          <p className={`text-sm mt-1 ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+          }`}>{t('pleaseEnsureBackendServerIsRunning')}</p>
         </div>
       );
     }
@@ -571,36 +662,62 @@ const Patient = () => {
       return (
         <div className="space-y-4">
           {patientPrescriptions.map((prescription) => (
-            <div key={prescription.id} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <div key={prescription.id} className={`border rounded-lg p-6 shadow-sm hover:shadow-md transition-shadow duration-200 ${
+              darkMode
+                ? 'bg-[#10262D] border-[#133037]'
+                : 'bg-white border-gray-200'
+            }`}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-8">
                   <div className="min-w-[120px]">
-                    <div className="text-lg font-semibold text-[#5ACCC3]">{prescription.medication_name}</div>
-                    <div className="text-xs text-gray-500 font-medium">{prescription.prescribed_date}</div>
+                    <div className={`text-lg font-semibold ${
+                      darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+                    }`}>{prescription.medication_name}</div>
+                    <div className={`text-xs font-medium ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                    }`}>{prescription.prescribed_date}</div>
                   </div>
                   
                   <div className="min-w-[100px]">
-                    <div className="font-semibold text-gray-700">Dosage</div>
-                    <div className="text-sm text-gray-600">{prescription.dosage}</div>
+                    <div className={`font-semibold ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('dosage')}</div>
+                    <div className={`text-sm ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>{prescription.dosage}</div>
                   </div>
                   
                   <div className="min-w-[120px]">
-                    <div className="font-semibold text-gray-700">Frequency</div>
-                    <div className="text-sm text-gray-600">{prescription.frequency}</div>
+                    <div className={`font-semibold ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('frequency')}</div>
+                    <div className={`text-sm ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>{prescription.frequency}</div>
                   </div>
                   
                   <div className="min-w-[100px]">
-                    <div className="font-semibold text-gray-700">Duration</div>
-                    <div className="text-sm text-gray-600">{prescription.duration}</div>
+                    <div className={`font-semibold ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('duration')}</div>
+                    <div className={`text-sm ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>{prescription.duration}</div>
                   </div>
                   
                   <div className="flex-1 min-w-[200px]">
-                    <div className="font-semibold text-gray-700">Instructions</div>
-                    <div className="text-sm text-gray-600">{prescription.instructions || 'No special instructions'}</div>
+                    <div className={`font-semibold ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('instructions')}</div>
+                    <div className={`text-sm ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>{prescription.instructions || t('noSpecialInstructions')}</div>
                   </div>
                   
                   <div className="min-w-[120px]">
-                    <div className="text-gray-600 text-sm font-medium">{prescription.doctor_name}</div>
+                    <div className={`text-sm font-medium ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>{prescription.doctor_name}</div>
                   </div>
                 </div>
                 
@@ -608,20 +725,28 @@ const Patient = () => {
                   <select
                     value={prescription.status}
                     onChange={(e) => handleUpdatePrescriptionStatus(prescription.id, e.target.value)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border ${
+                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
                       prescription.status === 'active' 
-                        ? 'bg-green-100 text-green-800 border-green-200' 
+                        ? darkMode
+                          ? 'bg-[#062412] text-[#4ADE80] border-[#062412]'
+                          : 'bg-green-100 text-green-800 border-green-200'
+                        : darkMode
+                        ? 'bg-[#10262D] text-[#8AA2A7] border-[#133037]'
                         : 'bg-gray-100 text-gray-600 border-gray-200'
                     }`}
                   >
-                    <option value="active">Active</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
+                    <option value="active">{t('active')}</option>
+                    <option value="completed">{t('completed')}</option>
+                    <option value="cancelled">{t('cancelled')}</option>
                   </select>
                   <button 
                     onClick={() => handleEditPrescription(prescription.id)}
-                    className="p-2 text-gray-600 hover:text-[#5ACCC3] transition-colors duration-200"
-                    title="Edit prescription"
+                    className={`p-2 transition-colors duration-200 ${
+                      darkMode
+                        ? 'text-[#8AA2A7] hover:text-[#79CAC2]'
+                        : 'text-gray-600 hover:text-[#5ACCC3]'
+                    }`}
+                    title={t('editPrescription')}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -629,8 +754,12 @@ const Patient = () => {
                   </button>
                   <button 
                     onClick={() => handleDeletePrescription(prescription.id)}
-                    className="p-2 text-gray-600 hover:text-red-600 transition-colors duration-200"
-                    title="Delete prescription"
+                    className={`p-2 transition-colors duration-200 ${
+                      darkMode
+                        ? 'text-[#8AA2A7] hover:text-[#FB7185]'
+                        : 'text-gray-600 hover:text-red-600'
+                    }`}
+                    title={t('deletePrescription')}
                   >
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -645,12 +774,22 @@ const Patient = () => {
     }
 
     return (
-      <div className="flex flex-col items-center justify-center h-[300px] text-gray-400 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-        <svg className="w-12 h-12 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <div className={`flex flex-col items-center justify-center h-[300px] rounded-lg border-2 border-dashed transition-colors ${
+        darkMode
+          ? 'text-[#8AA2A7] bg-[#10262D] border-[#133037]'
+          : 'text-gray-400 bg-gray-50 border-gray-200'
+      }`}>
+        <svg className={`w-12 h-12 mb-4 ${
+          darkMode ? 'text-[#8AA2A7]' : 'text-gray-300'
+        }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
         </svg>
-        <p className="text-lg font-medium">No prescriptions found</p>
-        <p className="text-sm text-gray-400 mt-1">This patient doesn't have any prescriptions yet.</p>
+        <p className={`text-lg font-medium ${
+          darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+        }`}>{t('noPrescriptionsFound')}</p>
+        <p className={`text-sm mt-1 ${
+          darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+        }`}>{t('thisPatientDoesntHaveAnyPrescriptionsYet')}</p>
       </div>
     );
   };
@@ -658,8 +797,10 @@ const Patient = () => {
   const renderRadiologyContent = () => {
     if (!selectedPatientDetails) {
       return (
-        <div className="text-center py-12 text-gray-500">
-          <p>Please select a patient to view radiology studies</p>
+        <div className={`text-center py-12 ${
+          darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+        }`}>
+          <p>{t('pleaseSelectPatientToViewRadiologyStudies')}</p>
         </div>
       );
     }
@@ -670,37 +811,63 @@ const Patient = () => {
         <div className="flex justify-end mb-4">
           <button
             onClick={() => setShowUploadModal(true)}
-            className="px-4 py-2 bg-[#5ACCC3] text-white rounded-lg text-sm font-medium hover:bg-[#4BB5AC] transition-colors flex items-center space-x-2"
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center space-x-2 ${
+              darkMode
+                ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                : 'bg-[#5ACCC3] text-white hover:bg-[#4BB5AC]'
+            }`}
           >
             <Upload className="w-4 h-4" />
-            <span>Upload DICOM Study</span>
+            <span>{t('uploadDicomStudy')}</span>
           </button>
         </div>
 
         {/* Studies List */}
         {radiologyLoading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5ACCC3]"></div>
+            <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${
+              darkMode ? 'border-[#79CAC2]' : 'border-[#5ACCC3]'
+            }`}></div>
           </div>
         ) : patientRadiologyStudies.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-lg shadow-sm">
-            <Monitor className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">No radiology studies found for this patient</p>
-            <p className="text-sm text-gray-500 mt-2">Upload a DICOM study to get started</p>
+          <div className={`text-center py-12 rounded-lg shadow-sm transition-colors ${
+            darkMode
+              ? 'bg-[#10262D] border border-[#133037]'
+              : 'bg-white'
+          }`}>
+            <Monitor className={`w-12 h-12 mx-auto mb-4 ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+            }`} />
+            <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{t('noRadiologyStudiesFoundForThisPatient')}</p>
+            <p className={`text-sm mt-2 ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+            }`}>{t('uploadDicomStudyToGetStarted')}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {patientRadiologyStudies.map((study) => (
-              <div key={study.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 hover:shadow-md transition-shadow">
+              <div key={study.id} className={`rounded-lg shadow-sm border p-4 hover:shadow-md transition-shadow ${
+                darkMode
+                  ? 'bg-[#10262D] border-[#133037]'
+                  : 'bg-white border-gray-200'
+              }`}>
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-2">
-                    <Monitor className="w-5 h-5 text-[#5ACCC3]" />
+                    <Monitor className={`w-5 h-5 ${
+                      darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+                    }`} />
                     <div>
-                      <h3 className="font-semibold text-gray-900 text-sm">
-                        {study.studyDescription || study.modality || 'Radiology Study'}
+                      <h3 className={`font-semibold text-sm ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                      }`}>
+                        {study.studyDescription || study.modality || t('radiologyStudy')}
                       </h3>
                       {study.modality && (
-                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded mt-1 inline-block">
+                        <span className={`text-xs px-2 py-1 rounded mt-1 inline-block ${
+                          darkMode
+                            ? 'text-[#8AA2A7] bg-[#0D2026]'
+                            : 'text-gray-500 bg-gray-100'
+                        }`}>
                           {study.modality}
                         </span>
                       )}
@@ -708,9 +875,11 @@ const Patient = () => {
                   </div>
                 </div>
                 
-                <div className="space-y-1 text-xs text-gray-600 mb-3">
+                <div className={`space-y-1 text-xs mb-3 ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>
                   {study.bodyPart && (
-                    <div>Body Part: {study.bodyPart}</div>
+                    <div>{t('bodyPart')}: {study.bodyPart}</div>
                   )}
                   {study.scheduledDate && (
                     <div className="flex items-center">
@@ -737,10 +906,14 @@ const Patient = () => {
                         } 
                       });
                     }}
-                    className="w-full px-3 py-2 bg-[#5ACCC3] text-white rounded text-xs font-medium hover:bg-[#4BB5AC] transition-colors flex items-center justify-center space-x-2"
+                    className={`w-full px-3 py-2 rounded text-xs font-medium transition-colors flex items-center justify-center space-x-2 ${
+                      darkMode
+                        ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                        : 'bg-[#5ACCC3] text-white hover:bg-[#4BB5AC]'
+                    }`}
                   >
                     <Eye className="w-4 h-4" />
-                    <span>View Images</span>
+                    <span>{t('viewImages')}</span>
                   </button>
                 )}
               </div>
@@ -764,38 +937,56 @@ const Patient = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col min-h-screen bg-gray-50">
+      <div className={`flex flex-col min-h-screen transition-colors ${
+        darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+      }`}>
         <Header />
         <div className="flex justify-center items-center flex-1">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#5ACCC3]"></div>
-          <span className="ml-4 text-gray-600 text-lg">Connecting to backend...</span>
+          <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${
+            darkMode ? 'border-[#79CAC2]' : 'border-[#5ACCC3]'
+          }`}></div>
+          <span className={`ml-4 text-lg ${
+            darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+          }`}>{t('connectingToBackend')}</span>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
+    <div className={`flex flex-col min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       <Header />
       
       {/* Backend status and error indicators */}
       {!backendConnected && (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 mx-2 sm:mx-4 mt-4 rounded">
+        <div className={`border px-4 py-3 mx-2 sm:mx-4 mt-4 rounded transition-colors ${
+          darkMode
+            ? 'bg-[#251F07] border-[#FACC15] text-[#FACC15]'
+            : 'bg-yellow-100 border-yellow-400 text-yellow-700'
+        }`}>
           <div className="flex items-center">
             <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
-            Backend not connected - Please ensure the server is running
+            {t('backendNotConnected')}
           </div>
         </div>
       )}
       
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 mx-2 sm:mx-4 mt-4 rounded">
+        <div className={`border px-4 py-3 mx-2 sm:mx-4 mt-4 rounded transition-colors ${
+          darkMode
+            ? 'bg-[#2A0E15] border-[#FB7185] text-[#FB7185]'
+            : 'bg-red-100 border-red-400 text-red-700'
+        }`}>
           {error}
           <button 
             onClick={() => setError(null)}
-            className="float-right text-red-700 hover:text-red-900"
+            className={`float-right transition-colors ${
+              darkMode ? 'text-[#FB7185] hover:text-[#FB7185]' : 'text-red-700 hover:text-red-900'
+            }`}
           >
             ×
           </button>
@@ -806,8 +997,12 @@ const Patient = () => {
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-4">
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">
-              Patients
+            <h2 className={`text-2xl font-bold bg-clip-text text-transparent ${
+              darkMode
+                ? 'bg-gradient-to-r from-[#79CAC2] to-[#58B4AA]'
+                : 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0]'
+            }`}>
+              {t('patients')}
             </h2>
           </div>
         </div>
@@ -816,18 +1011,30 @@ const Patient = () => {
         <div className="flex gap-6">
           {/* Left Sidebar - Patient list */}
           <div className="lg:w-1/4 flex-shrink-0">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-6">
+          <div className={`rounded-xl shadow-sm border p-4 sm:p-6 transition-colors ${
+            darkMode
+              ? 'bg-[#0D2026] border-[#133037]'
+              : 'bg-white border-gray-100'
+          }`}>
             <div className="mb-4 sm:mb-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[#5ACCC3] font-semibold text-sm sm:text-base">Patients List</h2>
+                <h2 className={`font-semibold text-sm sm:text-base ${
+                  darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+                }`}>{t('patientsList')}</h2>
                 <div className="flex items-center space-x-2">
                   {backendConnected && (
-                    <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Backend connected"></div>
+                    <div className={`w-2 h-2 rounded-full animate-pulse ${
+                      darkMode ? 'bg-[#4ADE80]' : 'bg-green-500'
+                    }`} title={t('backendConnected')}></div>
                   )}
                   <button 
                     onClick={handleRefreshData}
-                    className="text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10 p-1 rounded-md transition-colors duration-200"
-                    title="Refresh data"
+                    className={`p-1 rounded-md transition-colors duration-200 ${
+                      darkMode
+                        ? 'text-[#79CAC2] hover:bg-[#79CAC2] hover:bg-opacity-10'
+                        : 'text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10'
+                    }`}
+                    title={t('refreshData')}
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
@@ -845,22 +1052,36 @@ const Patient = () => {
                     onClick={() => handlePatientSelect(index)}
                     className={`py-3 sm:py-4 px-3 sm:px-4 cursor-pointer border rounded-xl text-center transition-all duration-200 ${
                       selectedPatient === index 
-                        ? 'bg-[#5ACCC3] text-white shadow-md transform scale-105' 
+                        ? darkMode
+                          ? 'bg-[#79CAC2] text-[#050C0F] shadow-md transform scale-105'
+                          : 'bg-[#5ACCC3] text-white shadow-md transform scale-105'
+                        : darkMode
+                        ? 'bg-[#10262D] border-[#133037] hover:bg-[#133037] hover:border-[#79CAC2] hover:shadow-sm'
                         : 'bg-white border-gray-200 hover:bg-gray-50 hover:border-[#5ACCC3] hover:shadow-sm'
                     }`}
                   >
-                    <h3 className={`font-semibold text-xs sm:text-sm ${selectedPatient === index ? 'text-white' : 'text-gray-900'}`}>
+                    <h3 className={`font-semibold text-xs sm:text-sm ${
+                      selectedPatient === index 
+                        ? darkMode ? 'text-[#050C0F]' : 'text-white'
+                        : darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>
                       {patient.first_name} {patient.last_name}
                     </h3>
-                    <p className={`text-xs mt-1 ${selectedPatient === index ? 'text-white text-opacity-90' : 'text-gray-500'}`}>
+                    <p className={`text-xs mt-1 ${
+                      selectedPatient === index 
+                        ? darkMode ? 'text-[#050C0F] text-opacity-80' : 'text-white text-opacity-90'
+                        : darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                    }`}>
                       {patient.patient_code}
                     </p>
                   </div>
                 ))
               ) : (
-                <div className="text-center text-gray-500 py-6 sm:py-8">
-                  <p className="text-xs sm:text-sm">No patients found</p>
-                  <p className="text-xs mt-1">Please check backend connection</p>
+                <div className={`text-center py-6 sm:py-8 ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                }`}>
+                  <p className="text-xs sm:text-sm">{t('noPatientsFound')}</p>
+                  <p className="text-xs mt-1">{t('pleaseCheckBackendConnection')}</p>
                 </div>
               )}
             </div>
@@ -869,14 +1090,26 @@ const Patient = () => {
           
           {/* Main content - Patient details */}
           <div className="lg:w-3/4">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 sm:p-8">
+          <div className={`rounded-xl shadow-sm border p-4 sm:p-8 transition-colors ${
+            darkMode
+              ? 'bg-[#0D2026] border-[#133037]'
+              : 'bg-white border-gray-100'
+          }`}>
             {patients[selectedPatient] ? (
               <>
-                <div className="bg-gradient-to-r from-[#5ACCC3]/5 to-[#4DB6B0]/5 rounded-xl p-6 mb-6">
+                <div className={`rounded-xl p-6 mb-6 transition-colors ${
+                  darkMode
+                    ? 'bg-gradient-to-r from-[#79CAC2]/10 to-[#58B4AA]/10'
+                    : 'bg-gradient-to-r from-[#5ACCC3]/5 to-[#4DB6B0]/5'
+                }`}>
                   {/* Patient Header */}
                   <div className="flex items-start gap-6 mb-6">
                     {/* Patient Avatar */}
-                    <div className="w-20 h-20 bg-gradient-to-br from-[#5ACCC3] to-[#4DB6B0] rounded-xl shadow-lg flex items-center justify-center flex-shrink-0">
+                    <div className={`w-20 h-20 rounded-xl shadow-lg flex items-center justify-center flex-shrink-0 ${
+                      darkMode
+                        ? 'bg-gradient-to-br from-[#79CAC2] to-[#58B4AA]'
+                        : 'bg-gradient-to-br from-[#5ACCC3] to-[#4DB6B0]'
+                    }`}>
                       <svg className="w-10 h-10 text-white" fill="currentColor" viewBox="0 0 20 20">
                         <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                       </svg>
@@ -884,15 +1117,19 @@ const Patient = () => {
                     
                     {/* Patient Info */}
                     <div className="flex-1 min-w-0">
-                      <h2 className="text-2xl font-bold text-gray-900 mb-2">
+                      <h2 className={`text-2xl font-bold mb-2 ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                      }`}>
                         {patients[selectedPatient].first_name} {patients[selectedPatient].last_name}
                       </h2>
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
+                      <div className={`flex items-center gap-4 text-sm ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                      }`}>
                         <span className="flex items-center gap-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                           </svg>
-                          {patients[selectedPatient].age} years old
+                          {patients[selectedPatient].age} {t('yearsOld')}
                         </span>
                         <span className="flex items-center gap-1">
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -914,37 +1151,83 @@ const Patient = () => {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* Medical Information */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <svg className="w-5 h-5 text-[#5ACCC3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <h3 className={`text-lg font-semibold flex items-center gap-2 ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                      }`}>
+                        <svg className={`w-5 h-5 ${
+                          darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+                        }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                         </svg>
-                        Medical Information
+                        {t('medicalInformation')}
                       </h3>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Blood Group</p>
-                          <p className="text-sm font-semibold text-gray-900">{patients[selectedPatient].blood_group || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('bloodGroup')}</p>
+                          <p className={`text-sm font-semibold ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].blood_group || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Rh Factor</p>
-                          <p className="text-sm font-semibold text-gray-900">{patients[selectedPatient].rh_factor || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('rhFactor')}</p>
+                          <p className={`text-sm font-semibold ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].rh_factor || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Height</p>
-                          <p className="text-sm font-semibold text-gray-900">{(selectedPatientDetails?.height || patients[selectedPatient]?.height) || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('height')}</p>
+                          <p className={`text-sm font-semibold ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{(selectedPatientDetails?.height || patients[selectedPatient]?.height) || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Weight</p>
-                          <p className="text-sm font-semibold text-gray-900">{(selectedPatientDetails?.weight || patients[selectedPatient]?.weight) || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('weight')}</p>
+                          <p className={`text-sm font-semibold ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{(selectedPatientDetails?.weight || patients[selectedPatient]?.weight) || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100 col-span-2">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">BMI</p>
+                        <div className={`rounded-lg p-3 border col-span-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('bmi')}</p>
                           <div className="flex items-center justify-between">
-                            <p className="text-sm font-semibold text-gray-900">{(selectedPatientDetails?.bmi || patients[selectedPatient]?.bmi) || '—'}</p>
-                            <p className="text-xs text-gray-400">
+                            <p className={`text-sm font-semibold ${
+                              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                            }`}>{(selectedPatientDetails?.bmi || patients[selectedPatient]?.bmi) || '—'}</p>
+                            <p className={`text-xs ${
+                              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                            }`}>
                               {selectedPatientDetails?.last_measured 
-                                ? `Last measured: ${new Date(selectedPatientDetails.last_measured).toLocaleString()}` 
-                                : 'Last measured: —'}
+                                ? `${t('lastMeasured')}: ${new Date(selectedPatientDetails.last_measured).toLocaleString()}` 
+                                : `${t('lastMeasured')}: —`}
                             </p>
                           </div>
                         </div>
@@ -953,82 +1236,166 @@ const Patient = () => {
 
                     {/* Contact Information */}
                     <div className="space-y-4">
-                      <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
-                        <svg className="w-5 h-5 text-[#5ACCC3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <h3 className={`text-lg font-semibold flex items-center gap-2 ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                      }`}>
+                        <svg className={`w-5 h-5 ${
+                          darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+                        }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 4.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
-                        Contact Information
+                        {t('contactInformation')}
                       </h3>
                       <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Email</p>
-                          <p className="text-sm text-gray-900">{patients[selectedPatient].email || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('email')}</p>
+                          <p className={`text-sm ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].email || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Phone Number</p>
-                          <p className="text-sm text-gray-900">{patients[selectedPatient].phone_number || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('phoneNumber')}</p>
+                          <p className={`text-sm ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].phone_number || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Address</p>
-                          <p className="text-sm text-gray-900">{patients[selectedPatient].address || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('address')}</p>
+                          <p className={`text-sm ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].address || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Temporary Address</p>
-                          <p className="text-sm text-gray-900">{patients[selectedPatient].temporary_address || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('temporaryAddress')}</p>
+                          <p className={`text-sm ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].temporary_address || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Work Place</p>
-                          <p className="text-sm text-gray-900">{patients[selectedPatient].work_place || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('workPlace')}</p>
+                          <p className={`text-sm ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].work_place || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Occupation</p>
-                          <p className="text-sm text-gray-900">{patients[selectedPatient].occupation || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('occupation')}</p>
+                          <p className={`text-sm ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].occupation || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Additional Contact Name</p>
-                          <p className="text-sm text-gray-900">{patients[selectedPatient].emergency_contact_name || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('additionalContactName')}</p>
+                          <p className={`text-sm ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].emergency_contact_name || '—'}</p>
                         </div>
-                        <div className="bg-white rounded-lg p-3 border border-gray-100">
-                          <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Additional Contact Phone</p>
-                          <p className="text-sm text-gray-900">{patients[selectedPatient].emergency_contact_phone || '—'}</p>
+                        <div className={`rounded-lg p-3 border transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037]'
+                            : 'bg-white border-gray-100'
+                        }`}>
+                          <p className={`text-xs font-medium uppercase tracking-wide mb-1 ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('additionalContactPhone')}</p>
+                          <p className={`text-sm ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{patients[selectedPatient].emergency_contact_phone || '—'}</p>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
                 
-                <div className="border-t border-gray-200 pt-6 sm:pt-8">
+                <div className={`border-t pt-6 sm:pt-8 transition-colors ${
+                  darkMode ? 'border-[#133037]' : 'border-gray-200'
+                }`}>
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 sm:mb-8 space-y-4 sm:space-y-0">
-                    <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                    <div className={`flex space-x-1 p-1 rounded-lg transition-colors ${
+                      darkMode ? 'bg-[#10262D]' : 'bg-gray-100'
+                    }`}>
                       <button 
                         onClick={() => handleTabChange('reports')}
                         className={`px-4 sm:px-6 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 ${
                           activeTab === 'reports' 
-                            ? 'bg-[#5ACCC3] text-white shadow-sm' 
+                            ? darkMode
+                              ? 'bg-[#79CAC2] text-[#050C0F] shadow-sm'
+                              : 'bg-[#5ACCC3] text-white shadow-sm'
+                            : darkMode
+                            ? 'text-[#79CAC2] hover:bg-[#10262D] hover:shadow-sm'
                             : 'text-[#5ACCC3] hover:bg-white hover:shadow-sm'
                         }`}
                       >
-                        Reports
+                        {t('reports')}
                       </button>
                       <button 
                         onClick={() => handleTabChange('prescriptions')}
                         className={`px-4 sm:px-6 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 ${
                           activeTab === 'prescriptions' 
-                            ? 'bg-[#5ACCC3] text-white shadow-sm' 
+                            ? darkMode
+                              ? 'bg-[#79CAC2] text-[#050C0F] shadow-sm'
+                              : 'bg-[#5ACCC3] text-white shadow-sm'
+                            : darkMode
+                            ? 'text-[#79CAC2] hover:bg-[#10262D] hover:shadow-sm'
                             : 'text-[#5ACCC3] hover:bg-white hover:shadow-sm'
                         }`}
                       >
-                        Prescriptions
+                        {t('prescriptions')}
                       </button>
                       <button 
                         onClick={() => handleTabChange('radiology')}
                         className={`px-4 sm:px-6 py-2 rounded-md text-xs sm:text-sm font-medium transition-all duration-200 ${
                           activeTab === 'radiology' 
-                            ? 'bg-[#5ACCC3] text-white shadow-sm' 
+                            ? darkMode
+                              ? 'bg-[#79CAC2] text-[#050C0F] shadow-sm'
+                              : 'bg-[#5ACCC3] text-white shadow-sm'
+                            : darkMode
+                            ? 'text-[#79CAC2] hover:bg-[#10262D] hover:shadow-sm'
                             : 'text-[#5ACCC3] hover:bg-white hover:shadow-sm'
                         }`}
                       >
-                        Radiology
+                        {t('radiology')}
                       </button>
                     </div>
                     <div className="flex items-center space-x-3">
@@ -1097,8 +1464,12 @@ const Patient = () => {
                       </div>
                       <button 
                         onClick={handleExportData}
-                        className="text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10 p-2 rounded-md transition-colors duration-200"
-                        title="Export data"
+                        className={`p-2 rounded-md transition-colors duration-200 ${
+                          darkMode
+                            ? 'text-[#79CAC2] hover:bg-[#79CAC2] hover:bg-opacity-10'
+                            : 'text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10'
+                        }`}
+                        title={t('export')}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
@@ -1106,8 +1477,12 @@ const Patient = () => {
                       </button>
                       <button 
                         onClick={handlePrintData}
-                        className="text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10 p-2 rounded-md transition-colors duration-200"
-                        title="Print"
+                        className={`p-2 rounded-md transition-colors duration-200 ${
+                          darkMode
+                            ? 'text-[#79CAC2] hover:bg-[#79CAC2] hover:bg-opacity-10'
+                            : 'text-[#5ACCC3] hover:bg-[#5ACCC3] hover:bg-opacity-10'
+                        }`}
+                        title={t('print')}
                       >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 sm:h-5 sm:w-5" viewBox="0 0 20 20" fill="currentColor">
                           <path fillRule="evenodd" d="M5 4v3H4a2 2 0 00-2 2v3a2 2 0 002 2h1v2a2 2 0 002 2h6a2 2 0 002-2v-2h1a2 2 0 002-2V9a2 2 0 00-2-2h-1V4a2 2 0 00-2-2H7a2 2 0 00-2 2zm8 0H7v3h6V4zm0 8H7v4h6v-4z" clipRule="evenodd" />
@@ -1117,39 +1492,35 @@ const Patient = () => {
                         <>
                           <button 
                             onClick={handleViewAllReports}
-                            className="px-4 sm:px-6 py-2 border-2 border-[#5ACCC3] text-[#5ACCC3] rounded-lg text-xs sm:text-sm font-medium hover:bg-[#5ACCC3] hover:text-white transition-all duration-200"
+                            className={`px-4 sm:px-6 py-2 border-2 rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 ${
+                              darkMode
+                                ? 'border-[#79CAC2] text-[#79CAC2] hover:bg-[#79CAC2] hover:text-[#050C0F]'
+                                : 'border-[#5ACCC3] text-[#5ACCC3] hover:bg-[#5ACCC3] hover:text-white'
+                            }`}
                           >
-                            View All
+                            {t('viewAll')}
                           </button>
                           <button 
                             onClick={handleAddReport}
-                            className="px-4 sm:px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm"
+                            className={`px-4 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 shadow-sm ${
+                              darkMode
+                                ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                                : 'bg-[#5ACCC3] text-white hover:bg-[#4BB5AC]'
+                            }`}
                           >
-                            Add Report
+                            {t('addReport')}
                           </button>
                         </>
                       ) : activeTab === 'prescriptions' ? (
-                        <>
-                          <button 
-                            onClick={() => setShowPrescriptionTable(true)}
-                            className="px-4 sm:px-6 py-2 bg-white text-[#5ACCC3] border border-[#5ACCC3] rounded-lg text-xs sm:text-sm font-medium hover:bg-[#5ACCC3] hover:text-white transition-colors duration-200 shadow-sm"
-                          >
-                            View Table
-                          </button>
-                          <button 
-                            onClick={() => setShowPrescriptionModal(true)}
-                            className="px-4 sm:px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm"
-                          >
-                            Add Prescription
-                          </button>
-                        </>
-                      ) : activeTab === 'radiology' ? (
                         <button 
-                          onClick={() => setShowUploadModal(true)}
-                          className="px-4 sm:px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm flex items-center space-x-2"
+                          onClick={() => setShowPrescriptionModal(true)}
+                          className={`px-4 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 shadow-sm ${
+                            darkMode
+                              ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                              : 'bg-[#5ACCC3] text-white hover:bg-[#4BB5AC]'
+                          }`}
                         >
-                          <Upload className="w-4 h-4" />
-                          <span>Upload DICOM</span>
+                          {t('addPrescription')}
                         </button>
                       ) : null}
                     </div>
@@ -1160,12 +1531,20 @@ const Patient = () => {
                 </div>
               </>
             ) : (
-              <div className="flex flex-col items-center justify-center h-[300px] sm:h-[400px] text-gray-400">
-                <svg className="w-12 h-12 sm:w-16 sm:h-16 mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <div className={`flex flex-col items-center justify-center h-[300px] sm:h-[400px] ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+              }`}>
+                <svg className={`w-12 h-12 sm:w-16 sm:h-16 mb-4 ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-300'
+                }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                 </svg>
-                <p className="text-base sm:text-lg font-medium">No Patient Selected</p>
-                <p className="text-sm text-gray-400 mt-1">Please select a patient from the list to view details</p>
+                <p className={`text-base sm:text-lg font-medium ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{t('noPatientSelected')}</p>
+                <p className={`text-sm mt-1 ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                }`}>{t('pleaseSelectPatientFromListToViewDetails')}</p>
               </div>
             )}
           </div>
@@ -1283,7 +1662,11 @@ const Patient = () => {
 
       {/* Prescription Modal with Clear Blurred Background */}
       {showPrescriptionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => {
+          setShowPrescriptionModal(false);
+          setMedicationSearchResults([]);
+          setShowMedicationDropdown(false);
+        }}>
           {/* Blurred Background */}
           <div 
             className="absolute inset-0 backdrop-blur-md"
@@ -1295,16 +1678,26 @@ const Patient = () => {
           ></div>
           
           {/* Modal Content */}
-          <div className="relative bg-white rounded-2xl shadow-2xl p-4 sm:p-8 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+          <div className={`relative rounded-2xl shadow-2xl p-4 sm:p-8 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto transition-colors ${
+            darkMode
+              ? 'bg-[#0D2026] border border-[#133037]'
+              : 'bg-white'
+          }`} onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg sm:text-xl font-bold text-gray-900">Add New Prescription</h3>
+              <h3 className={`text-lg sm:text-xl font-bold ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('addNewPrescription')}</h3>
               <button
                 onClick={() => {
                   setShowPrescriptionModal(false);
                   setMedicationSearchResults([]);
                   setShowMedicationDropdown(false);
                 }}
-                className="text-gray-400 hover:text-gray-600 transition-colors duration-200 p-1"
+                className={`transition-colors duration-200 p-1 ${
+                  darkMode
+                    ? 'text-[#8AA2A7] hover:text-[#F5FEFF]'
+                    : 'text-gray-400 hover:text-gray-600'
+                }`}
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1314,8 +1707,10 @@ const Patient = () => {
             
             <div className="space-y-4">
               <div className="relative" ref={medicationInputRef}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Medication Name *
+                <label className={`block text-sm font-medium mb-1 ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-700'
+                }`}>
+                  {t('medicationName')} *
                 </label>
                 <div className="relative">
                 <input
@@ -1328,51 +1723,75 @@ const Patient = () => {
                         setShowMedicationDropdown(true);
                       }
                     }}
-                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
-                    placeholder="Start typing medication name..."
+                  className={`w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none text-sm sm:text-base transition-colors ${
+                    darkMode
+                      ? 'border-[#133037] bg-[#07181D] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2] focus:border-[#79CAC2]'
+                      : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-[#5ACCC3] focus:border-transparent'
+                  }`}
+                    placeholder={t('startTypingMedicationName')}
                   required
                     autoComplete="off"
                 />
                   {medicationSearchLoading && (
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#5ACCC3]"></div>
+                      <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${
+                        darkMode ? 'border-[#79CAC2]' : 'border-[#5ACCC3]'
+                      }`}></div>
                     </div>
                   )}
                 </div>
                 
                 {/* Medication Search Dropdown */}
                 {showMedicationDropdown && medicationSearchResults.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+                  <div className={`absolute z-50 w-full mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto transition-colors ${
+                    darkMode
+                      ? 'bg-[#0D2026] border-[#133037]'
+                      : 'bg-white border-gray-300'
+                  }`}>
                     {medicationSearchResults.map((medication) => (
                       <button
                         key={medication.id}
                         type="button"
                         onClick={() => handleSelectMedication(medication)}
-                        className="w-full px-4 py-3 text-left hover:bg-gray-50 transition-colors duration-150 border-b border-gray-100 last:border-b-0"
+                        className={`w-full px-4 py-3 text-left transition-colors duration-150 border-b last:border-b-0 ${
+                          darkMode
+                            ? 'hover:bg-[#133037] border-[#133037]'
+                            : 'hover:bg-gray-50 border-gray-100'
+                        }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
-                            <div className="font-semibold text-gray-900 text-sm">
+                            <div className={`font-semibold text-sm ${
+                              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                            }`}>
                               {medication.brand_name}
                             </div>
                             {medication.mnn && (
-                              <div className="text-xs text-gray-500 mt-1">
+                              <div className={`text-xs mt-1 ${
+                                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                              }`}>
                                 MNN: {medication.mnn.name}
                               </div>
                             )}
                             {medication.dosage_form && (
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                Form: {medication.dosage_form.name}
+                              <div className={`text-xs mt-0.5 ${
+                                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                              }`}>
+                                {t('form')}: {medication.dosage_form.name}
                               </div>
                             )}
                             {medication.strength_value && medication.strength_unit && (
-                              <div className="text-xs text-gray-500 mt-0.5">
-                                Strength: {medication.strength_value} {medication.strength_unit.name}
+                              <div className={`text-xs mt-0.5 ${
+                                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                              }`}>
+                                {t('strength')}: {medication.strength_value} {medication.strength_unit.name}
                               </div>
                             )}
                           </div>
                           {medication.manufacturer && (
-                            <div className="text-xs text-gray-400 ml-2 text-right">
+                            <div className={`text-xs ml-2 text-right ${
+                              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                            }`}>
                               {medication.manufacturer.name}
                             </div>
                           )}
@@ -1383,67 +1802,95 @@ const Patient = () => {
                 )}
                 
                 {showMedicationDropdown && medicationSearchResults.length === 0 && !medicationSearchLoading && newPrescription.medication_name.trim().length >= 2 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg px-4 py-3 text-sm text-gray-500">
-                    No medications found. Try a different search term.
+                  <div className={`absolute z-50 w-full mt-1 border rounded-lg shadow-lg px-4 py-3 text-sm transition-colors ${
+                    darkMode
+                      ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                      : 'bg-white border-gray-300 text-gray-500'
+                  }`}>
+                    {t('noMedicationsFoundTryDifferentSearchTerm')}
                   </div>
                 )}
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Dosage *
+                <label className={`block text-sm font-medium mb-1 ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-700'
+                }`}>
+                  {t('dosage')} *
                 </label>
                 <input
                   type="text"
                   name="dosage"
                   value={newPrescription.dosage}
                   onChange={handlePrescriptionInputChange}
-                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
-                  placeholder="e.g., 50mg"
+                  className={`w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none text-sm sm:text-base transition-colors ${
+                    darkMode
+                      ? 'border-[#133037] bg-[#07181D] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2] focus:border-[#79CAC2]'
+                      : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-[#5ACCC3] focus:border-transparent'
+                  }`}
+                  placeholder={t('dosagePlaceholder')}
                   required
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Frequency *
+                <label className={`block text-sm font-medium mb-1 ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-700'
+                }`}>
+                  {t('frequency')} *
                 </label>
                 <input
                   type="text"
                   name="frequency"
                   value={newPrescription.frequency}
                   onChange={handlePrescriptionInputChange}
-                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
-                  placeholder="e.g., Once daily"
+                  className={`w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none text-sm sm:text-base transition-colors ${
+                    darkMode
+                      ? 'border-[#133037] bg-[#07181D] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2] focus:border-[#79CAC2]'
+                      : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-[#5ACCC3] focus:border-transparent'
+                  }`}
+                  placeholder={t('frequencyPlaceholder')}
                   required
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Duration *
+                <label className={`block text-sm font-medium mb-1 ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-700'
+                }`}>
+                  {t('duration')} *
                 </label>
                 <input
                   type="text"
                   name="duration"
                   value={newPrescription.duration}
                   onChange={handlePrescriptionInputChange}
-                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
-                  placeholder="e.g., 3 months"
+                  className={`w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none text-sm sm:text-base transition-colors ${
+                    darkMode
+                      ? 'border-[#133037] bg-[#07181D] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2] focus:border-[#79CAC2]'
+                      : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-[#5ACCC3] focus:border-transparent'
+                  }`}
+                  placeholder={t('durationPlaceholder')}
                   required
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Instructions
+                <label className={`block text-sm font-medium mb-1 ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-700'
+                }`}>
+                  {t('instructions')}
                 </label>
                 <textarea
                   name="instructions"
                   value={newPrescription.instructions}
                   onChange={handlePrescriptionInputChange}
-                  className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent text-sm sm:text-base"
-                  placeholder="Special instructions for the patient"
+                  className={`w-full px-3 sm:px-4 py-2 border rounded-lg focus:ring-2 focus:outline-none text-sm sm:text-base transition-colors resize-none ${
+                    darkMode
+                      ? 'border-[#133037] bg-[#07181D] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2] focus:border-[#79CAC2]'
+                      : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:ring-[#5ACCC3] focus:border-transparent'
+                  }`}
+                  placeholder={t('specialInstructionsForPatient')}
                   rows="3"
                 />
               </div>
@@ -1464,16 +1911,24 @@ const Patient = () => {
                   setMedicationSearchResults([]);
                   setShowMedicationDropdown(false);
                 }}
-                className="px-4 sm:px-6 py-2 border border-gray-300 text-gray-700 rounded-lg text-xs sm:text-sm font-medium hover:bg-gray-50 transition-colors duration-200"
+                className={`px-4 sm:px-6 py-2 border rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 ${
+                  darkMode
+                    ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
               >
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 onClick={handleCreatePrescription}
                 disabled={!newPrescription.medication_name || !newPrescription.dosage || !newPrescription.frequency || !newPrescription.duration || !backendConnected}
-                className="px-4 sm:px-6 py-2 bg-[#5ACCC3] text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-[#4BB5AC] transition-colors duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`px-4 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors duration-200 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode
+                    ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                    : 'bg-[#5ACCC3] text-white hover:bg-[#4BB5AC]'
+                }`}
               >
-                Add Prescription
+                {t('addPrescription')}
               </button>
             </div>
           </div>

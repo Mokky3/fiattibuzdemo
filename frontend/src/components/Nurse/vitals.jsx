@@ -1,16 +1,35 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Search, Thermometer, Heart, Activity, Droplets, Eye, Plus, Calendar, Clock, User, TrendingUp, AlertTriangle, X } from 'lucide-react';
 import NurseHeader from './header';
 import { getVitals, getPatients, createPatientVital } from '../../services/nurseService';
 import { VitalSignForm } from './PatientProfileForms';
 
 const NurseVitalsModule = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
   const [viewMode, setViewMode] = useState('table'); // table or cards
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   const [vitalsData, setVitalsData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -83,7 +102,7 @@ const NurseVitalsModule = () => {
 
   const handleRecordVital = async (vitalData) => {
     if (!selectedPatientId) {
-      alert('Please select a patient first')
+      alert(t('pleaseSelectPatientFirst'))
       return
     }
 
@@ -111,7 +130,7 @@ const NurseVitalsModule = () => {
       setPatientSearchTerm('')
     } catch (e) {
       console.error('Error recording vital:', e)
-      alert('Error recording vital: ' + (e.message || 'Unknown error'))
+      alert(t('errorRecordingVital') + ': ' + (e.message || t('unknownError')))
     } finally {
       setSubmitting(false)
     }
@@ -125,39 +144,43 @@ const NurseVitalsModule = () => {
   const getStatusColor = (status) => {
     switch(status) {
       case 'normal':
-        return 'bg-green-100 text-green-800';
+        return darkMode ? 'bg-green-900 bg-opacity-30 text-green-300' : 'bg-green-100 text-green-800';
       case 'attention':
-        return 'bg-yellow-100 text-yellow-800';
+        return darkMode ? 'bg-yellow-900 bg-opacity-30 text-yellow-300' : 'bg-yellow-100 text-yellow-800';
       case 'abnormal':
-        return 'bg-red-100 text-red-800';
+        return darkMode ? 'bg-red-900 bg-opacity-30 text-red-300' : 'bg-red-100 text-red-800';
       case 'pending':
-        return 'bg-gray-100 text-gray-800';
+        return darkMode ? 'bg-[#133037] text-[#8AA2A7]' : 'bg-gray-100 text-gray-800';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return darkMode ? 'bg-[#133037] text-[#8AA2A7]' : 'bg-gray-100 text-gray-800';
     }
   };
 
   const getStatusIcon = (status) => {
     switch(status) {
       case 'normal':
-        return <div className="w-3 h-3 bg-green-500 rounded-full"></div>;
+        return <div className={`w-3 h-3 rounded-full ${darkMode ? 'bg-green-400' : 'bg-green-500'}`}></div>;
       case 'attention':
-        return <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>;
+        return <div className={`w-3 h-3 rounded-full ${darkMode ? 'bg-yellow-400' : 'bg-yellow-500'}`}></div>;
       case 'abnormal':
-        return <div className="w-3 h-3 bg-red-500 rounded-full"></div>;
+        return <div className={`w-3 h-3 rounded-full ${darkMode ? 'bg-red-400' : 'bg-red-500'}`}></div>;
       case 'pending':
-        return <Clock className="w-3 h-3 text-gray-500" />;
+        return <Clock className={`w-3 h-3 ${darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'}`} />;
       default:
-        return <div className="w-3 h-3 bg-gray-500 rounded-full"></div>;
+        return <div className={`w-3 h-3 rounded-full ${darkMode ? 'bg-[#8AA2A7]' : 'bg-gray-500'}`}></div>;
     }
   };
 
   const getActionButton = (status, vital) => {
     if (status === 'pending') {
       return (
-        <button className="bg-[#5ACCC3] text-white px-3 py-1 rounded text-sm hover:bg-teal-600 flex items-center">
+        <button className={`px-3 py-1 rounded text-sm flex items-center transition-colors ${
+          darkMode
+            ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+            : 'bg-[#5ACCC3] text-white hover:bg-teal-600'
+        }`}>
           <Plus className="w-3 h-3 mr-1" />
-          Record
+          {t('record')}
         </button>
       );
     } else {
@@ -168,10 +191,14 @@ const NurseVitalsModule = () => {
               navigate(`/nurse/patients/${vital.patientId}/profile`);
             }
           }}
-          className="bg-white border border-gray-300 text-gray-700 px-3 py-1 rounded text-sm hover:bg-gray-50 flex items-center"
+          className={`border px-3 py-1 rounded text-sm flex items-center transition-colors ${
+            darkMode
+              ? 'bg-[#0D2026] border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+              : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+          }`}
         >
           <Eye className="w-3 h-3 mr-1" />
-          View
+          {t('view')}
         </button>
       );
     }
@@ -194,55 +221,107 @@ const NurseVitalsModule = () => {
   const statusCounts = getStatusCounts();
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       <NurseHeader />
       
       <div className="p-6">
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h1 className="text-2xl font-bold text-[#5ACCC3] flex items-center">
+            <h1 className={`text-2xl font-bold flex items-center ${
+              darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+            }`}>
               <Activity className="mr-3 h-6 w-6" />
-              Vital Signs Management
+              {t('vitalSignsManagement')}
             </h1>
             <div className="flex items-center space-x-4">
               <input
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
-                className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]"
+                className={`border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 transition-colors ${
+                  darkMode
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-white border-gray-300 text-gray-900 focus:ring-[#5ACCC3]'
+                }`}
               />
               <button 
                 onClick={() => setShowRecordModal(true)}
-                className="bg-[#5ACCC3] text-white px-4 py-2 rounded hover:bg-teal-600 flex items-center"
+                className={`px-4 py-2 rounded flex items-center transition-colors ${
+                  darkMode
+                    ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                    : 'bg-[#5ACCC3] text-white hover:bg-teal-600'
+                }`}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                Record Vitals
+                {t('recordVitals')}
               </button>
             </div>
           </div>
 
           {/* Status Summary */}
           <div className="grid grid-cols-5 gap-4 mb-6">
-            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-green-500">
-              <div className="text-2xl font-bold text-green-600">{statusCounts.normal || 0}</div>
-              <div className="text-sm text-gray-600">Normal</div>
+            <div className={`p-4 rounded-lg shadow border-l-4 transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border-green-500 border-[#133037]'
+                : 'bg-white border-green-500'
+            }`}>
+              <div className={`text-2xl font-bold ${
+                darkMode ? 'text-green-400' : 'text-green-600'
+              }`}>{statusCounts.normal || 0}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+              }`}>{t('normal')}</div>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-yellow-500">
-              <div className="text-2xl font-bold text-yellow-600">{statusCounts.attention || 0}</div>
-              <div className="text-sm text-gray-600">Attention</div>
+            <div className={`p-4 rounded-lg shadow border-l-4 transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border-yellow-500 border-[#133037]'
+                : 'bg-white border-yellow-500'
+            }`}>
+              <div className={`text-2xl font-bold ${
+                darkMode ? 'text-yellow-400' : 'text-yellow-600'
+              }`}>{statusCounts.attention || 0}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+              }`}>{t('attention')}</div>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-red-500">
-              <div className="text-2xl font-bold text-red-600">{statusCounts.abnormal || 0}</div>
-              <div className="text-sm text-gray-600">Abnormal</div>
+            <div className={`p-4 rounded-lg shadow border-l-4 transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border-red-500 border-[#133037]'
+                : 'bg-white border-red-500'
+            }`}>
+              <div className={`text-2xl font-bold ${
+                darkMode ? 'text-red-400' : 'text-red-600'
+              }`}>{statusCounts.abnormal || 0}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+              }`}>{t('abnormal')}</div>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-gray-500">
-              <div className="text-2xl font-bold text-gray-600">{statusCounts.pending || 0}</div>
-              <div className="text-sm text-gray-600">Pending</div>
+            <div className={`p-4 rounded-lg shadow border-l-4 transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border-gray-500 border-[#133037]'
+                : 'bg-white border-gray-500'
+            }`}>
+              <div className={`text-2xl font-bold ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+              }`}>{statusCounts.pending || 0}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+              }`}>{t('pending')}</div>
             </div>
-            <div className="bg-white p-4 rounded-lg shadow border-l-4 border-[#5ACCC3]">
-              <div className="text-2xl font-bold text-[#5ACCC3]">{vitalsData.length}</div>
-              <div className="text-sm text-gray-600">Total Patients</div>
+            <div className={`p-4 rounded-lg shadow border-l-4 transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border-[#79CAC2] border-[#133037]'
+                : 'bg-white border-[#5ACCC3]'
+            }`}>
+              <div className={`text-2xl font-bold ${
+                darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+              }`}>{vitalsData.length}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+              }`}>{t('totalPatients')}</div>
             </div>
           </div>
 
@@ -252,47 +331,65 @@ const NurseVitalsModule = () => {
               <div className="relative flex-1 max-w-md">
                 <input
                   type="text"
-                  placeholder="Search patient or room..."
+                  placeholder={t('searchPatientOrRoom')}
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5ACCC3] focus:border-transparent"
+                  className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                      : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:ring-[#5ACCC3]'
+                  }`}
                 />
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                <Search className={`absolute left-3 top-2.5 h-4 w-4 ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                }`} />
               </div>
               
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]"
+                className={`border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                  darkMode
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-white border-gray-300 text-gray-900 focus:ring-[#5ACCC3]'
+                }`}
               >
-                <option value="all">All Status</option>
-                <option value="normal">Normal</option>
-                <option value="attention">Attention</option>
-                <option value="abnormal">Abnormal</option>
-                <option value="pending">Pending</option>
+                <option value="all">{t('allStatus')}</option>
+                <option value="normal">{t('normal')}</option>
+                <option value="attention">{t('attention')}</option>
+                <option value="abnormal">{t('abnormal')}</option>
+                <option value="pending">{t('pending')}</option>
               </select>
             </div>
 
             <div className="flex items-center space-x-2">
               <button
                 onClick={() => setViewMode('table')}
-                className={`px-3 py-2 rounded ${
-                  viewMode === 'table' 
-                    ? 'bg-[#5ACCC3] text-white' 
+                className={`px-3 py-2 rounded transition-colors ${
+                  viewMode === 'table'
+                    ? darkMode
+                      ? 'bg-[#79CAC2] text-[#050C0F]'
+                      : 'bg-[#5ACCC3] text-white'
+                    : darkMode
+                    ? 'bg-[#0D2026] border border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
                     : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                Table
+                {t('table')}
               </button>
               <button
                 onClick={() => setViewMode('cards')}
-                className={`px-3 py-2 rounded ${
-                  viewMode === 'cards' 
-                    ? 'bg-[#5ACCC3] text-white' 
+                className={`px-3 py-2 rounded transition-colors ${
+                  viewMode === 'cards'
+                    ? darkMode
+                      ? 'bg-[#79CAC2] text-[#050C0F]'
+                      : 'bg-[#5ACCC3] text-white'
+                    : darkMode
+                    ? 'bg-[#0D2026] border border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
                     : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
                 }`}
               >
-                Cards
+                {t('cards')}
               </button>
             </div>
           </div>
@@ -300,95 +397,153 @@ const NurseVitalsModule = () => {
 
         {/* Vitals Display */}
         {viewMode === 'table' ? (
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className={`rounded-lg shadow overflow-hidden transition-colors ${
+            darkMode ? 'bg-[#0D2026] border border-[#133037]' : 'bg-white'
+          }`}>
             <div className="overflow-x-auto">
               <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className={`border-b transition-colors ${
+                  darkMode ? 'bg-[#07181D] border-[#133037]' : 'bg-gray-50 border-gray-200'
+                }`}>
                   <tr>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">Patient</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">Time</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">Temperature</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">Blood Pressure</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">Heart Rate</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">Respiratory</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">O2 Sat</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">Pain</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-700 uppercase tracking-wider">Action</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('patient')}</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('time')}</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('temperature')}</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('bloodPressure')}</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('heartRate')}</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('respiratory')}</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('o2Sat')}</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('pain')}</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('status')}</th>
+                    <th className={`px-6 py-4 text-left text-sm font-medium uppercase tracking-wider ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>{t('action')}</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody className={`divide-y transition-colors ${
+                  darkMode ? 'divide-[#133037]' : 'divide-gray-200 bg-white'
+                }`}>
                   {loading ? (
                     <tr>
-                      <td colSpan="9" className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan="10" className={`px-6 py-8 text-center ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                      }`}>
                         <div className="flex items-center justify-center">
-                          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#5ACCC3] mr-2"></div>
-                          Loading vitals data...
+                          <div className={`animate-spin rounded-full h-6 w-6 border-b-2 mr-2 ${
+                            darkMode ? 'border-[#79CAC2]' : 'border-[#5ACCC3]'
+                          }`}></div>
+                          {t('loadingVitalsData')}
                         </div>
                       </td>
                     </tr>
                   ) : filteredVitals.length === 0 ? (
                     <tr>
-                      <td colSpan="9" className="px-6 py-8 text-center text-gray-500">
-                        No vital signs found
+                      <td colSpan="10" className={`px-6 py-8 text-center ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                      }`}>
+                        {t('noVitalSignsFound')}
                       </td>
                     </tr>
                   ) : (
                     filteredVitals.map((vital) => (
-                    <tr key={vital.id} className="hover:bg-gray-50 transition-colors">
+                    <tr key={vital.id} className={`transition-colors ${
+                      darkMode ? 'hover:bg-[#133037]' : 'hover:bg-gray-50'
+                    }`}>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="font-medium text-gray-900">{vital.patient}</div>
-                          <div className="text-sm text-gray-500">Room {vital.room}</div>
+                          <div className={`font-medium ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{vital.patient}</div>
+                          <div className={`text-sm ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{t('room')} {vital.room}</div>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-gray-900">{vital.time}</div>
-                        <div className="text-xs text-gray-500">{vital.date}</div>
+                        <div className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.time}</div>
+                        <div className={`text-xs ${
+                          darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                        }`}>{vital.date}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <Thermometer className="w-4 h-4 mr-2 text-red-500" />
-                          <span className="text-gray-900">{vital.temperature}</span>
+                          <Thermometer className={`w-4 h-4 mr-2 ${
+                            darkMode ? 'text-red-400' : 'text-red-500'
+                          }`} />
+                          <span className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.temperature}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <Activity className="w-4 h-4 mr-2 text-blue-500" />
-                          <span className="text-gray-900">{vital.bloodPressure}</span>
+                          <Activity className={`w-4 h-4 mr-2 ${
+                            darkMode ? 'text-blue-400' : 'text-blue-500'
+                          }`} />
+                          <span className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.bloodPressure}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <Heart className="w-4 h-4 mr-2 text-red-500" />
-                          <span className="text-gray-900">{vital.heartRate}</span>
-                          {vital.heartRate !== '-' && <span className="text-xs text-gray-500 ml-1">bpm</span>}
+                          <Heart className={`w-4 h-4 mr-2 ${
+                            darkMode ? 'text-red-400' : 'text-red-500'
+                          }`} />
+                          <span className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.heartRate}</span>
+                          {vital.heartRate !== '-' && (
+                            <span className={`text-xs ml-1 ${
+                              darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                            }`}>bpm</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-gray-900">{vital.respiratory}</div>
-                        {vital.respiratory !== '-' && <div className="text-xs text-gray-500">/min</div>}
+                        <div className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.respiratory}</div>
+                        {vital.respiratory !== '-' && (
+                          <div className={`text-xs ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>/min</div>
+                        )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center">
-                          <Droplets className="w-4 h-4 mr-2 text-blue-500" />
-                          <span className="text-gray-900">{vital.oxygenSat}</span>
+                          <Droplets className={`w-4 h-4 mr-2 ${
+                            darkMode ? 'text-blue-400' : 'text-blue-500'
+                          }`} />
+                          <span className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.oxygenSat}</span>
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-gray-900">{vital.pain}</div>
+                        <div className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.pain}</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="flex items-center space-x-2">
                           {getStatusIcon(vital.status)}
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(vital.status)}`}>
-                            {vital.status.charAt(0).toUpperCase() + vital.status.slice(1)}
+                            {t(vital.status)}
                           </span>
                         </div>
-                        {vital.alerts.length > 0 && (
+                        {vital.alerts && vital.alerts.length > 0 && (
                           <div className="mt-1">
                             {vital.alerts.map((alert, index) => (
-                              <div key={index} className="flex items-center text-xs text-red-600">
+                              <div key={index} className={`flex items-center text-xs ${
+                                darkMode ? 'text-red-400' : 'text-red-600'
+                              }`}>
                                 <AlertTriangle className="w-3 h-3 mr-1" />
                                 {alert}
                               </div>
@@ -409,16 +564,22 @@ const NurseVitalsModule = () => {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredVitals.map((vital) => (
-              <div key={vital.id} className="bg-white rounded-lg shadow p-6 hover:shadow-lg transition-shadow">
+              <div key={vital.id} className={`rounded-lg shadow p-6 hover:shadow-lg transition-all ${
+                darkMode ? 'bg-[#0D2026] border border-[#133037]' : 'bg-white'
+              }`}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <h3 className="font-bold text-gray-900">{vital.patient}</h3>
-                    <p className="text-sm text-gray-500">Room {vital.room} • {vital.time}</p>
+                    <h3 className={`font-bold ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{vital.patient}</h3>
+                    <p className={`text-sm ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                    }`}>{t('room')} {vital.room} • {vital.time}</p>
                   </div>
                   <div className="flex items-center space-x-2">
                     {getStatusIcon(vital.status)}
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(vital.status)}`}>
-                      {vital.status.charAt(0).toUpperCase() + vital.status.slice(1)}
+                      {t(vital.status)}
                     </span>
                   </div>
                 </div>
@@ -426,33 +587,49 @@ const NurseVitalsModule = () => {
                 {vital.status !== 'pending' ? (
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div className="flex items-center">
-                      <Thermometer className="w-4 h-4 mr-2 text-red-500" />
-                      <span>{vital.temperature}</span>
+                      <Thermometer className={`w-4 h-4 mr-2 ${
+                        darkMode ? 'text-red-400' : 'text-red-500'
+                      }`} />
+                      <span className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.temperature}</span>
                     </div>
                     <div className="flex items-center">
-                      <Heart className="w-4 h-4 mr-2 text-red-500" />
-                      <span>{vital.heartRate} bpm</span>
+                      <Heart className={`w-4 h-4 mr-2 ${
+                        darkMode ? 'text-red-400' : 'text-red-500'
+                      }`} />
+                      <span className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.heartRate} bpm</span>
                     </div>
                     <div className="flex items-center">
-                      <Activity className="w-4 h-4 mr-2 text-blue-500" />
-                      <span>{vital.bloodPressure}</span>
+                      <Activity className={`w-4 h-4 mr-2 ${
+                        darkMode ? 'text-blue-400' : 'text-blue-500'
+                      }`} />
+                      <span className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.bloodPressure}</span>
                     </div>
                     <div className="flex items-center">
-                      <Droplets className="w-4 h-4 mr-2 text-blue-500" />
-                      <span>{vital.oxygenSat}</span>
+                      <Droplets className={`w-4 h-4 mr-2 ${
+                        darkMode ? 'text-blue-400' : 'text-blue-500'
+                      }`} />
+                      <span className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{vital.oxygenSat}</span>
                     </div>
                   </div>
                 ) : (
-                  <div className="text-center py-4 text-gray-500">
-                    <Clock className="w-8 h-8 mx-auto mb-2" />
-                    <p>Vitals due for recording</p>
+                  <div className={`text-center py-4 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>
+                    <Clock className={`w-8 h-8 mx-auto mb-2 ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                    }`} />
+                    <p>{t('vitalsDueForRecording')}</p>
                   </div>
                 )}
                 
-                {vital.alerts.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-gray-200">
+                {vital.alerts && vital.alerts.length > 0 && (
+                  <div className={`mt-4 pt-4 border-t ${
+                    darkMode ? 'border-[#133037]' : 'border-gray-200'
+                  }`}>
                     {vital.alerts.map((alert, index) => (
-                      <div key={index} className="flex items-center text-xs text-red-600 mb-1">
+                      <div key={index} className={`flex items-center text-xs mb-1 ${
+                        darkMode ? 'text-red-400' : 'text-red-600'
+                      }`}>
                         <AlertTriangle className="w-3 h-3 mr-1" />
                         {alert}
                       </div>
@@ -460,9 +637,13 @@ const NurseVitalsModule = () => {
                   </div>
                 )}
                 
-                <div className="mt-4 pt-4 border-t border-gray-200 flex justify-between items-center">
-                  <span className="text-xs text-gray-500">
-                    {vital.nurse !== '-' ? `Recorded by: ${vital.nurse}` : 'Not recorded'}
+                <div className={`mt-4 pt-4 border-t flex justify-between items-center ${
+                  darkMode ? 'border-[#133037]' : 'border-gray-200'
+                }`}>
+                  <span className={`text-xs ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>
+                    {vital.nurse !== '-' ? t('recordedBy', { nurse: vital.nurse }) : t('notRecorded')}
                   </span>
                   {getActionButton(vital.status, vital)}
                 </div>
@@ -472,25 +653,39 @@ const NurseVitalsModule = () => {
         )}
 
         {/* Summary Footer */}
-        <div className="mt-6 text-sm text-gray-600 text-center">
-          Showing {filteredVitals.length} of {vitalsData.length} patients for {selectedDate}
+        <div className={`mt-6 text-sm text-center ${
+          darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+        }`}>
+          {t('showingVitals', { 
+            count: filteredVitals.length, 
+            total: vitalsData.length, 
+            date: selectedDate 
+          })}
         </div>
       </div>
 
       {/* Record Vitals Modal */}
       {showRecordModal && (
-        <div className="fixed inset-0 bg-white/30 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className={`fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 ${
+          darkMode ? 'bg-black/50' : 'bg-white/30'
+        }`}>
+          <div className={`rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto transition-colors ${
+            darkMode ? 'bg-[#0D2026] border border-[#133037]' : 'bg-white'
+          }`}>
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-[#5ACCC3]">Record Vital Signs</h2>
+                <h2 className={`text-xl font-bold ${
+                  darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+                }`}>{t('recordVitalSigns')}</h2>
                 <button
                   onClick={() => {
                     setShowRecordModal(false)
                     setSelectedPatientId(null)
                     setPatientSearchTerm('')
                   }}
-                  className="text-gray-400 hover:text-gray-600"
+                  className={`transition-colors ${
+                    darkMode ? 'text-[#8AA2A7] hover:text-[#C1D9DD]' : 'text-gray-400 hover:text-gray-600'
+                  }`}
                 >
                   <X className="w-6 h-6" />
                 </button>
@@ -499,43 +694,63 @@ const NurseVitalsModule = () => {
               {!selectedPatientId ? (
                 <div>
                   <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Select Patient
+                    <label className={`block text-sm font-medium mb-2 ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                    }`}>
+                      {t('selectPatient')}
                     </label>
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder="Search patients..."
+                        placeholder={t('searchPatients')}
                         value={patientSearchTerm}
                         onChange={(e) => setPatientSearchTerm(e.target.value)}
-                        className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]"
+                        className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                          darkMode
+                            ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                            : 'bg-white border-gray-300 text-gray-900 placeholder-gray-400 focus:ring-[#5ACCC3]'
+                        }`}
                       />
-                      <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
+                      <Search className={`absolute left-3 top-2.5 h-4 w-4 ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                      }`} />
                     </div>
                   </div>
-                  <div className="max-h-64 overflow-y-auto border border-gray-200 rounded-lg">
+                  <div className={`max-h-64 overflow-y-auto border rounded-lg ${
+                    darkMode ? 'border-[#133037]' : 'border-gray-200'
+                  }`}>
                     {filteredPatients.length > 0 ? (
-                      <ul className="divide-y divide-gray-200">
+                      <ul className={`divide-y ${
+                        darkMode ? 'divide-[#133037]' : 'divide-gray-200'
+                      }`}>
                         {filteredPatients.map((patient) => (
                           <li
                             key={patient.id}
                             onClick={() => setSelectedPatientId(patient.id)}
-                            className="p-3 hover:bg-gray-50 cursor-pointer"
+                            className={`p-3 cursor-pointer transition-colors ${
+                              darkMode ? 'hover:bg-[#133037]' : 'hover:bg-gray-50'
+                            }`}
                           >
-                            <div className="font-medium text-gray-900">
+                            <div className={`font-medium ${
+                              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                            }`}>
                               {patient.firstName} {patient.lastName}
                             </div>
                             {patient.dateOfBirth && (
-                              <div className="text-sm text-gray-500">
-                                DOB: {new Date(patient.dateOfBirth).toLocaleDateString()}
+                              <div className={`text-sm ${
+                                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                              }`}>
+                                {t('dob')}: {new Date(patient.dateOfBirth).toLocaleDateString()}
                               </div>
                             )}
                           </li>
                         ))}
                       </ul>
                     ) : (
-                      <div className="p-4 text-center text-gray-500">
-                        No patients found
+                      <div className={`p-4 text-center ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                      }`}>
+                        {t('noPatientsFound')}
                       </div>
                     )}
                   </div>
@@ -544,17 +759,25 @@ const NurseVitalsModule = () => {
                 <div>
                   <div className="mb-4 flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-gray-600">Recording vitals for:</p>
-                      <p className="font-medium text-gray-900">
+                      <p className={`text-sm ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                      }`}>{t('recordingVitalsFor')}:</p>
+                      <p className={`font-medium ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                      }`}>
                         {patients.find(p => p.id === selectedPatientId)?.firstName}{' '}
                         {patients.find(p => p.id === selectedPatientId)?.lastName}
                       </p>
                     </div>
                     <button
                       onClick={() => setSelectedPatientId(null)}
-                      className="text-sm text-[#5ACCC3] hover:text-teal-700"
+                      className={`text-sm transition-colors ${
+                        darkMode
+                          ? 'text-[#79CAC2] hover:text-[#58B4AA]'
+                          : 'text-[#5ACCC3] hover:text-teal-700'
+                      }`}
                     >
-                      Change Patient
+                      {t('changePatient')}
                     </button>
                   </div>
                   <VitalSignForm

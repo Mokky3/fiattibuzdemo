@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDown, X } from 'lucide-react';
 import { patientDoctorSearchAPI } from '../../services/apiService';
 
 const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospital = '', onAppointmentBooked }) => {
+  const { t } = useTranslation();
   const [doctorSearchData, setDoctorSearchData] = useState({
     fullName: initialDoctor?.name || '',
     hospital: initialHospital || '',
@@ -18,12 +20,31 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const searchTimeoutRef = useRef(null);
 
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount and when darkMode changes
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
   const appointmentTypes = [
-    'General Consultation',
-    'Yearly Check Up',
-    'Follow-up Visit',
-    'Emergency Consultation',
-    'Specialist Consultation'
+    t('patientAppointment.typeGeneralConsultation'),
+    t('patientAppointment.typeYearlyCheckUp'),
+    t('patientAppointment.typeFollowUpVisit'),
+    t('patientAppointment.typeEmergencyConsultation'),
+    t('patientAppointment.typeSpecialistConsultation')
   ];
 
   const handleAutoSearch = useCallback(async (doctorName, hospitalName) => {
@@ -46,7 +67,7 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
         setResults([]);
         setError(''); // Don't show error for not found, just show empty results
       } else {
-        setError(err?.message || 'Failed to search doctors');
+        setError(err?.message || t('doctorSearchModal.errorSearchFailed'));
         setResults([]);
       }
     } finally {
@@ -148,7 +169,7 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
         setResults([]);
         setError(''); // Don't show error for not found, just show empty results
       } else {
-        setError(err?.message || 'Failed to search doctors');
+        setError(err?.message || t('doctorSearchModal.errorSearchFailed'));
         setResults([]);
       }
     } finally {
@@ -228,7 +249,7 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
     
     // Validate required fields
     if (!doctorSearchData.appointmentDate || !doctorSearchData.appointmentTime || !doctorSearchData.appointmentType) {
-      setError('Please select date, time, and appointment type');
+      setError(t('doctorSearchModal.errorSelectDateTimeType'));
       return;
     }
     
@@ -240,7 +261,7 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
     } : null);
     
     if (!doctorToBook || !doctorToBook.id) {
-      setError('Please select a doctor from the search results');
+      setError(t('doctorSearchModal.errorSelectDoctor'));
       return;
     }
     
@@ -271,7 +292,7 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
       }, 3000);
       
     } catch (e) {
-      setError(e?.message || 'Failed to book appointment');
+      setError(e?.message || t('patientAppointment.errorBookFailed'));
       setLoading(false);
     }
   };
@@ -296,13 +317,13 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
 
   return (
     <div className="fixed inset-0 bg-transparent backdrop-blur-md flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-xl sm:rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border-2 sm:border-4 border-emerald-400">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl sm:rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border-2 sm:border-4 ${darkMode ? 'border-emerald-600' : 'border-emerald-400'}`}>
         <div className="p-4 sm:p-8">
           <div className="flex justify-between items-center mb-6 sm:mb-8">
-            <h2 className="text-lg sm:text-2xl font-semibold text-emerald-400">Search a doctor</h2>
+            <h2 className={`text-lg sm:text-2xl font-semibold ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('doctorSearchModal.searchDoctor')}</h2>
             <button
               onClick={handleClose}
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+              className={`transition-colors p-1 ${darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
             >
               <X className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
@@ -318,31 +339,43 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search doctor by name..."
+                  placeholder={t('doctorSearchModal.searchByName')}
                   value={doctorSearchData.fullName}
                   onChange={(e) => handleDoctorSearchChange('fullName', e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-emerald-200 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors text-sm sm:text-base"
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors text-sm sm:text-base ${
+                    darkMode 
+                      ? 'bg-gray-700 border-emerald-600 text-gray-100 placeholder-gray-400' 
+                      : 'border-emerald-200'
+                  }`}
                 />
                 {loading && doctorSearchData.fullName && (
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-emerald-400"></div>
+                    <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${darkMode ? 'border-emerald-400' : 'border-emerald-400'}`}></div>
                   </div>
                 )}
               </div>
               <div>
                 <input
                   type="text"
-                  placeholder="Filter by hospital (optional)"
+                  placeholder={t('doctorSearchModal.filterByHospital')}
                   value={doctorSearchData.hospital}
                   onChange={(e) => handleDoctorSearchChange('hospital', e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-emerald-200 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors text-sm sm:text-base"
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-full focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 transition-colors text-sm sm:text-base ${
+                    darkMode 
+                      ? 'bg-gray-700 border-emerald-600 text-gray-100 placeholder-gray-400' 
+                      : 'border-emerald-200'
+                  }`}
                 />
               </div>
             </div>
             
             {/* Real-time search results dropdown */}
             {doctorSearchData.fullName && results.length > 0 && !showSuccessMessage && (
-              <div className="mt-2 border-2 border-emerald-200 rounded-lg bg-white shadow-lg max-h-64 overflow-y-auto">
+              <div className={`mt-2 border-2 rounded-lg shadow-lg max-h-64 overflow-y-auto ${
+                darkMode 
+                  ? 'bg-gray-700 border-emerald-600' 
+                  : 'bg-white border-emerald-200'
+              }`}>
                 {results.map((doc, idx) => (
                   <div 
                     key={doc.id || idx} 
@@ -355,27 +388,31 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
                       }));
                       setResults([]); // Close dropdown after selection
                     }}
-                    className={`p-3 cursor-pointer transition-colors border-b border-gray-100 last:border-b-0 ${
+                    className={`p-3 cursor-pointer transition-colors border-b last:border-b-0 ${
                       selectedDoctor?.id === doc.id || selectedDoctor?.id === doc.doctor_id
-                        ? 'bg-emerald-50 border-emerald-200'
-                        : 'hover:bg-gray-50'
+                        ? darkMode 
+                          ? 'bg-emerald-900/30 border-emerald-600' 
+                          : 'bg-emerald-50 border-emerald-200'
+                        : darkMode 
+                          ? 'border-gray-600 hover:bg-gray-600' 
+                          : 'border-gray-100 hover:bg-gray-50'
                     }`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
-                        <div className="font-semibold text-gray-800 text-sm sm:text-base">
-                          {doc.fullName || doc.name || doc.full_name || 'Doctor'}
+                        <div className={`font-semibold text-sm sm:text-base ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
+                          {doc.fullName || doc.name || doc.full_name || t('doctorSearchModal.doctor')}
                         </div>
-                        <div className="text-xs sm:text-sm text-gray-600 mt-1">
+                        <div className={`text-xs sm:text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                           {doc.specialty || doc.specialization ? (
-                            <span className="text-emerald-600 font-medium">{doc.specialty || doc.specialization}</span>
+                            <span className={`font-medium ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>{doc.specialty || doc.specialization}</span>
                           ) : null}
                           {doc.specialty || doc.specialization ? ' • ' : ''}
-                          {doc.hospital || doc.organization || 'Hospital not specified'}
+                          {doc.hospital || doc.organization || t('doctorSearchModal.hospitalNotSpecified')}
                         </div>
                       </div>
                       {selectedDoctor?.id === doc.id || selectedDoctor?.id === doc.doctor_id ? (
-                        <div className="ml-2 text-emerald-600">
+                        <div className={`ml-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`}>
                           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                           </svg>
@@ -388,58 +425,74 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
             )}
             
             {doctorSearchData.fullName && results.length === 0 && !loading && !showSuccessMessage && (
-              <div className="mt-2 text-sm text-gray-500 text-center py-2">
-                No doctors found. Try a different search term.
+              <div className={`mt-2 text-sm text-center py-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                {t('doctorSearchModal.noDoctorsFound')}
               </div>
             )}
 
             <div>
-              <label className="block text-sm font-medium text-emerald-400 mb-2">Appointment date</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('patientAppointment.appointmentDate')}</label>
               <input
                 type="date"
                 value={doctorSearchData.appointmentDate}
                 onChange={(e) => handleDoctorSearchChange('appointmentDate', e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base"
+                className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base ${
+                  darkMode 
+                    ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                    : 'border-gray-200'
+                }`}
                 placeholder="date/month/year"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-emerald-400 mb-2">Appointment time</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('patientAppointment.appointmentTime')}</label>
               <input
                 type="time"
                 value={doctorSearchData.appointmentTime}
                 onChange={(e) => handleDoctorSearchChange('appointmentTime', e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base"
+                className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent text-sm sm:text-base ${
+                  darkMode 
+                    ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                    : 'border-gray-200'
+                }`}
                 placeholder="time"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-emerald-400 mb-2">Appointment type</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('patientAppointment.appointmentType')}</label>
               <div className="relative">
                 <select
                   value={doctorSearchData.appointmentType}
                   onChange={(e) => handleDoctorSearchChange('appointmentType', e.target.value)}
-                  className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent appearance-none bg-white text-sm sm:text-base"
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent appearance-none text-sm sm:text-base ${
+                    darkMode 
+                      ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                      : 'bg-white border-gray-200'
+                  }`}
                 >
-                  <option value="">Value</option>
+                  <option value="">{t('patientAppointment.selectType')}</option>
                   {appointmentTypes.map((type) => (
                     <option key={type} value={type}>{type}</option>
                   ))}
                 </select>
-                <ChevronDown className="absolute right-3 top-2.5 sm:top-3.5 h-4 w-4 text-gray-400 pointer-events-none" />
+                <ChevronDown className={`absolute right-3 top-2.5 sm:top-3.5 h-4 w-4 pointer-events-none ${darkMode ? 'text-gray-400' : 'text-gray-400'}`} />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-emerald-400 mb-2">Additional note (optional)</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('patientAppointment.additionalNote')}</label>
               <textarea
                 value={doctorSearchData.additionalNote}
                 onChange={(e) => handleDoctorSearchChange('additionalNote', e.target.value)}
                 rows={4}
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent resize-none text-sm sm:text-base"
-                placeholder="Value"
+                className={`w-full px-3 sm:px-4 py-2 sm:py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-transparent resize-none text-sm sm:text-base ${
+                  darkMode 
+                    ? 'bg-gray-700 border-gray-600 text-gray-100' 
+                    : 'border-gray-200'
+                }`}
+                placeholder={t('patientAppointment.additionalNotePlaceholder')}
               />
             </div>
 
@@ -447,33 +500,49 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-6 sm:px-8 py-2 sm:py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm sm:text-base"
+                className={`px-6 sm:px-8 py-2 sm:py-3 rounded-lg transition-colors font-medium text-sm sm:text-base ${
+                  darkMode 
+                    ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
               >
-                CANCEL
+                {t('doctorSearchModal.cancel')}
               </button>
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={loading}
-                className="px-6 sm:px-8 py-2 sm:py-3 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors font-medium text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`px-6 sm:px-8 py-2 sm:py-3 rounded-lg transition-colors font-medium text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode 
+                    ? 'bg-emerald-600 hover:bg-emerald-700' 
+                    : 'bg-emerald-400 hover:bg-emerald-500'
+                } text-white`}
               >
-                {loading ? 'BOOKING...' : 'SUBMIT'}
+                {loading ? t('doctorSearchModal.booking') : t('doctorSearchModal.submit')}
               </button>
             </div>
           </form>
 
           <div className="mt-4">
             {error && (
-              <div className="p-3 bg-red-100 border border-red-200 text-red-700 rounded">{error}</div>
+              <div className={`p-3 rounded border ${
+                darkMode 
+                  ? 'bg-red-900/30 border-red-700 text-red-300' 
+                  : 'bg-red-100 border-red-200 text-red-700'
+              }`}>{error}</div>
             )}
             {showSuccessMessage && (
-              <div className="p-4 bg-green-100 border border-green-400 text-green-800 rounded-lg text-center">
-                <div className="font-semibold text-lg mb-1">Appointment Booked Successfully!</div>
-                <div className="text-sm">Your appointment has been confirmed.</div>
+              <div className={`p-4 rounded-lg text-center border ${
+                darkMode 
+                  ? 'bg-green-900/30 border-green-700 text-green-300' 
+                  : 'bg-green-100 border-green-400 text-green-800'
+              }`}>
+                <div className={`font-semibold text-lg mb-1 ${darkMode ? 'text-green-300' : 'text-green-800'}`}>{t('doctorSearchModal.successBooked')}</div>
+                <div className={`text-sm ${darkMode ? 'text-green-300' : 'text-green-800'}`}>{t('doctorSearchModal.appointmentConfirmed')}</div>
               </div>
             )}
             {loading && !showSuccessMessage && (
-              <div className="text-sm text-gray-600">Searching doctors...</div>
+              <div className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('doctorSearchModal.searching')}</div>
             )}
             {!loading && results.length > 0 && (
               <div className="space-y-2">
@@ -483,13 +552,17 @@ const DoctorSearchModal = ({ isOpen, onClose, initialDoctor = null, initialHospi
                     onClick={() => setSelectedDoctor(doc)}
                     className={`border rounded-lg p-3 cursor-pointer transition-colors ${
                       selectedDoctor?.id === doc.id || selectedDoctor?.id === doc.doctor_id
-                        ? 'border-emerald-400 bg-emerald-50'
-                        : 'border-gray-200 hover:border-gray-300'
+                        ? darkMode 
+                          ? 'border-emerald-600 bg-emerald-900/30' 
+                          : 'border-emerald-400 bg-emerald-50'
+                        : darkMode 
+                          ? 'border-gray-600 hover:border-gray-500' 
+                          : 'border-gray-200 hover:border-gray-300'
                     }`}
                   >
                     <div>
-                      <div className="font-semibold text-gray-800">{doc.name || doc.fullName || 'Doctor'}</div>
-                      <div className="text-xs text-gray-600">{doc.specialty || doc.specialization} • {doc.hospital || doc.organization}</div>
+                      <div className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{doc.name || doc.fullName || t('doctorSearchModal.doctor')}</div>
+                      <div className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{doc.specialty || doc.specialization} • {doc.hospital || doc.organization}</div>
                     </div>
                   </div>
                 ))}

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import Navbar from './Navbar'
 import { 
   Bell, Lock, Globe, Eye, EyeOff, Smartphone, Mail, 
@@ -10,10 +11,30 @@ import { patientSettingsAPI, patientSecurityAPI } from '../../services/apiServic
 import { handlePatientAuthError } from '../../utils/patientAuth'
 
 const PatientSettings = () => {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('notifications')
   const [loading, setLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   const [error, setError] = useState('')
+
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme')
+    if (saved) return saved === 'dark'
+    return document.documentElement.classList.contains('dark')
+  })
+
+  // Apply theme on mount and when darkMode changes
+  useEffect(() => {
+    const root = document.documentElement
+    if (darkMode) {
+      root.classList.add('dark')
+      localStorage.setItem('theme', 'dark')
+    } else {
+      root.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
+    }
+  }, [darkMode])
   
   // Notification settings
   const [notifications, setNotifications] = useState({
@@ -144,12 +165,12 @@ const PatientSettings = () => {
   // Handle password change
   const handlePasswordChange = async () => {
     if (passwordForm.new !== passwordForm.confirm) {
-      setError('Passwords do not match')
+      setError(t('settings.passwordsDoNotMatch'))
       return
     }
     
     if (passwordForm.new.length < 8) {
-      setError('Password must be at least 8 characters long')
+      setError(t('settings.passwordMinLength'))
       return
     }
     
@@ -181,7 +202,7 @@ const PatientSettings = () => {
       
       setTimeout(() => setSaveStatus(''), 3000)
     } catch (error) {
-      setError(error?.message || 'Failed to change password')
+      setError(error?.message || t('settings.errorPasswordChangeFailed'))
       setSaveStatus('error')
     } finally {
       setLoading(false)
@@ -216,7 +237,7 @@ const PatientSettings = () => {
         setTimeout(() => setSaveStatus(''), 3000)
       }
     } catch (error) {
-      setError(error?.message || 'Failed to setup 2FA')
+      setError(error?.message || t('settings.error2FAFailed'))
       setSaveStatus('error')
     } finally {
       setLoading(false)
@@ -226,7 +247,7 @@ const PatientSettings = () => {
   // Handle 2FA verification
   const handleTwoFactorVerify = async () => {
     if (twoFactorToken.length !== 6) {
-      setError('Please enter a 6-digit code')
+      setError(t('settings.enter6DigitCode'))
       return
     }
     
@@ -248,7 +269,7 @@ const PatientSettings = () => {
       await loadSecurityData()
       setTimeout(() => setSaveStatus(''), 3000)
     } catch (error) {
-      setError(error?.message || 'Invalid verification code')
+      setError(error?.message || t('settings.invalidVerificationCode'))
       setSaveStatus('error')
     } finally {
       setLoading(false)
@@ -268,7 +289,7 @@ const PatientSettings = () => {
       await loadSecurityData()
       setTimeout(() => setSaveStatus(''), 3000)
     } catch (error) {
-      setError(error?.message || 'Failed to end session')
+      setError(error?.message || t('settings.errorEndSessionFailed'))
       setSaveStatus('error')
     } finally {
       setLoading(false)
@@ -277,7 +298,7 @@ const PatientSettings = () => {
 
   // Handle logout all sessions
   const handleLogoutAllSessions = async () => {
-    if (!confirm('Are you sure you want to logout from all other sessions? This will end all sessions except the current one.')) {
+    if (!confirm(t('settings.confirmLogoutAllSessions'))) {
       return
     }
     
@@ -292,7 +313,7 @@ const PatientSettings = () => {
       await loadSecurityData()
       setTimeout(() => setSaveStatus(''), 3000)
     } catch (error) {
-      setError(error?.message || 'Failed to logout from all sessions')
+      setError(error?.message || t('settings.errorLogoutAllFailed'))
       setSaveStatus('error')
     } finally {
       setLoading(false)
@@ -363,7 +384,7 @@ const PatientSettings = () => {
         // Load security data
         await loadSecurityData()
       } catch (e) {
-        setError(e?.message || 'Failed to load settings')
+        setError(e?.message || t('settings.errorLoadFailed'))
       } finally {
         setLoading(false)
       }
@@ -372,10 +393,10 @@ const PatientSettings = () => {
   }, [])
 
   const tabs = [
-    { id: 'notifications', label: 'Notifications', icon: <Bell className="h-4 w-4" /> },
-    { id: 'privacy', label: 'Privacy', icon: <Shield className="h-4 w-4" /> },
-    { id: 'security', label: 'Security', icon: <Lock className="h-4 w-4" /> },
-    { id: 'preferences', label: 'Preferences', icon: <Globe className="h-4 w-4" /> }
+    { id: 'notifications', label: t('settings.notifications'), icon: <Bell className="h-4 w-4" /> },
+    { id: 'privacy', label: t('settings.privacy'), icon: <Shield className="h-4 w-4" /> },
+    { id: 'security', label: t('settings.security'), icon: <Lock className="h-4 w-4" /> },
+    { id: 'preferences', label: t('settings.preferences'), icon: <Globe className="h-4 w-4" /> }
   ]
 
   const handleSave = async () => {
@@ -520,7 +541,7 @@ const PatientSettings = () => {
       setTimeout(() => setSaveStatus(''), 3000)
     } catch (error) {
       setSaveStatus('error')
-      setError(error?.message || 'Failed to save settings')
+      setError(error?.message || t('settings.errorSaveFailed'))
     } finally {
       setLoading(false)
     }
@@ -529,25 +550,27 @@ const PatientSettings = () => {
   const renderNotificationSettings = () => (
     <div className="space-y-6">
       {/* Email Notifications */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Mail className="h-5 w-5 mr-2 text-emerald-500" />
-          Email Notifications
+          {t('settings.emailNotifications')}
         </h3>
         
         <div className="space-y-4">
           {Object.entries(notifications.email).map(([key, value]) => (
-            <div key={key} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+            <div key={key} className={`flex items-center justify-between py-3 border-b last:border-0 ${
+              darkMode ? 'border-gray-700' : 'border-gray-100'
+            }`}>
               <div>
-                <p className="font-medium text-gray-700 capitalize">
-                  {key.replace(/([A-Z])/g, ' $1').trim()}
+                <p className={`font-medium capitalize ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                  {t(`settings.email${key.charAt(0).toUpperCase() + key.slice(1)}`)}
                 </p>
-                <p className="text-sm text-gray-500">
-                  {key === 'appointments' && 'Receive email updates about your appointments'}
-                  {key === 'reminders' && 'Get reminder emails before appointments'}
-                  {key === 'labResults' && 'Notification when lab results are ready'}
-                  {key === 'prescriptions' && 'Updates about prescription refills'}
-                  {key === 'newsletters' && 'Health tips and clinic newsletters'}
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {key === 'appointments' && t('settings.emailAppointmentsDesc')}
+                  {key === 'reminders' && t('settings.emailRemindersDesc')}
+                  {key === 'labResults' && t('settings.emailLabResultsDesc')}
+                  {key === 'prescriptions' && t('settings.emailPrescriptionsDesc')}
+                  {key === 'newsletters' && t('settings.emailNewslettersDesc')}
                 </p>
               </div>
               <button
@@ -556,7 +579,9 @@ const PatientSettings = () => {
                   email: { ...notifications.email, [key]: !value }
                 })}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  value ? 'bg-emerald-400' : 'bg-gray-200'
+                  value 
+                    ? darkMode ? 'bg-emerald-600' : 'bg-emerald-400'
+                    : darkMode ? 'bg-gray-700' : 'bg-gray-200'
                 }`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -569,23 +594,25 @@ const PatientSettings = () => {
       </div>
 
       {/* SMS Notifications */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Smartphone className="h-5 w-5 mr-2 text-emerald-500" />
-          SMS Notifications
+          {t('settings.smsNotifications')}
         </h3>
         
         <div className="space-y-4">
           {Object.entries(notifications.sms).map(([key, value]) => (
-            <div key={key} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0">
+            <div key={key} className={`flex items-center justify-between py-3 border-b last:border-0 ${
+              darkMode ? 'border-gray-700' : 'border-gray-100'
+            }`}>
               <div>
-                <p className="font-medium text-gray-700 capitalize">
-                  {key.replace(/([A-Z])/g, ' $1').trim()}
+                <p className={`font-medium capitalize ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                  {t(`settings.sms${key.charAt(0).toUpperCase() + key.slice(1)}`)}
                 </p>
-                <p className="text-sm text-gray-500">
-                  {key === 'appointments' && 'SMS alerts for appointment confirmations'}
-                  {key === 'reminders' && 'Text message reminders'}
-                  {key === 'emergencyOnly' && 'Only receive urgent/emergency messages'}
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {key === 'appointments' && t('settings.smsAppointmentsDesc')}
+                  {key === 'reminders' && t('settings.smsRemindersDesc')}
+                  {key === 'emergencyOnly' && t('settings.smsEmergencyOnlyDesc')}
                 </p>
               </div>
               <button
@@ -594,7 +621,9 @@ const PatientSettings = () => {
                   sms: { ...notifications.sms, [key]: !value }
                 })}
                 className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                  value ? 'bg-emerald-400' : 'bg-gray-200'
+                  value 
+                    ? darkMode ? 'bg-emerald-600' : 'bg-emerald-400'
+                    : darkMode ? 'bg-gray-700' : 'bg-gray-200'
                 }`}
               >
                 <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -607,27 +636,29 @@ const PatientSettings = () => {
       </div>
 
       {/* Reminder Timing */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Clock className="h-5 w-5 mr-2 text-emerald-500" />
-          Reminder Timing
+          {t('settings.reminderTiming')}
         </h3>
         
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Send appointment reminders
+          <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+            {t('settings.sendAppointmentReminders')}
           </label>
           <select
             value={notifications.reminderTiming}
             onChange={(e) => setNotifications({ ...notifications, reminderTiming: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+              darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+            }`}
           >
-            <option value="15min">15 minutes before</option>
-            <option value="30min">30 minutes before</option>
-            <option value="1hour">1 hour before</option>
-            <option value="2hours">2 hours before</option>
-            <option value="24hours">24 hours before</option>
-            <option value="48hours">48 hours before</option>
+            <option value="15min">{t('settings.reminder15min')}</option>
+            <option value="30min">{t('settings.reminder30min')}</option>
+            <option value="1hour">{t('settings.reminder1hour')}</option>
+            <option value="2hours">{t('settings.reminder2hours')}</option>
+            <option value="24hours">{t('settings.reminder24hours')}</option>
+            <option value="48hours">{t('settings.reminder48hours')}</option>
           </select>
         </div>
       </div>
@@ -636,7 +667,7 @@ const PatientSettings = () => {
 
   // Download data handler
   const handleDownloadData = async () => {
-    if (!confirm('This will download all your medical data. Do you want to continue?')) {
+    if (!confirm(t('settings.confirmDownloadData'))) {
       return
     }
     
@@ -681,7 +712,7 @@ const PatientSettings = () => {
         setTimeout(() => setSaveStatus(''), 3000)
       }
     } catch (error) {
-      setError(error?.message || 'Failed to export data')
+        setError(error?.message || t('settings.errorExportFailed'))
       setSaveStatus('error')
     } finally {
       setLoading(false)
@@ -691,8 +722,7 @@ const PatientSettings = () => {
   // Delete account handler
   const handleDeleteAccount = async () => {
     const confirmation = prompt(
-      'This action cannot be undone. All your data will be permanently deleted.\n\n' +
-      'Type "DELETE" to confirm:'
+      t('settings.deleteAccountWarning') + '\n\n' + t('settings.typeDeleteToConfirm')
     )
     
     if (confirmation !== 'DELETE') {
@@ -716,7 +746,7 @@ const PatientSettings = () => {
       localStorage.removeItem('token')
       window.location.href = '/'
     } catch (error) {
-      setError(error?.message || 'Failed to delete account')
+      setError(error?.message || t('settings.errorDeleteAccountFailed'))
       setSaveStatus('error')
     } finally {
       setLoading(false)
@@ -726,19 +756,21 @@ const PatientSettings = () => {
   const renderPrivacySettings = () => (
     <div className="space-y-6">
       {/* Profile Visibility */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Eye className="h-5 w-5 mr-2 text-emerald-500" />
-          Profile Visibility
+          {t('settings.profileVisibility')}
         </h3>
         
         <div className="space-y-3">
           {[
-            { value: 'private', label: 'Private', desc: 'Only you can view your profile' },
-            { value: 'doctors-only', label: 'Healthcare Providers Only', desc: 'Your doctors and healthcare team can view' },
-            { value: 'public', label: 'Public', desc: 'Anyone with the link can view your profile' }
+            { value: 'private', label: t('settings.private'), desc: t('settings.privateDesc') },
+            { value: 'doctors-only', label: t('settings.healthcareProvidersOnly'), desc: t('settings.healthcareProvidersOnlyDesc') },
+            { value: 'public', label: t('settings.public'), desc: t('settings.publicDesc') }
           ].map(option => (
-            <label key={option.value} className="flex items-start cursor-pointer p-3 rounded-lg hover:bg-gray-50">
+            <label key={option.value} className={`flex items-start cursor-pointer p-3 rounded-lg transition-colors ${
+              darkMode ? 'hover:bg-gray-700' : 'hover:bg-gray-50'
+            }`}>
               <input
                 type="radio"
                 name="visibility"
@@ -748,8 +780,8 @@ const PatientSettings = () => {
                 className="mt-1 text-emerald-400 focus:ring-emerald-400"
               />
               <div className="ml-3">
-                <p className="font-medium text-gray-700">{option.label}</p>
-                <p className="text-sm text-gray-500">{option.desc}</p>
+                <p className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{option.label}</p>
+                <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{option.desc}</p>
               </div>
             </label>
           ))}
@@ -757,22 +789,26 @@ const PatientSettings = () => {
       </div>
 
       {/* Data Sharing */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Shield className="h-5 w-5 mr-2 text-emerald-500" />
-          Data Sharing & Privacy
+          {t('settings.dataSharingPrivacy')}
         </h3>
         
         <div className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <div className={`flex items-center justify-between py-3 border-b ${
+            darkMode ? 'border-gray-700' : 'border-gray-100'
+          }`}>
             <div>
-              <p className="font-medium text-gray-700">Share Health Data</p>
-              <p className="text-sm text-gray-500">Allow healthcare providers to access your health data for treatment</p>
+              <p className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.shareHealthData')}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('settings.shareHealthDataDesc')}</p>
             </div>
             <button
               onClick={() => setPrivacy({ ...privacy, shareHealthData: !privacy.shareHealthData })}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                privacy.shareHealthData ? 'bg-emerald-400' : 'bg-gray-200'
+                privacy.shareHealthData 
+                  ? darkMode ? 'bg-emerald-600' : 'bg-emerald-400'
+                  : darkMode ? 'bg-gray-700' : 'bg-gray-200'
               }`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -781,15 +817,19 @@ const PatientSettings = () => {
             </button>
           </div>
           
-          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <div className={`flex items-center justify-between py-3 border-b ${
+            darkMode ? 'border-gray-700' : 'border-gray-100'
+          }`}>
             <div>
-              <p className="font-medium text-gray-700">Contribute to Medical Research</p>
-              <p className="text-sm text-gray-500">Anonymously share data for research purposes</p>
+              <p className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.contributeToResearch')}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('settings.contributeToResearchDesc')}</p>
             </div>
             <button
               onClick={() => setPrivacy({ ...privacy, allowResearch: !privacy.allowResearch })}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                privacy.allowResearch ? 'bg-emerald-400' : 'bg-gray-200'
+                privacy.allowResearch 
+                  ? darkMode ? 'bg-emerald-600' : 'bg-emerald-400'
+                  : darkMode ? 'bg-gray-700' : 'bg-gray-200'
               }`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -800,13 +840,15 @@ const PatientSettings = () => {
           
           <div className="flex items-center justify-between py-3">
             <div>
-              <p className="font-medium text-gray-700">Activity Tracking</p>
-              <p className="text-sm text-gray-500">Track your account activity for security purposes</p>
+              <p className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.activityTracking')}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('settings.activityTrackingDesc')}</p>
             </div>
             <button
               onClick={() => setPrivacy({ ...privacy, activityTracking: !privacy.activityTracking })}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                privacy.activityTracking ? 'bg-emerald-400' : 'bg-gray-200'
+                privacy.activityTracking 
+                  ? darkMode ? 'bg-emerald-600' : 'bg-emerald-400'
+                  : darkMode ? 'bg-gray-700' : 'bg-gray-200'
               }`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -818,38 +860,40 @@ const PatientSettings = () => {
       </div>
 
       {/* Data Retention */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Clock className="h-5 w-5 mr-2 text-emerald-500" />
-          Data Retention
+          {t('settings.dataRetention')}
         </h3>
         
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            How long should we keep your data?
+          <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+            {t('settings.dataRetentionQuestion')}
           </label>
           <select
             value={privacy.dataRetention}
             onChange={(e) => setPrivacy({ ...privacy, dataRetention: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent"
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 focus:border-transparent ${
+              darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+            }`}
           >
-            <option value="1year">1 year</option>
-            <option value="3years">3 years</option>
-            <option value="5years">5 years</option>
-            <option value="10years">10 years</option>
-            <option value="indefinite">Indefinite</option>
+            <option value="1year">{t('settings.retention1year')}</option>
+            <option value="3years">{t('settings.retention3years')}</option>
+            <option value="5years">{t('settings.retention5years')}</option>
+            <option value="10years">{t('settings.retention10years')}</option>
+            <option value="indefinite">{t('settings.retentionIndefinite')}</option>
           </select>
-          <p className="text-sm text-gray-500 mt-2">
-            Your data will be retained according to your selection and legal requirements
+          <p className={`text-sm mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            {t('settings.dataRetentionNote')}
           </p>
         </div>
       </div>
 
       {/* Data Management */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Download className="h-5 w-5 mr-2 text-emerald-500" />
-          Data Management
+          {t('settings.dataManagement')}
         </h3>
         
         <div className="space-y-4">
@@ -857,22 +901,30 @@ const PatientSettings = () => {
             <button 
               onClick={handleDownloadData}
               disabled={loading}
-              className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                darkMode 
+                  ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
             >
               <Download className="h-4 w-4 mr-2" />
-              {loading ? 'Exporting...' : 'Download My Data'}
+              {loading ? t('settings.exporting') : t('settings.downloadMyData')}
             </button>
             <button 
               onClick={handleDeleteAccount}
               disabled={loading}
-              className="flex items-center px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                darkMode 
+                  ? 'bg-red-900/50 text-red-300 hover:bg-red-900/70' 
+                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+              }`}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              Delete My Account
+              {t('settings.deleteMyAccount')}
             </button>
           </div>
-          <p className="text-sm text-gray-500">
-            Download your data or permanently delete your account. Account deletion cannot be undone.
+          <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+            {t('settings.dataManagementNote')}
           </p>
         </div>
       </div>
@@ -882,26 +934,28 @@ const PatientSettings = () => {
   const renderSecuritySettings = () => (
     <div className="space-y-6">
       {/* Change Password */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Key className="h-5 w-5 mr-2 text-emerald-500" />
-          Change Password
+          {t('settings.changePassword')}
         </h3>
         
         <div className="space-y-4 max-w-md">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Current Password</label>
+            <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.currentPassword')}</label>
             <div className="relative">
               <input
                 type={passwordForm.showCurrent ? 'text' : 'password'}
                 value={passwordForm.current}
                 onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
-                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+                className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                }`}
               />
               <button
                 type="button"
                 onClick={() => setPasswordForm({ ...passwordForm, showCurrent: !passwordForm.showCurrent })}
-                className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600"
+                className={`absolute right-2 top-2.5 transition-colors ${darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
               >
                 {passwordForm.showCurrent ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
@@ -909,18 +963,20 @@ const PatientSettings = () => {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">New Password</label>
+            <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.newPassword')}</label>
             <div className="relative">
               <input
                 type={passwordForm.showNew ? 'text' : 'password'}
                 value={passwordForm.new}
                 onChange={(e) => setPasswordForm({ ...passwordForm, new: e.target.value })}
-                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+                className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                }`}
               />
               <button
                 type="button"
                 onClick={() => setPasswordForm({ ...passwordForm, showNew: !passwordForm.showNew })}
-                className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600"
+                className={`absolute right-2 top-2.5 transition-colors ${darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
               >
                 {passwordForm.showNew ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
@@ -928,18 +984,20 @@ const PatientSettings = () => {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Confirm New Password</label>
+            <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.confirmNewPassword')}</label>
             <div className="relative">
               <input
                 type={passwordForm.showConfirm ? 'text' : 'password'}
                 value={passwordForm.confirm}
                 onChange={(e) => setPasswordForm({ ...passwordForm, confirm: e.target.value })}
-                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+                className={`w-full px-4 py-2 pr-10 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                  darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+                }`}
               />
               <button
                 type="button"
                 onClick={() => setPasswordForm({ ...passwordForm, showConfirm: !passwordForm.showConfirm })}
-                className="absolute right-2 top-2.5 text-gray-400 hover:text-gray-600"
+                className={`absolute right-2 top-2.5 transition-colors ${darkMode ? 'text-gray-400 hover:text-gray-300' : 'text-gray-400 hover:text-gray-600'}`}
               >
                 {passwordForm.showConfirm ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
               </button>
@@ -949,28 +1007,36 @@ const PatientSettings = () => {
           <button 
             onClick={handlePasswordChange}
             disabled={loading || !passwordForm.current || !passwordForm.new || !passwordForm.confirm}
-            className="px-6 py-2 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`px-6 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+              darkMode 
+                ? 'bg-emerald-600 hover:bg-emerald-700' 
+                : 'bg-emerald-400 hover:bg-emerald-500'
+            } text-white`}
           >
-            {loading ? 'Updating...' : 'Update Password'}
+            {loading ? t('settings.updating') : t('settings.updatePassword')}
           </button>
         </div>
       </div>
 
       {/* Security Options */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Security Options</h3>
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{t('settings.securityOptions')}</h3>
         
         <div className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <div className={`flex items-center justify-between py-3 border-b ${
+            darkMode ? 'border-gray-700' : 'border-gray-100'
+          }`}>
             <div>
-              <p className="font-medium text-gray-700">Two-Factor Authentication</p>
-              <p className="text-sm text-gray-500">Add an extra layer of security to your account</p>
+              <p className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.twoFactorAuth')}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('settings.twoFactorAuthDesc')}</p>
             </div>
             <button
               onClick={() => handleTwoFactorSetup(!security.twoFactor)}
               disabled={loading}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
-                security.twoFactor ? 'bg-emerald-400' : 'bg-gray-200'
+                security.twoFactor 
+                  ? darkMode ? 'bg-emerald-600' : 'bg-emerald-400'
+                  : darkMode ? 'bg-gray-700' : 'bg-gray-200'
               }`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -979,10 +1045,12 @@ const PatientSettings = () => {
             </button>
           </div>
           
-          <div className="flex items-center justify-between py-3 border-b border-gray-100">
+          <div className={`flex items-center justify-between py-3 border-b ${
+            darkMode ? 'border-gray-700' : 'border-gray-100'
+          }`}>
             <div>
-              <p className="font-medium text-gray-700">Login Alerts</p>
-              <p className="text-sm text-gray-500">Get notified of new login attempts</p>
+              <p className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.loginAlerts')}</p>
+              <p className={`text-sm ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>{t('settings.loginAlertsDesc')}</p>
             </div>
             <button
               onClick={async () => {
@@ -994,7 +1062,7 @@ const PatientSettings = () => {
                   setSaveStatus('success')
                   setTimeout(() => setSaveStatus(''), 2000)
                 } catch (error) {
-                  setError(error?.message || 'Failed to update login alerts')
+                  setError(error?.message || t('settings.errorUpdateLoginAlerts'))
                   setSaveStatus('error')
                 } finally {
                   setLoading(false)
@@ -1002,7 +1070,9 @@ const PatientSettings = () => {
               }}
               disabled={loading}
               className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 ${
-                security.loginAlerts ? 'bg-emerald-400' : 'bg-gray-200'
+                security.loginAlerts 
+                  ? darkMode ? 'bg-emerald-600' : 'bg-emerald-400'
+                  : darkMode ? 'bg-gray-700' : 'bg-gray-200'
               }`}
             >
               <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
@@ -1012,7 +1082,7 @@ const PatientSettings = () => {
           </div>
           
           <div className="py-3">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Auto-Logout After Inactivity</label>
+            <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.autoLogout')}</label>
             <select
               value={security.sessionTimeout}
               onChange={async (e) => {
@@ -1024,20 +1094,22 @@ const PatientSettings = () => {
                   setSaveStatus('success')
                   setTimeout(() => setSaveStatus(''), 2000)
                 } catch (error) {
-                  setError(error?.message || 'Failed to update session timeout')
+                  setError(error?.message || t('settings.errorUpdateSessionTimeout'))
                   setSaveStatus('error')
                 } finally {
                   setLoading(false)
                 }
               }}
               disabled={loading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 disabled:opacity-50"
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 disabled:opacity-50 ${
+                darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+              }`}
             >
-              <option value="15">15 minutes</option>
-              <option value="30">30 minutes</option>
-              <option value="60">1 hour</option>
-              <option value="120">2 hours</option>
-              <option value="0">Never</option>
+              <option value="15">{t('settings.timeout15min')}</option>
+              <option value="30">{t('settings.timeout30min')}</option>
+              <option value="60">{t('settings.timeout1hour')}</option>
+              <option value="120">{t('settings.timeout2hours')}</option>
+              <option value="0">{t('settings.timeoutNever')}</option>
             </select>
           </div>
         </div>
@@ -1045,37 +1117,39 @@ const PatientSettings = () => {
 
       {/* 2FA Setup Modal */}
       {twoFactorSetup.verificationRequired && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Complete 2FA Setup</h3>
+        <div className={`fixed inset-0 ${darkMode ? 'bg-gray-900/80' : 'bg-black bg-opacity-50'} flex items-center justify-center z-50`}>
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl p-6 max-w-md w-full mx-4`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{t('settings.complete2FASetup')}</h3>
             
             <div className="space-y-4">
               <div className="text-center">
-                <p className="text-sm text-gray-600 mb-4">
-                  Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+                <p className={`text-sm mb-4 ${darkMode ? 'text-gray-300' : 'text-gray-600'}`}>
+                  {t('settings.scanQRCode')}
                 </p>
                 {twoFactorSetup.qrCode && (
                   <img 
                     src={twoFactorSetup.qrCode} 
                     alt="2FA QR Code" 
-                    className="mx-auto border border-gray-200 rounded-lg"
+                    className={`mx-auto border rounded-lg ${darkMode ? 'border-gray-600' : 'border-gray-200'}`}
                   />
                 )}
-                <p className="text-xs text-gray-500 mt-2">
-                  Or enter this code manually: <code className="bg-gray-100 px-2 py-1 rounded">{twoFactorSetup.secret}</code>
+                <p className={`text-xs mt-2 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`}>
+                  {t('settings.enterCodeManually')}: <code className={`px-2 py-1 rounded ${darkMode ? 'bg-gray-700 text-gray-200' : 'bg-gray-100'}`}>{twoFactorSetup.secret}</code>
                 </p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Enter 6-digit verification code
+                <label className={`block text-sm font-medium mb-1 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>
+                  {t('settings.enter6DigitCode')}
                 </label>
                 <input
                   type="text"
                   value={twoFactorToken}
                   onChange={(e) => setTwoFactorToken(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="123456"
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400 text-center text-lg tracking-widest"
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 text-center text-lg tracking-widest ${
+                    darkMode ? 'bg-gray-700 border-gray-600 text-gray-100 placeholder-gray-400' : 'border-gray-300'
+                  }`}
                   maxLength={6}
                 />
               </div>
@@ -1084,15 +1158,23 @@ const PatientSettings = () => {
                 <button
                   onClick={handleTwoFactorVerify}
                   disabled={loading || twoFactorToken.length !== 6}
-                  className="flex-1 px-4 py-2 bg-emerald-400 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  className={`flex-1 px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                    darkMode 
+                      ? 'bg-emerald-600 hover:bg-emerald-700' 
+                      : 'bg-emerald-400 hover:bg-emerald-500'
+                  } text-white`}
                 >
-                  {loading ? 'Verifying...' : 'Verify & Enable'}
+                  {loading ? t('settings.verifying') : t('settings.verifyEnable')}
                 </button>
                 <button
                   onClick={() => setTwoFactorSetup({ qrCode: null, secret: null, verificationRequired: false })}
-                  className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  className={`px-4 py-2 rounded-lg transition-colors ${
+                    darkMode 
+                      ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' 
+                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`}
                 >
-                  Cancel
+                  {t('settings.cancel')}
                 </button>
               </div>
             </div>
@@ -1101,42 +1183,54 @@ const PatientSettings = () => {
       )}
 
       {/* Active Sessions */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Smartphone className="h-5 w-5 mr-2 text-emerald-500" />
-          Active Sessions
+          {t('settings.activeSessions')}
         </h3>
         
         <div className="space-y-3">
           {sessions.map((session) => (
-            <div key={session.session_id} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+            <div key={session.session_id} className={`flex items-center justify-between p-3 border rounded-lg ${
+              darkMode ? 'border-gray-700 bg-gray-700/50' : 'border-gray-200'
+            }`}>
               <div className="flex items-center space-x-3">
-                <div className="w-10 h-10 bg-emerald-100 rounded-full flex items-center justify-center">
-                  <Smartphone className="h-5 w-5 text-emerald-600" />
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                  darkMode ? 'bg-emerald-900/30' : 'bg-emerald-100'
+                }`}>
+                  <Smartphone className={`h-5 w-5 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
                 </div>
                 <div>
-                  <p className="font-medium text-gray-800">{session.device_info}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className={`font-medium ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{session.device_info}</p>
+                  <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
                     {session.ip_address} • {session.location}
                   </p>
-                  <p className="text-xs text-gray-400">
-                    Last activity: {new Date(session.last_activity).toLocaleString()}
+                  <p className={`text-xs ${darkMode ? 'text-gray-400' : 'text-gray-400'}`}>
+                    {t('settings.lastActivity')}: {new Date(session.last_activity).toLocaleString()}
                   </p>
                 </div>
               </div>
               <div className="flex items-center space-x-2">
                 {session.is_current && (
-                  <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full">
-                    Current
+                  <span className={`px-2 py-1 text-xs rounded-full ${
+                    darkMode 
+                      ? 'bg-emerald-900/50 text-emerald-300' 
+                      : 'bg-emerald-100 text-emerald-700'
+                  }`}>
+                    {t('settings.current')}
                   </span>
                 )}
                 {!session.is_current && (
                   <button
                     onClick={() => handleEndSession(session.session_id)}
                     disabled={loading}
-                    className="px-3 py-1 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                    className={`px-3 py-1 rounded-lg transition-colors disabled:opacity-50 ${
+                      darkMode 
+                        ? 'text-red-400 hover:bg-red-900/30' 
+                        : 'text-red-600 hover:bg-red-50'
+                    }`}
                   >
-                    End Session
+                    {t('settings.endSession')}
                   </button>
                 )}
               </div>
@@ -1145,53 +1239,65 @@ const PatientSettings = () => {
         </div>
         
         {sessions.length > 1 && (
-          <div className="mt-4 pt-4 border-t border-gray-200">
+          <div className={`mt-4 pt-4 border-t ${darkMode ? 'border-gray-700' : 'border-gray-200'}`}>
             <button
               onClick={handleLogoutAllSessions}
               disabled={loading}
-              className="w-full px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors disabled:opacity-50"
+              className={`w-full px-4 py-2 rounded-lg transition-colors disabled:opacity-50 ${
+                darkMode 
+                  ? 'bg-red-900/50 text-red-300 hover:bg-red-900/70' 
+                  : 'bg-red-100 text-red-700 hover:bg-red-200'
+              }`}
             >
-              {loading ? 'Logging out...' : 'Logout from All Other Sessions'}
+              {loading ? t('settings.loggingOut') : t('settings.logoutAllOtherSessions')}
             </button>
           </div>
         )}
       </div>
 
       {/* Security Activity */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Shield className="h-5 w-5 mr-2 text-emerald-500" />
-          Recent Security Activity
+          {t('settings.recentSecurityActivity')}
         </h3>
         
         <div className="space-y-3">
           {securityActivity.map((activity, index) => (
-            <div key={index} className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
+            <div key={index} className={`flex items-center justify-between p-3 border rounded-lg ${
+              darkMode ? 'border-gray-700 bg-gray-700/50' : 'border-gray-200'
+            }`}>
               <div className="flex items-center space-x-3">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                  activity.status === 'success' ? 'bg-emerald-100' : 'bg-red-100'
+                  activity.status === 'success' 
+                    ? darkMode ? 'bg-emerald-900/30' : 'bg-emerald-100'
+                    : darkMode ? 'bg-red-900/30' : 'bg-red-100'
                 }`}>
                   {activity.status === 'success' ? (
-                    <Check className="h-4 w-4 text-emerald-600" />
+                    <Check className={`h-4 w-4 ${darkMode ? 'text-emerald-400' : 'text-emerald-600'}`} />
                   ) : (
-                    <X className="h-4 w-4 text-red-600" />
+                    <X className={`h-4 w-4 ${darkMode ? 'text-red-400' : 'text-red-600'}`} />
                   )}
                 </div>
                 <div>
-                  <p className="font-medium text-gray-800">{activity.activity}</p>
-                  <p className="text-sm text-gray-500">
+                  <p className={`font-medium ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{activity.activity}</p>
+                  <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
                     {activity.ip_address} • {activity.location}
                   </p>
                 </div>
               </div>
               <div className="text-right">
-                <p className="text-sm text-gray-500">
+                <p className={`text-sm ${darkMode ? 'text-gray-300' : 'text-gray-500'}`}>
                   {new Date(activity.timestamp).toLocaleString()}
                 </p>
                 <span className={`text-xs px-2 py-1 rounded-full ${
                   activity.status === 'success' 
-                    ? 'bg-emerald-100 text-emerald-700' 
-                    : 'bg-red-100 text-red-700'
+                    ? darkMode
+                      ? 'bg-emerald-900/50 text-emerald-300'
+                      : 'bg-emerald-100 text-emerald-700'
+                    : darkMode
+                      ? 'bg-red-900/50 text-red-300'
+                      : 'bg-red-100 text-red-700'
                 }`}>
                   {activity.status}
                 </span>
@@ -1206,32 +1312,36 @@ const PatientSettings = () => {
   const renderPreferences = () => (
     <div className="space-y-6">
       {/* Language & Region */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>
           <Globe className="h-5 w-5 mr-2 text-emerald-500" />
-          Language & Region
+          {t('settings.languageRegion')}
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
+            <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.language')}</label>
             <select
               value={preferences.language}
               onChange={(e) => setPreferences({ ...preferences, language: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+              }`}
             >
-              <option value="en">English</option>
-              <option value="uz">Uzbek</option>
-              <option value="ru">Russian</option>
+              <option value="en">{t('settings.english')}</option>
+              <option value="uz">{t('settings.uzbek')}</option>
+              <option value="ru">{t('settings.russian')}</option>
             </select>
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
+            <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.dateFormat')}</label>
             <select
               value={preferences.dateFormat}
               onChange={(e) => setPreferences({ ...preferences, dateFormat: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+              }`}
             >
               <option value="MM/DD/YYYY">MM/DD/YYYY</option>
               <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -1240,63 +1350,81 @@ const PatientSettings = () => {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
+            <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.timeFormat')}</label>
             <select
               value={preferences.timeFormat}
               onChange={(e) => setPreferences({ ...preferences, timeFormat: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+              }`}
             >
-              <option value="12hour">12-hour (AM/PM)</option>
-              <option value="24hour">24-hour</option>
+              <option value="12hour">{t('settings.time12hour')}</option>
+              <option value="24hour">{t('settings.time24hour')}</option>
             </select>
           </div>
         </div>
       </div>
 
       {/* Appearance */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-4">Appearance</h3>
+      <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-6`}>
+        <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{t('settings.appearance')}</h3>
         
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-3">Theme</label>
+            <label className={`block text-sm font-medium mb-3 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.theme')}</label>
             <div className="flex space-x-3">
               <button
-                onClick={() => setPreferences({ ...preferences, theme: 'light' })}
+                onClick={() => {
+                  setPreferences({ ...preferences, theme: 'light' })
+                  setDarkMode(false)
+                }}
                 className={`flex items-center px-4 py-2 rounded-lg border-2 transition-colors ${
                   preferences.theme === 'light' 
-                    ? 'border-emerald-400 bg-emerald-50 text-emerald-700' 
-                    : 'border-gray-200 text-gray-600'
+                    ? darkMode
+                      ? 'border-emerald-500 bg-emerald-900/30 text-emerald-300'
+                      : 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                    : darkMode
+                      ? 'border-gray-600 text-gray-300'
+                      : 'border-gray-200 text-gray-600'
                 }`}
               >
                 <Sun className="h-4 w-4 mr-2" />
-                Light
+                {t('settings.light')}
               </button>
               <button
-                onClick={() => setPreferences({ ...preferences, theme: 'dark' })}
+                onClick={() => {
+                  setPreferences({ ...preferences, theme: 'dark' })
+                  setDarkMode(true)
+                }}
                 className={`flex items-center px-4 py-2 rounded-lg border-2 transition-colors ${
                   preferences.theme === 'dark' 
-                    ? 'border-emerald-400 bg-emerald-50 text-emerald-700' 
-                    : 'border-gray-200 text-gray-600'
+                    ? darkMode
+                      ? 'border-emerald-500 bg-emerald-900/30 text-emerald-300'
+                      : 'border-emerald-400 bg-emerald-50 text-emerald-700'
+                    : darkMode
+                      ? 'border-gray-600 text-gray-300'
+                      : 'border-gray-200 text-gray-600'
                 }`}
               >
                 <Moon className="h-4 w-4 mr-2" />
-                Dark
+                {t('settings.dark')}
               </button>
             </div>
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Font Size</label>
+            <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-gray-200' : 'text-gray-700'}`}>{t('settings.fontSize')}</label>
             <select
               value={preferences.fontSize}
               onChange={(e) => setPreferences({ ...preferences, fontSize: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-400"
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-emerald-400 ${
+                darkMode ? 'bg-gray-700 border-gray-600 text-gray-100' : 'border-gray-300'
+              }`}
             >
-              <option value="small">Small</option>
-              <option value="medium">Medium (Default)</option>
-              <option value="large">Large</option>
-              <option value="extra-large">Extra Large</option>
+              <option value="small">{t('settings.fontSmall')}</option>
+              <option value="medium">{t('settings.fontMedium')}</option>
+              <option value="large">{t('settings.fontLarge')}</option>
+              <option value="extra-large">{t('settings.fontExtraLarge')}</option>
             </select>
           </div>
         </div>
@@ -1305,36 +1433,59 @@ const PatientSettings = () => {
   )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
+    <div className={`min-h-screen bg-gradient-to-br ${darkMode ? 'from-gray-900 to-gray-800' : 'from-emerald-50 to-teal-50'}`}>
       <Navbar />
       
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold text-gray-800 mb-8">Settings</h1>
+        <h1 className={`text-3xl font-bold mb-8 ${darkMode ? 'text-gray-100' : 'text-gray-800'}`}>{t('settings.settings')}</h1>
 
         {/* Save Status */}
         {saveStatus === 'success' && (
-          <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded-lg flex items-center">
+          <div className={`mb-4 p-3 border rounded-lg flex items-center ${
+            darkMode 
+              ? 'bg-green-900/30 border-green-700 text-green-300' 
+              : 'bg-green-100 border-green-400 text-green-700'
+          }`}>
             <Check className="h-5 w-5 mr-2" />
-            Settings saved successfully!
+            {t('settings.settingsSavedSuccess')}
           </div>
         )}
         {saveStatus === 'error' && (
-          <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg flex items-center">
+          <div className={`mb-4 p-3 border rounded-lg flex items-center ${
+            darkMode 
+              ? 'bg-red-900/30 border-red-700 text-red-300' 
+              : 'bg-red-100 border-red-400 text-red-700'
+          }`}>
             <AlertCircle className="h-5 w-5 mr-2" />
-            Error saving settings. Please try again.
+            {t('settings.errorSavingSettings')}
+          </div>
+        )}
+        {error && (
+          <div className={`mb-4 p-3 border rounded-lg ${
+            darkMode 
+              ? 'bg-red-900/30 border-red-700 text-red-300' 
+              : 'bg-red-100 border-red-400 text-red-700'
+          }`}>
+            {error}
           </div>
         )}
 
         {/* Tab Navigation */}
-        <div className="flex space-x-1 mb-8 bg-white rounded-lg p-1 shadow-sm overflow-x-auto">
+        <div className={`flex space-x-1 mb-8 rounded-lg p-1 shadow-sm overflow-x-auto ${
+          darkMode ? 'bg-gray-800' : 'bg-white'
+        }`}>
           {tabs.map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex items-center px-4 py-2 rounded-lg font-medium transition-all duration-200 whitespace-nowrap ${
                 activeTab === tab.id
-                  ? 'bg-emerald-400 text-white shadow-md'
-                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
+                  ? darkMode
+                    ? 'bg-emerald-600 text-white shadow-md'
+                    : 'bg-emerald-400 text-white shadow-md'
+                  : darkMode
+                    ? 'text-gray-300 hover:text-gray-100 hover:bg-gray-700'
+                    : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
               }`}
             >
               <span className="mr-2">{tab.icon}</span>
@@ -1355,41 +1506,72 @@ const PatientSettings = () => {
         <div className="mt-8 flex items-center justify-between">
           <button
             onClick={() => window.history.back()}
-            className="text-gray-600 hover:text-gray-800 font-medium"
+            className={`font-medium transition-colors ${
+              darkMode 
+                ? 'text-gray-300 hover:text-gray-100' 
+                : 'text-gray-600 hover:text-gray-800'
+            }`}
           >
-            Cancel
+            {t('settings.cancel')}
           </button>
           
           <button
             onClick={handleSave}
             disabled={loading}
-            className="flex items-center px-6 py-3 bg-emerald-400 text-white rounded-lg font-medium hover:bg-emerald-500 transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`flex items-center px-6 py-3 rounded-lg font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed ${
+              darkMode 
+                ? 'bg-emerald-600 hover:bg-emerald-700' 
+                : 'bg-emerald-400 hover:bg-emerald-500'
+            } text-white`}
           >
             {loading ? (
               <>
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Saving...
+                {t('settings.saving')}
               </>
             ) : (
               <>
                 <Save className="h-4 w-4 mr-2" />
-                Save Changes
+                {t('settings.saveChanges')}
               </>
             )}
           </button>
         </div>
 
         {/* Danger Zone */}
-        <div className="mt-12 bg-red-50 rounded-xl p-6 border border-red-200">
-          <h3 className="text-lg font-semibold text-red-800 mb-4">Danger Zone</h3>
+        <div className={`mt-12 rounded-xl p-6 border ${
+          darkMode 
+            ? 'bg-red-900/20 border-red-800' 
+            : 'bg-red-50 border-red-200'
+        }`}>
+          <h3 className={`text-lg font-semibold mb-4 ${
+            darkMode ? 'text-red-300' : 'text-red-800'
+          }`}>{t('settings.dangerZone')}</h3>
           <div className="space-y-3">
-            <button className="flex items-center px-4 py-2 bg-white text-red-600 border border-red-300 rounded-lg hover:bg-red-50 transition-colors">
+            <button 
+              onClick={() => {
+                localStorage.removeItem('token')
+                window.location.href = '/signin'
+              }}
+              className={`flex items-center px-4 py-2 border rounded-lg transition-colors ${
+                darkMode 
+                  ? 'bg-gray-800 text-red-400 border-red-800 hover:bg-gray-700' 
+                  : 'bg-white text-red-600 border-red-300 hover:bg-red-50'
+              }`}
+            >
               <LogOut className="h-4 w-4 mr-2" />
-              Sign Out
+              {t('settings.signOut')}
             </button>
-            <button className="flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors">
+            <button 
+              onClick={handleDeleteAccount}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                darkMode 
+                  ? 'bg-red-900/50 text-red-300 hover:bg-red-900/70' 
+                  : 'bg-red-600 text-white hover:bg-red-700'
+              }`}
+            >
               <Trash2 className="h-4 w-4 mr-2" />
-              Delete Account
+              {t('settings.deleteAccount')}
             </button>
           </div>
         </div>

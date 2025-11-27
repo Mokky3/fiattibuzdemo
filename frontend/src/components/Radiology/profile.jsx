@@ -1,10 +1,30 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, Filter, User, Settings, Bell, Shield, Key, Camera, Edit, Save, X, Check, Mail, Phone, MapPin, Calendar, Award, Activity, Clock, Download, Monitor, Eye, FileText, Stethoscope, AlertCircle } from 'lucide-react';
 // Import the radiology header component
 import RadiologyHeader from './header';
 import { getRadiologistProfile, updateRadiologistProfile, getRadiologistStats, getRadiologistActivity, updateRadiologistSecurity } from '../../services/radiologyService';
 
 const RadiologyProfileModule = () => {
+  const { t } = useTranslation();
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
+  
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
   // Real profile data from API
@@ -172,7 +192,7 @@ const RadiologyProfileModule = () => {
       setIsEditing(false);
     } catch (err) {
       console.error('Error saving profile:', err);
-      setError('Failed to save profile changes');
+      setError(t('failedToSaveProfileChanges'));
     } finally {
       setSaving(false);
     }
@@ -194,7 +214,7 @@ const RadiologyProfileModule = () => {
       setProfileData(securityData);
     } catch (err) {
       console.error('Error updating security settings:', err);
-      setError('Failed to update security settings');
+      setError(t('failedToUpdateSecuritySettings'));
     } finally {
       setSaving(false);
     }
@@ -203,44 +223,62 @@ const RadiologyProfileModule = () => {
   const ProfileSection = () => (
     <div className="space-y-6">
       {/* Profile Information */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-gray-900">Profile Information</h2>
+          <h2 className={`text-xl font-bold ${
+            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+          }`}>{t('profileInformation')}</h2>
           <div className="flex space-x-2">
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
-                className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  darkMode
+                    ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                    : 'bg-teal-500 hover:bg-teal-600 text-white'
+                }`}
               >
                 <Edit className="w-4 h-4" />
-                Edit Profile
+                {t('editProfile')}
               </button>
             ) : (
               <div className="flex space-x-2">
                 <button
                   onClick={handleSaveProfile}
                   disabled={saving}
-                  className="bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                  className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 ${
+                    darkMode
+                      ? 'bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white'
+                      : 'bg-green-500 hover:bg-green-600 disabled:bg-green-300 text-white'
+                  }`}
                 >
                   {saving ? (
                     <>
                       <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                      Saving...
+                      {t('saving')}
                     </>
                   ) : (
                     <>
                       <Save className="w-4 h-4" />
-                      Save
+                      {t('save')}
                     </>
                   )}
                 </button>
                 <button
                   onClick={handleCancelEdit}
-                  className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                  className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                    darkMode
+                      ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                      : 'bg-gray-500 hover:bg-gray-600 text-white'
+                  }`}
                 >
                   <X className="w-4 h-4" />
-                  Cancel
+                  {t('cancel')}
                 </button>
               </div>
             )}
@@ -249,78 +287,152 @@ const RadiologyProfileModule = () => {
 
         {/* Personal Information */}
         <div className="mb-8">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-            Personal Information
+          <h4 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+            darkMode
+              ? 'text-[#F5FEFF] border-[#79CAC2]'
+              : 'text-gray-900 border-teal-500'
+          }`}>
+            {t('personalInformation')}
           </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('firstName')}</label>
             <input
               type="text"
               value={tempProfileData.firstName}
               onChange={(e) => setTempProfileData({...tempProfileData, firstName: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'border-gray-300 bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('lastName')}</label>
             <input
               type="text"
               value={tempProfileData.lastName}
               onChange={(e) => setTempProfileData({...tempProfileData, lastName: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'border-gray-300 bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('email')}</label>
             <input
               type="email"
               value={tempProfileData.email}
               onChange={(e) => setTempProfileData({...tempProfileData, email: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'border-gray-300 bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('phone')}</label>
             <input
               type="tel"
               value={tempProfileData.phone}
               onChange={(e) => setTempProfileData({...tempProfileData, phone: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'border-gray-300 bg-gray-50'
+              }`}
             />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('address')}</label>
             <input
               type="text"
               value={tempProfileData.address}
               onChange={(e) => setTempProfileData({...tempProfileData, address: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'border-gray-300 bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('city')}</label>
             <input
               type="text"
               value={tempProfileData.city}
               onChange={(e) => setTempProfileData({...tempProfileData, city: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'border-gray-300 bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('state')}</label>
             <input
               type="text"
               value={tempProfileData.state}
               onChange={(e) => setTempProfileData({...tempProfileData, state: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'border-gray-300 bg-gray-50'
+              }`}
             />
           </div>
         </div>
@@ -328,62 +440,102 @@ const RadiologyProfileModule = () => {
 
         {/* Professional Information */}
         <div className="mb-8">
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-            Professional Information
+          <h4 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+            darkMode
+              ? 'text-[#F5FEFF] border-[#79CAC2]'
+              : 'text-gray-900 border-teal-500'
+          }`}>
+            {t('professionalInformation')}
           </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('position')}</label>
             <input
               type="text"
               value={tempProfileData.position}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('department')}</label>
             <input
               type="text"
               value={tempProfileData.department}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Subspecialty</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('subspecialty')}</label>
             <input
               type="text"
               value={tempProfileData.subspecialty}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('supervisor')}</label>
             <input
               type="text"
               value={tempProfileData.supervisor}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Medical License</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('medicalLicense')}</label>
             <input
               type="text"
               value={tempProfileData.licenseNumber}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">License Expiry</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('licenseExpiry')}</label>
             <input
               type="date"
               value={tempProfileData.licenseExpiry}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
         </div>
@@ -391,44 +543,72 @@ const RadiologyProfileModule = () => {
 
         {/* Education & Training */}
         <div>
-          <h4 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-            Education & Training
+          <h4 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+            darkMode
+              ? 'text-[#F5FEFF] border-[#79CAC2]'
+              : 'text-gray-900 border-teal-500'
+          }`}>
+            {t('educationTraining')}
           </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Medical School</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('medicalSchool')}</label>
             <input
               type="text"
               value={tempProfileData.medicalSchool}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Residency</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('residency')}</label>
             <input
               type="text"
               value={tempProfileData.residency}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Fellowship</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('fellowship')}</label>
             <input
               type="text"
               value={tempProfileData.fellowship}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Board Certification</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('boardCertification')}</label>
             <input
               type="text"
               value={tempProfileData.certification}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
         </div>
@@ -574,15 +754,27 @@ const RadiologyProfileModule = () => {
   const SecuritySection = () => (
     <div className="space-y-6">
       {/* Security Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Security Settings
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('securitySettings')}
         </h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900">Two-Factor Authentication</div>
-              <div className="text-sm text-gray-500">Add an extra layer of security to your account</div>
+              <div className={`font-medium ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('twoFactorAuthentication')}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{t('addAnExtraLayerOfSecurityToYourAccount')}</div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -592,14 +784,22 @@ const RadiologyProfileModule = () => {
                 disabled={saving}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500 peer-disabled:opacity-50"></div>
+              <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-disabled:opacity-50 ${
+                darkMode
+                  ? 'bg-gray-700 peer-focus:ring-4 peer-focus:ring-[#79CAC2] peer-checked:bg-[#79CAC2] after:border-gray-600'
+                  : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 peer-checked:bg-teal-500 after:border-gray-300'
+              }`}></div>
             </label>
           </div>
           
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900">Login Alerts</div>
-              <div className="text-sm text-gray-500">Get notified when someone logs into your account</div>
+              <div className={`font-medium ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('loginAlerts')}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{t('getNotifiedWhenSomeoneLogsIntoYourAccount')}</div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -609,23 +809,33 @@ const RadiologyProfileModule = () => {
                 disabled={saving}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500 peer-disabled:opacity-50"></div>
+              <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-disabled:opacity-50 ${
+                darkMode
+                  ? 'bg-gray-700 peer-focus:ring-4 peer-focus:ring-[#79CAC2] peer-checked:bg-[#79CAC2] after:border-gray-600'
+                  : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 peer-checked:bg-teal-500 after:border-gray-300'
+              }`}></div>
             </label>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Session Timeout</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('sessionTimeout')}</label>
             <select
               value={profileData.sessionTimeout || 30}
               onChange={(e) => handleSecurityChange('sessionTimeout', parseInt(e.target.value))}
               disabled={saving}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
-              <option value={15}>15 minutes</option>
-              <option value={30}>30 minutes</option>
-              <option value={60}>1 hour</option>
-              <option value={120}>2 hours</option>
-              <option value={240}>4 hours</option>
+              <option value={15}>15 {t('minutes')}</option>
+              <option value={30}>30 {t('minutes')}</option>
+              <option value={60}>1 {t('hour')}</option>
+              <option value={120}>2 {t('hours')}</option>
+              <option value={240}>4 {t('hours')}</option>
             </select>
           </div>
         </div>
@@ -753,7 +963,9 @@ const RadiologyProfileModule = () => {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       {/* Header Component */}
       <RadiologyHeader />
 
@@ -762,20 +974,34 @@ const RadiologyProfileModule = () => {
         {loading && (
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading profile data...</p>
+              <div className={`animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4 ${
+                darkMode ? 'border-[#79CAC2]' : 'border-teal-500'
+              }`}></div>
+              <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+                {t('loadingProfileData')}
+              </p>
             </div>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+          <div className={`border rounded-lg p-4 mb-6 ${
+            darkMode
+              ? 'bg-red-900 bg-opacity-30 border-red-700'
+              : 'bg-red-50 border-red-200'
+          }`}>
             <div className="flex items-center">
-              <X className="w-5 h-5 text-red-500 mr-2" />
+              <X className={`w-5 h-5 mr-2 ${
+                darkMode ? 'text-red-400' : 'text-red-500'
+              }`} />
               <div>
-                <h3 className="text-sm font-medium text-red-800">Error loading profile</h3>
-                <p className="text-sm text-red-600 mt-1">{error}</p>
+                <h3 className={`text-sm font-medium ${
+                  darkMode ? 'text-red-300' : 'text-red-800'
+                }`}>{t('errorLoadingProfile')}</h3>
+                <p className={`text-sm mt-1 ${
+                  darkMode ? 'text-red-300' : 'text-red-600'
+                }`}>{error}</p>
               </div>
             </div>
           </div>
@@ -787,39 +1013,67 @@ const RadiologyProfileModule = () => {
             {/* Left Sidebar */}
             <div className="w-80 flex-shrink-0">
               {/* Profile Summary Card */}
-              <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6 mb-6">
+              <div className={`rounded-lg shadow-sm border p-6 mb-6 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037]'
+                  : 'bg-white border-gray-100'
+              }`}>
                 <div className="flex flex-col items-center text-center">
-                  <div className="w-20 h-20 bg-teal-500 rounded-full flex items-center justify-center text-white text-xl font-bold mb-4">
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center text-xl font-bold mb-4 ${
+                    darkMode
+                      ? 'bg-[#79CAC2] text-[#050C0F]'
+                      : 'bg-teal-500 text-white'
+                  }`}>
                     {profileData.firstName?.[0] || 'R'}{profileData.lastName?.[0] || 'D'}
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-1">
-                    {profileData.firstName || 'Radiologist'} {profileData.lastName || 'User'}
+                  <h3 className={`text-xl font-semibold mb-1 ${
+                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                  }`}>
+                    {profileData.firstName || t('radiologist')} {profileData.lastName || t('user')}
                   </h3>
-                  <p className="text-gray-600 mb-1">{profileData.position || 'Staff Radiologist'}</p>
-                  <p className="text-sm text-gray-500 mb-4">Employee ID: {profileData.employeeId || 'RAD-001'}</p>
-                  <div className="w-full space-y-2 text-sm text-gray-600">
+                  <p className={`mb-1 ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                  }`}>{profileData.position || t('staffRadiologist')}</p>
+                  <p className={`text-sm mb-4 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>{t('employeeId')}: {profileData.employeeId || 'RAD-001'}</p>
+                  <div className={`w-full space-y-2 text-sm ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                  }`}>
                     <div className="flex items-center justify-center space-x-1">
-                      <Mail className="w-4 h-4" />
+                      <Mail className={`w-4 h-4 ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                      }`} />
                       <span className="text-xs">{profileData.email || 'radiologist@example.com'}</span>
                     </div>
                     <div className="flex items-center justify-center space-x-1">
-                      <Phone className="w-4 h-4" />
+                      <Phone className={`w-4 h-4 ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                      }`} />
                       <span className="text-xs">{profileData.phone || '+1 (555) 123-4567'}</span>
                     </div>
                     <div className="flex items-center justify-center space-x-1">
-                      <Monitor className="w-4 h-4 text-blue-600" />
-                      <span className="text-xs text-blue-600">{profileData.subspecialty || 'Diagnostic Radiology'}</span>
+                      <Monitor className={`w-4 h-4 ${
+                        darkMode ? 'text-blue-400' : 'text-blue-600'
+                      }`} />
+                      <span className={`text-xs ${
+                        darkMode ? 'text-blue-400' : 'text-blue-600'
+                      }`}>{profileData.subspecialty || t('diagnosticRadiology')}</span>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Navigation */}
-              <div className="mt-6 bg-white rounded-lg shadow-sm border border-gray-100 p-4">
+              <div className={`mt-6 rounded-lg shadow-sm border p-4 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037]'
+                  : 'bg-white border-gray-100'
+              }`}>
                 <nav className="space-y-2">
                   {[
-                    { id: 'profile', label: 'Profile', icon: User },
-                    { id: 'security', label: 'Security', icon: Shield }
+                    { id: 'profile', label: t('profile'), icon: User },
+                    { id: 'security', label: t('security'), icon: Shield }
                   ].map(item => {
                     const Icon = item.icon;
                     return (
@@ -828,8 +1082,12 @@ const RadiologyProfileModule = () => {
                         onClick={() => setActiveTab(item.id)}
                         className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
                           activeTab === item.id
-                            ? 'bg-teal-100 text-teal-700'
-                            : 'text-gray-600 hover:bg-gray-100'
+                            ? darkMode
+                              ? 'bg-[#133037] text-[#79CAC2]'
+                              : 'bg-teal-100 text-teal-700'
+                            : darkMode
+                              ? 'text-[#C1D9DD] hover:bg-[#133037]'
+                              : 'text-gray-600 hover:bg-gray-100'
                         }`}
                       >
                         <Icon className="w-4 h-4" />
