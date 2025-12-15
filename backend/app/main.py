@@ -10,14 +10,20 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment from backend/.env as early as possible
-_backend_root = Path(__file__).resolve().parents[2]
-_env_path = _backend_root / ".env"
-try:
-    load_dotenv(dotenv_path=str(_env_path), encoding="utf-8")
-except Exception:
-    # Fallback: ignore if not present
-    pass
+# Load environment from repo root .env and backend/.env as early as possible
+_repo_root = Path(__file__).resolve().parents[2]
+_backend_dir = Path(__file__).resolve().parents[1]
+_env_paths = [
+    _repo_root / ".env",
+    _backend_dir / ".env",
+]
+for _env_path in _env_paths:
+    try:
+        if _env_path.exists():
+            load_dotenv(dotenv_path=str(_env_path), encoding="utf-8")
+    except Exception:
+        # Ignore missing/invalid env files to keep startup resilient
+        pass
 
 # Import database session
 from app.db.session import SessionLocal, engine
@@ -150,6 +156,7 @@ from app.portals.radiology.routes.reports import router as radiology_reports_rou
 
 # Import medication API routes
 from app.api.v1.medications import router as medications_router
+from app.api.v1.telegram_bot import router as telegram_bot_router
 
 # Configure logging
 logging.basicConfig(
@@ -912,6 +919,13 @@ app.include_router(
     medications_router,
     prefix="/api/v1",
     tags=["Medications"]
+)
+
+# Telegram Bot Integration
+app.include_router(
+    telegram_bot_router,
+    prefix="/api/v1",
+    tags=["Integrations · Telegram Bot"]
 )
 
 # ================================

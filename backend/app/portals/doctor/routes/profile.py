@@ -56,17 +56,29 @@ async def get_profile(current: DoctorUser = Depends(get_current_doctor), db: Ses
     # Load User and UserProfile
     from app.common.models.user import User
     from app.common.models.doctor import Doctor
+    from app.common.models.hospital import Hospital
     user = db.query(User).filter(User.id == current.id).first()
     prof = user_profile.get_profile(db, user_id=current.id)
     doctor = db.query(Doctor).filter(Doctor.user_id == current.id).first()
     full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    
+    # Get organization/clinic name from Hospital table via user's organization_id
+    organization_name = None
+    if user.organization_id:
+        hospital = db.query(Hospital).filter(Hospital.id == user.organization_id).first()
+        if hospital:
+            organization_name = hospital.name
+    # Fallback to UserProfile.organization if no hospital found
+    if not organization_name and prof:
+        organization_name = getattr(prof, "organization", None)
+    
     profile = DoctorProfile(
         full_name=full_name or user.email,
         email=user.email,
         phone=user.phone,
         specialty=prof.specialty if prof else getattr(doctor, "primary_specialization", None),
         license_number=prof.license_number if prof else getattr(doctor, "license_number", None),
-        organization=None,
+        organization=organization_name,
         bio=prof.bio if prof else None,
         address=prof.address if prof else None,
         profile_image=user.profile_image_url,
@@ -97,6 +109,7 @@ async def update_profile(
         profile_updates = {
             "specialty": parsed.specialty,
             "license_number": parsed.license_number,
+            "organization": parsed.organization,
             "bio": parsed.bio,
             "address": parsed.address,
         }

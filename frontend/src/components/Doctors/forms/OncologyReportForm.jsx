@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { icdCodesAPI } from '../../../services/apiService';
 
 // Shared UI primitives (reusing from OphthalmologyReportForm)
@@ -49,7 +50,7 @@ const Input = React.memo(({ name, placeholder, value, onChange, className = "", 
   />
 ));
 
-const Select = React.memo(({ name, value, onChange, options, className = "", required = false }) => (
+const Select = React.memo(({ name, value, onChange, options, className = "", required = false, selectPlaceholder }) => (
   <select
     name={name}
     value={value}
@@ -57,7 +58,7 @@ const Select = React.memo(({ name, value, onChange, options, className = "", req
     required={required}
     className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${className}`}
   >
-    <option value="">Select...</option>
+    <option value="">{selectPlaceholder || 'Select...'}</option>
     {options.map(option => (
       <option key={option.value} value={option.value}>
         {option.label}
@@ -264,6 +265,8 @@ const getOhifUrl = (study) => {
 };
 
 const OncologyReportForm = ({ patient, encounter, onSave }) => {
+  const { t } = useTranslation();
+  
   // Mode state
   const [mode, setMode] = useState('initial');
   
@@ -762,50 +765,51 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
       {/* Autosave Toast */}
       {showSaveToast && (
         <div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
-          Saved at {lastSaved?.toLocaleTimeString()}
+          {t('oncologyForm.savedAt')} {lastSaved?.toLocaleTimeString()}
         </div>
       )}
 
       {/* Header */}
-      <Card title="Oncology Report" className="mb-6">
+      <Card title={t('oncologyForm.title')} className="mb-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <FieldLabel>Mode</FieldLabel>
+            <FieldLabel>{t('oncologyForm.mode')}</FieldLabel>
             <Select
               name="mode"
               value={mode}
               onChange={(e) => handleModeChange(e.target.value)}
               options={[
-                { value: 'initial', label: 'Initial Assessment' },
-                { value: 'discharge', label: 'Discharge Summary' }
+                { value: 'initial', label: t('oncologyForm.initialAssessment') },
+                { value: 'discharge', label: t('oncologyForm.dischargeSummary') }
               ]}
+              selectPlaceholder={t('oncologyForm.select')}
             />
           </div>
           <div>
-            <FieldLabel>Patient</FieldLabel>
+            <FieldLabel>{t('oncologyForm.patient')}</FieldLabel>
             <div className="text-slate-600">
-              {patient ? `${patient.first_name} ${patient.last_name}` : 'John Doe'} 
-              {patient && ` (${patient.age || 'N/A'} years, ${patient.gender || 'N/A'})`}
+              {patient ? `${patient.first_name} ${patient.last_name}` : t('oncologyForm.johnDoe')} 
+              {patient && ` (${patient.age || t('oncologyForm.na')} ${t('oncologyForm.years')}, ${patient.gender || t('oncologyForm.na')})`}
             </div>
           </div>
           <div>
-            <FieldLabel>Clinic</FieldLabel>
-            <div className="text-slate-600">Oncology Department</div>
+            <FieldLabel>{t('oncologyForm.clinic')}</FieldLabel>
+            <div className="text-slate-600">{t('oncologyForm.oncologyDepartment')}</div>
           </div>
           <div>
-            <FieldLabel>Physician</FieldLabel>
-            <div className="text-slate-600">Dr. Smith</div>
+            <FieldLabel>{t('oncologyForm.physician')}</FieldLabel>
+            <div className="text-slate-600">{t('oncologyForm.drSmith')}</div>
           </div>
           <div>
-            <FieldLabel>Encounter</FieldLabel>
+            <FieldLabel>{t('oncologyForm.encounter')}</FieldLabel>
             <div className="text-slate-600">
               {formData.meta.encounter_id} - {new Date(formData.meta.datetime).toLocaleString()}
             </div>
           </div>
           <div>
-            <FieldLabel>Last Saved</FieldLabel>
+            <FieldLabel>{t('oncologyForm.lastSaved')}</FieldLabel>
             <div className="text-slate-600">
-              {lastSaved ? lastSaved.toLocaleTimeString() : 'Not saved yet'}
+              {lastSaved ? lastSaved.toLocaleTimeString() : t('oncologyForm.notSavedYet')}
             </div>
           </div>
         </div>
@@ -813,19 +817,23 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Treatment Intent & Tumor Board */}
       <Card 
-        title="Treatment Intent & Tumor Board" 
+        title={t('oncologyForm.treatmentIntentTumorBoard')} 
         collapsible 
         isOpen={!collapsedSections.intent}
         onToggle={() => toggleSection('intent')}
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel>Treatment Intent</FieldLabel>
+            <FieldLabel>{t('oncologyForm.treatmentIntent')}</FieldLabel>
             <Select
               name="intent"
               value={formData.intent}
               onChange={(e) => updateFormData('intent', e.target.value)}
-              options={TREATMENT_INTENT.map(i => ({ value: i, label: i.charAt(0).toUpperCase() + i.slice(1) }))}
+              options={TREATMENT_INTENT.map(i => ({ 
+                value: i, 
+                label: t(`oncologyForm.${i}`) || i.charAt(0).toUpperCase() + i.slice(1) 
+              }))}
+              selectPlaceholder={t('oncologyForm.select')}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -837,20 +845,20 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('tumor_board.discussed', e.target.checked)}
                   className="w-4 h-4 rounded"
                 />
-                <label className="text-sm text-slate-600">Tumor Board Discussed</label>
+                <label className="text-sm text-slate-600">{t('oncologyForm.tumorBoardDiscussed')}</label>
               </div>
               {formData.tumor_board.discussed && (
                 <>
                   <Input
                     name="tumor_board_date"
                     type="date"
-                    placeholder="Date"
+                    placeholder={t('oncologyForm.date')}
                     value={formData.tumor_board.date}
                     onChange={(e) => updateFormData('tumor_board.date', e.target.value)}
                   />
                   <TextArea
                     name="tumor_board_decisions"
-                    placeholder="Board decisions..."
+                    placeholder={t('oncologyForm.boardDecisions')}
                     value={formData.tumor_board.decisions}
                     onChange={(e) => updateFormData('tumor_board.decisions', e.target.value)}
                     rows={3}
@@ -859,7 +867,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
               )}
             </div>
             <div>
-              <FieldLabel>Consents</FieldLabel>
+              <FieldLabel>{t('oncologyForm.consents')}</FieldLabel>
               <div className="space-y-2">
                 {['chemo', 'immuno', 'radiation', 'surgery'].map(type => (
                   <div key={type} className="flex items-center gap-2">
@@ -869,7 +877,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                       onChange={(e) => updateFormData(`consents.${type}`, e.target.checked)}
                       className="w-4 h-4 rounded"
                     />
-                    <label className="text-sm text-slate-600 capitalize">{type === 'immuno' ? 'Immunotherapy' : type}</label>
+                    <label className="text-sm text-slate-600">{t(`oncologyForm.${type}`)}</label>
                   </div>
                 ))}
               </div>
@@ -879,11 +887,11 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Chief Complaint */}
-      <Card title="Chief Complaint">
-        <FieldLabel required>Chief Complaint</FieldLabel>
+      <Card title={t('oncologyForm.chiefComplaint')}>
+        <FieldLabel required>{t('oncologyForm.chiefComplaint')}</FieldLabel>
         <Input
           name="chief_complaint"
-          placeholder="Primary reason for visit..."
+          placeholder={t('oncologyForm.primaryReasonForVisit')}
           value={formData.chief_complaint}
           onChange={(e) => updateFormData('chief_complaint', e.target.value)}
           required
@@ -895,18 +903,18 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* HPI */}
       <Card 
-        title="History of Present Illness" 
+        title={t('oncologyForm.historyOfPresentIllness')} 
         collapsible 
         isOpen={!collapsedSections.hpi}
         onToggle={() => toggleSection('hpi')}
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel>HPI Description</FieldLabel>
+            <FieldLabel>{t('oncologyForm.hpiDescription')}</FieldLabel>
             <div className="flex gap-2">
               <TextArea
                 name="hpi_description"
-                placeholder="Detailed history..."
+                placeholder={t('oncologyForm.detailedHistory')}
                 value={formData.hpi.description}
                 onChange={(e) => updateFormData('hpi.description', e.target.value)}
                 rows={4}
@@ -916,77 +924,80 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 disabled={!formData.chief_complaint.trim()}
                 className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                🧠 AI Suggest
+                {t('oncologyForm.aiSuggest')}
               </button>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Duration</FieldLabel>
+              <FieldLabel>{t('oncologyForm.duration')}</FieldLabel>
               <Input
                 name="hpi_duration"
-                placeholder="Duration of symptoms..."
+                placeholder={t('oncologyForm.durationOfSymptoms')}
                 value={formData.hpi.duration}
                 onChange={(e) => updateFormData('hpi.duration', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>B Symptoms</FieldLabel>
+              <FieldLabel>{t('oncologyForm.bSymptoms')}</FieldLabel>
               <div className="space-y-2">
-                {['fever', 'night_sweats', 'weight_loss'].map(symptom => (
+                {['fever', 'nightSweats', 'weightLoss'].map(symptom => (
                   <div key={symptom} className="flex items-center gap-2">
                     <input
                       type="checkbox"
-                      checked={formData.hpi.b_symptoms[symptom]}
-                      onChange={(e) => updateFormData(`hpi.b_symptoms.${symptom}`, e.target.checked)}
+                      checked={formData.hpi.b_symptoms[symptom === 'nightSweats' ? 'night_sweats' : symptom === 'weightLoss' ? 'weight_loss' : symptom]}
+                      onChange={(e) => updateFormData(`hpi.b_symptoms.${symptom === 'nightSweats' ? 'night_sweats' : symptom === 'weightLoss' ? 'weight_loss' : symptom}`, e.target.checked)}
                       className="w-4 h-4 rounded"
                     />
-                    <label className="text-sm text-slate-600 capitalize">{symptom.replace('_', ' ')}</label>
+                    <label className="text-sm text-slate-600">{t(`oncologyForm.${symptom}`)}</label>
                   </div>
                 ))}
               </div>
             </div>
           </div>
           <div>
-            <FieldLabel>Associated Symptoms</FieldLabel>
+            <FieldLabel>{t('oncologyForm.associatedSymptoms')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.hpi.associated_symptoms?.map((symp, i) => (
                 <Chip key={i} onRemove={() => removeFromArray('hpi.associated_symptoms', i)}>{symp}</Chip>
               ))}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {['weakness', 'numbness', 'tingling', 'vision loss', 'diplopia', 'dysarthria', 'aphasia', 'vertigo', 'ataxia', 'syncope', 'tremor', 'memory loss', 'seizure', 'headache'].map(symp => (
-                <button
-                  key={symp}
-                  type="button"
-                  className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
-                  onClick={() => {
-                    if (!formData.hpi.associated_symptoms?.includes(symp)) {
-                      addToArray('hpi.associated_symptoms', symp);
-                    }
-                  }}
-                >
-                  {symp}
-                </button>
-              ))}
+              {['weakness', 'numbness', 'tingling', 'visionLoss', 'diplopia', 'dysarthria', 'aphasia', 'vertigo', 'ataxia', 'syncope', 'tremor', 'memoryLoss', 'seizure', 'headache'].map(symp => {
+                const displaySymp = symp === 'visionLoss' ? 'vision loss' : symp === 'memoryLoss' ? 'memory loss' : symp;
+                return (
+                  <button
+                    key={symp}
+                    type="button"
+                    className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
+                    onClick={() => {
+                      if (!formData.hpi.associated_symptoms?.includes(displaySymp)) {
+                        addToArray('hpi.associated_symptoms', displaySymp);
+                      }
+                    }}
+                  >
+                    {t(`oncologyForm.${symp}`)}
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Risk Factors</FieldLabel>
+              <FieldLabel>{t('oncologyForm.riskFactors')}</FieldLabel>
               <TextArea
                 name="risk_factors"
-                placeholder="Risk factors..."
+                placeholder={t('oncologyForm.riskFactorsPlaceholder')}
                 value={formData.hpi.risk_factors}
                 onChange={(e) => updateFormData('hpi.risk_factors', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Family History</FieldLabel>
+              <FieldLabel>{t('oncologyForm.familyHistory')}</FieldLabel>
               <TextArea
                 name="family_history"
-                placeholder="Family cancer history..."
+                placeholder={t('oncologyForm.familyCancerHistory')}
                 value={formData.hpi.family_history}
                 onChange={(e) => updateFormData('hpi.family_history', e.target.value)}
                 rows={2}
@@ -995,19 +1006,19 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Allergies</FieldLabel>
+              <FieldLabel>{t('oncologyForm.allergies')}</FieldLabel>
               <Input
                 name="allergies"
-                placeholder="Drug allergies..."
+                placeholder={t('oncologyForm.drugAllergies')}
                 value={formData.hpi.allergies}
                 onChange={(e) => updateFormData('hpi.allergies', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Current Medications</FieldLabel>
+              <FieldLabel>{t('oncologyForm.currentMedications')}</FieldLabel>
               <TextArea
                 name="meds_current"
-                placeholder="Current medications..."
+                placeholder={t('oncologyForm.currentMedicationsPlaceholder')}
                 value={formData.hpi.meds_current}
                 onChange={(e) => updateFormData('hpi.meds_current', e.target.value)}
                 rows={2}
@@ -1019,7 +1030,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Performance / Comorbidity / Nutrition / Pain */}
       <Card 
-        title="Performance Status & Comorbidities" 
+        title={t('oncologyForm.performanceStatusComorbidities')} 
         collapsible 
         isOpen={!collapsedSections.performance}
         onToggle={() => toggleSection('performance')}
@@ -1027,38 +1038,39 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>ECOG Performance Status</FieldLabel>
+              <FieldLabel>{t('oncologyForm.ecogPerformanceStatus')}</FieldLabel>
               <Select
                 name="ecog"
                 value={formData.performance.ecog}
                 onChange={(e) => updateFormData('performance.ecog', e.target.value)}
                 options={ECOG.map(e => ({ value: e, label: e }))}
+                selectPlaceholder={t('oncologyForm.select')}
               />
             </div>
             <div>
-              <FieldLabel>Karnofsky Score</FieldLabel>
+              <FieldLabel>{t('oncologyForm.karnofskyScore')}</FieldLabel>
               <Input
                 name="karnofsky"
-                placeholder="0-100"
+                placeholder={t('oncologyForm.karnofskyPlaceholder')}
                 value={formData.performance.karnofsky}
                 onChange={(e) => updateFormData('performance.karnofsky', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>BMI</FieldLabel>
+              <FieldLabel>{t('oncologyForm.bmi')}</FieldLabel>
               <Input
                 name="bmi"
-                placeholder="Auto-calculated"
+                placeholder={t('oncologyForm.autoCalculated')}
                 value={formData.nutrition.bmi}
                 onChange={(e) => updateFormData('nutrition.bmi', e.target.value)}
               />
             </div>
           </div>
           <div>
-            <FieldLabel>Comorbidities</FieldLabel>
+            <FieldLabel>{t('oncologyForm.comorbidities')}</FieldLabel>
             <TextArea
               name="comorbidities"
-              placeholder="Significant comorbidities..."
+              placeholder={t('oncologyForm.significantComorbidities')}
               value={formData.comorbidities}
               onChange={(e) => updateFormData('comorbidities', e.target.value)}
               rows={3}
@@ -1066,22 +1078,22 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Pain Score (NRS 0-10)</FieldLabel>
+              <FieldLabel>{t('oncologyForm.painScore')}</FieldLabel>
               <Input
                 name="pain_score"
                 type="number"
                 min="0"
                 max="10"
-                placeholder="0-10"
+                placeholder={t('oncologyForm.painScorePlaceholder')}
                 value={formData.pain.score}
                 onChange={(e) => updateFormData('pain.score', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Analgesics</FieldLabel>
+              <FieldLabel>{t('oncologyForm.analgesics')}</FieldLabel>
               <Input
                 name="analgesics"
-                placeholder="Current analgesics..."
+                placeholder={t('oncologyForm.currentAnalgesics')}
                 value={formData.pain.analgesics}
                 onChange={(e) => updateFormData('pain.analgesics', e.target.value)}
               />
@@ -1092,36 +1104,36 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Vitals & Labs */}
       <Card 
-        title="Vitals & Labs" 
+        title={t('oncologyForm.vitalsLabs')} 
         collapsible 
         isOpen={!collapsedSections.vitals}
         onToggle={() => toggleSection('vitals')}
       >
         <div className="space-y-6">
           <div>
-            <FieldLabel>Vitals</FieldLabel>
+            <FieldLabel>{t('oncologyForm.vitals')}</FieldLabel>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Input
                 name="hr"
-                placeholder="HR (bpm)"
+                placeholder={t('oncologyForm.hr')}
                 value={formData.vitals.hr}
                 onChange={(e) => updateFormData('vitals.hr', e.target.value)}
               />
               <Input
                 name="bp"
-                placeholder="BP (mmHg)"
+                placeholder={t('oncologyForm.bp')}
                 value={formData.vitals.bp}
                 onChange={(e) => updateFormData('vitals.bp', e.target.value)}
               />
               <Input
                 name="temp"
-                placeholder="Temp (°C)"
+                placeholder={t('oncologyForm.temp')}
                 value={formData.vitals.temp}
                 onChange={(e) => updateFormData('vitals.temp', e.target.value)}
               />
               <Input
                 name="spo2"
-                placeholder="SpO2 (%)"
+                placeholder={t('oncologyForm.spo2')}
                 value={formData.vitals.spo2}
                 onChange={(e) => updateFormData('vitals.spo2', e.target.value)}
               />
@@ -1129,23 +1141,23 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
           
           <div>
-            <FieldLabel>CBC</FieldLabel>
+            <FieldLabel>{t('oncologyForm.cbc')}</FieldLabel>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Input
                 name="wbc"
-                placeholder="WBC (×10³/μL)"
+                placeholder={t('oncologyForm.wbc')}
                 value={formData.labs.cbc.wbc}
                 onChange={(e) => updateFormData('labs.cbc.wbc', e.target.value)}
               />
               <Input
                 name="hb"
-                placeholder="Hb (g/dL)"
+                placeholder={t('oncologyForm.hb')}
                 value={formData.labs.cbc.hb}
                 onChange={(e) => updateFormData('labs.cbc.hb', e.target.value)}
               />
               <Input
                 name="plt"
-                placeholder="Platelets (×10³/μL)"
+                placeholder={t('oncologyForm.platelets')}
                 value={formData.labs.cbc.plt}
                 onChange={(e) => updateFormData('labs.cbc.plt', e.target.value)}
               />
@@ -1153,53 +1165,53 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
 
           <div>
-            <FieldLabel>Chemistry</FieldLabel>
+            <FieldLabel>{t('oncologyForm.chemistry')}</FieldLabel>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <Input
                 name="creatinine"
-                placeholder="Creatinine (mg/dL)"
+                placeholder={t('oncologyForm.creatinine')}
                 value={formData.labs.chem.creatinine}
                 onChange={(e) => updateFormData('labs.chem.creatinine', e.target.value)}
               />
               <Input
                 name="alt"
-                placeholder="ALT (U/L)"
+                placeholder={t('oncologyForm.alt')}
                 value={formData.labs.chem.alt}
                 onChange={(e) => updateFormData('labs.chem.alt', e.target.value)}
               />
               <Input
                 name="ast"
-                placeholder="AST (U/L)"
+                placeholder={t('oncologyForm.ast')}
                 value={formData.labs.chem.ast}
                 onChange={(e) => updateFormData('labs.chem.ast', e.target.value)}
               />
               <Input
                 name="bili"
-                placeholder="Bilirubin (mg/dL)"
+                placeholder={t('oncologyForm.bilirubin')}
                 value={formData.labs.chem.bili}
                 onChange={(e) => updateFormData('labs.chem.bili', e.target.value)}
               />
               <Input
                 name="alb"
-                placeholder="Albumin (g/dL)"
+                placeholder={t('oncologyForm.albumin')}
                 value={formData.labs.chem.alb}
                 onChange={(e) => updateFormData('labs.chem.alb', e.target.value)}
               />
               <Input
                 name="glu"
-                placeholder="Glucose (mg/dL)"
+                placeholder={t('oncologyForm.glucose')}
                 value={formData.labs.chem.glu}
                 onChange={(e) => updateFormData('labs.chem.glu', e.target.value)}
               />
               <Input
                 name="na"
-                placeholder="Na (mEq/L)"
+                placeholder={t('oncologyForm.na')}
                 value={formData.labs.chem.na}
                 onChange={(e) => updateFormData('labs.chem.na', e.target.value)}
               />
               <Input
                 name="k"
-                placeholder="K (mEq/L)"
+                placeholder={t('oncologyForm.k')}
                 value={formData.labs.chem.k}
                 onChange={(e) => updateFormData('labs.chem.k', e.target.value)}
               />
@@ -1207,17 +1219,17 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
 
           <div>
-            <FieldLabel>Coagulation</FieldLabel>
+            <FieldLabel>{t('oncologyForm.coagulation')}</FieldLabel>
             <div className="grid grid-cols-2 gap-4">
               <Input
                 name="inr"
-                placeholder="INR"
+                placeholder={t('oncologyForm.inr')}
                 value={formData.labs.coag.inr}
                 onChange={(e) => updateFormData('labs.coag.inr', e.target.value)}
               />
               <Input
                 name="aptt"
-                placeholder="aPTT (s)"
+                placeholder={t('oncologyForm.aptt')}
                 value={formData.labs.coag.aptt}
                 onChange={(e) => updateFormData('labs.coag.aptt', e.target.value)}
               />
@@ -1225,24 +1237,27 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
 
           <div>
-            <FieldLabel>Infectious Screening</FieldLabel>
+            <FieldLabel>{t('oncologyForm.infectiousScreening')}</FieldLabel>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {['hbsag', 'anti_hbc', 'anti_hbs', 'hcv_ab', 'hiv_abag', 'quantiferon'].map(test => (
-                <div key={test} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={formData.labs.infectious[test]}
-                    onChange={(e) => updateFormData(`labs.infectious.${test}`, e.target.checked)}
-                    className="w-4 h-4 rounded"
-                  />
-                  <label className="text-sm text-slate-600 uppercase">{test.replace(/_/g, '-')}</label>
-                </div>
-              ))}
+              {['hbsag', 'antiHbc', 'antiHbs', 'hcvAb', 'hivAbag', 'quantiferon'].map(test => {
+                const testKey = test === 'antiHbc' ? 'anti_hbc' : test === 'antiHbs' ? 'anti_hbs' : test === 'hcvAb' ? 'hcv_ab' : test === 'hivAbag' ? 'hiv_abag' : test;
+                return (
+                  <div key={test} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={formData.labs.infectious[testKey]}
+                      onChange={(e) => updateFormData(`labs.infectious.${testKey}`, e.target.checked)}
+                      className="w-4 h-4 rounded"
+                    />
+                    <label className="text-sm text-slate-600">{t(`oncologyForm.${test}`)}</label>
+                  </div>
+                );
+              })}
             </div>
           </div>
 
           <div>
-            <FieldLabel>Tumor Markers</FieldLabel>
+            <FieldLabel>{t('oncologyForm.tumorMarkers')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.labs.tumor_markers.map((marker, i) => (
                 <Chip key={i} onRemove={() => removeFromArray('labs.tumor_markers', i)}>{marker}</Chip>
@@ -1270,7 +1285,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Pathology & Biomarkers */}
       <Card 
-        title="Pathology & Biomarkers" 
+        title={t('oncologyForm.pathologyBiomarkers')} 
         collapsible 
         isOpen={!collapsedSections.pathology}
         onToggle={() => toggleSection('pathology')}
@@ -1278,43 +1293,44 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Primary Site</FieldLabel>
+              <FieldLabel>{t('oncologyForm.primarySite')}</FieldLabel>
               <Input
                 name="pathology_site"
-                placeholder="Primary tumor site..."
+                placeholder={t('oncologyForm.primaryTumorSite')}
                 value={formData.pathology.site}
                 onChange={(e) => updateFormData('pathology.site', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Histology</FieldLabel>
+              <FieldLabel>{t('oncologyForm.histology')}</FieldLabel>
               <Input
                 name="pathology_histology"
-                placeholder="Histologic type..."
+                placeholder={t('oncologyForm.histologicType')}
                 value={formData.pathology.histology}
                 onChange={(e) => updateFormData('pathology.histology', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Grade</FieldLabel>
+              <FieldLabel>{t('oncologyForm.grade')}</FieldLabel>
               <Input
                 name="pathology_grade"
-                placeholder="Tumor grade..."
+                placeholder={t('oncologyForm.tumorGrade')}
                 value={formData.pathology.grade}
                 onChange={(e) => updateFormData('pathology.grade', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Margins</FieldLabel>
+              <FieldLabel>{t('oncologyForm.margins')}</FieldLabel>
               <Select
                 name="pathology_margins"
                 value={formData.pathology.margins}
                 onChange={(e) => updateFormData('pathology.margins', e.target.value)}
                 options={[
-                  { value: 'R0', label: 'R0 (Negative)' },
-                  { value: 'R1', label: 'R1 (Microscopic)' },
-                  { value: 'R2', label: 'R2 (Macroscopic)' }
+                  { value: 'R0', label: t('oncologyForm.r0Negative') },
+                  { value: 'R1', label: t('oncologyForm.r1Microscopic') },
+                  { value: 'R2', label: t('oncologyForm.r2Macroscopic') }
                 ]}
+                selectPlaceholder={t('oncologyForm.select')}
               />
             </div>
           </div>
@@ -1326,7 +1342,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 onChange={(e) => updateFormData('pathology.lymphovascular_invasion', e.target.checked)}
                 className="w-4 h-4 rounded"
               />
-              <label className="text-sm text-slate-600">Lymphovascular Invasion</label>
+              <label className="text-sm text-slate-600">{t('oncologyForm.lymphovascularInvasion')}</label>
             </div>
             <div className="flex items-center gap-2">
               <input
@@ -1335,37 +1351,37 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 onChange={(e) => updateFormData('pathology.perineural_invasion', e.target.checked)}
                 className="w-4 h-4 rounded"
               />
-              <label className="text-sm text-slate-600">Perineural Invasion</label>
+              <label className="text-sm text-slate-600">{t('oncologyForm.perineuralInvasion')}</label>
             </div>
           </div>
           <div>
-            <FieldLabel>Biomarkers</FieldLabel>
+            <FieldLabel>{t('oncologyForm.biomarkers')}</FieldLabel>
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Input
                   name="pd_l1"
-                  placeholder="PD-L1 (%)"
+                  placeholder={t('oncologyForm.pdL1')}
                   value={formData.pathology.biomarkers.pd_l1}
                   onChange={(e) => updateFormData('pathology.biomarkers.pd_l1', e.target.value)}
                 />
                 <Input
                   name="msi_mmr"
-                  placeholder="MSI/MMR"
+                  placeholder={t('oncologyForm.msiMmr')}
                   value={formData.pathology.biomarkers.msi_mmr}
                   onChange={(e) => updateFormData('pathology.biomarkers.msi_mmr', e.target.value)}
                 />
                 <Input
                   name="tmb"
-                  placeholder="TMB (mut/Mb)"
+                  placeholder={t('oncologyForm.tmb')}
                   value={formData.pathology.biomarkers.tmb}
                   onChange={(e) => updateFormData('pathology.biomarkers.tmb', e.target.value)}
                 />
               </div>
               <div className="border-t pt-4">
-                <FieldLabel>Disease-Specific Biomarkers</FieldLabel>
+                <FieldLabel>{t('oncologyForm.diseaseSpecificBiomarkers')}</FieldLabel>
                 <div className="space-y-4">
                   <div>
-                    <FieldLabel className="text-xs">Lung</FieldLabel>
+                    <FieldLabel className="text-xs">{t('oncologyForm.lung')}</FieldLabel>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {['egfr', 'alk', 'ros1', 'braf', 'kras', 'met', 'ret', 'ntrk'].map(gene => (
                         <Input
@@ -1379,7 +1395,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     </div>
                   </div>
                   <div>
-                    <FieldLabel className="text-xs">Breast</FieldLabel>
+                    <FieldLabel className="text-xs">{t('oncologyForm.breast')}</FieldLabel>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       {['er', 'pr', 'her2', 'ki67'].map(marker => (
                         <Input
@@ -1393,7 +1409,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     </div>
                   </div>
                   <div>
-                    <FieldLabel className="text-xs">CRC</FieldLabel>
+                    <FieldLabel className="text-xs">{t('oncologyForm.crc')}</FieldLabel>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                       {['kras', 'nras', 'braf', 'msi_mmr', 'her2'].map(marker => (
                         <Input
@@ -1415,28 +1431,38 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Staging & Disease Burden */}
       <Card 
-        title="Staging & Disease Burden" 
+        title={t('oncologyForm.stagingDiseaseBurden')} 
         collapsible 
         isOpen={!collapsedSections.staging}
         onToggle={() => toggleSection('staging')}
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel>Staging System</FieldLabel>
+            <FieldLabel>{t('oncologyForm.stagingSystem')}</FieldLabel>
             <Select
               name="staging_system"
               value={formData.staging.system}
               onChange={(e) => updateFormData('staging.system', e.target.value)}
-              options={STAGING_SYSTEMS.map(s => ({ value: s, label: s }))}
+              options={STAGING_SYSTEMS.map(s => {
+                // Convert "Ann Arbor" to "annArbor", "Lugano" to "lugano", etc.
+                const key = s.split(/\s+/).map((word, idx) => 
+                  idx === 0 ? word.toLowerCase() : word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+                ).join('');
+                return { 
+                  value: s, 
+                  label: t(`oncologyForm.${key}`) || s 
+                };
+              })}
+              selectPlaceholder={t('oncologyForm.select')}
             />
           </div>
           {formData.staging.system === 'TNM' && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <FieldLabel required>T</FieldLabel>
+                <FieldLabel required>{t('oncologyForm.t')}</FieldLabel>
                 <Input
                   name="staging_t"
-                  placeholder="T stage"
+                  placeholder={t('oncologyForm.tStage')}
                   value={formData.staging.t}
                   onChange={(e) => updateFormData('staging.t', e.target.value)}
                   required
@@ -1444,10 +1470,10 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 {errors.staging_t && <p className="text-red-500 text-sm mt-1">{errors.staging_t}</p>}
               </div>
               <div>
-                <FieldLabel required>N</FieldLabel>
+                <FieldLabel required>{t('oncologyForm.n')}</FieldLabel>
                 <Input
                   name="staging_n"
-                  placeholder="N stage"
+                  placeholder={t('oncologyForm.nStage')}
                   value={formData.staging.n}
                   onChange={(e) => updateFormData('staging.n', e.target.value)}
                   required
@@ -1455,10 +1481,10 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 {errors.staging_n && <p className="text-red-500 text-sm mt-1">{errors.staging_n}</p>}
               </div>
               <div>
-                <FieldLabel required>M</FieldLabel>
+                <FieldLabel required>{t('oncologyForm.m')}</FieldLabel>
                 <Input
                   name="staging_m"
-                  placeholder="M stage"
+                  placeholder={t('oncologyForm.mStage')}
                   value={formData.staging.m}
                   onChange={(e) => updateFormData('staging.m', e.target.value)}
                   required
@@ -1466,10 +1492,10 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 {errors.staging_m && <p className="text-red-500 text-sm mt-1">{errors.staging_m}</p>}
               </div>
               <div>
-                <FieldLabel required>Stage Group</FieldLabel>
+                <FieldLabel required>{t('oncologyForm.stageGroup')}</FieldLabel>
                 <Input
                   name="staging_group"
-                  placeholder="Stage group"
+                  placeholder={t('oncologyForm.stageGroupPlaceholder')}
                   value={formData.staging.stage_group}
                   onChange={(e) => updateFormData('staging.stage_group', e.target.value)}
                   required
@@ -1479,22 +1505,22 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
           )}
           <div>
-            <FieldLabel>Imaging Summary</FieldLabel>
+            <FieldLabel>{t('oncologyForm.imagingSummary')}</FieldLabel>
             <TextArea
               name="imaging_summary"
-              placeholder="Summary of imaging findings..."
+              placeholder={t('oncologyForm.summaryOfImagingFindings')}
               value={formData.staging.imaging_summary}
               onChange={(e) => updateFormData('staging.imaging_summary', e.target.value)}
               rows={4}
             />
           </div>
           <div>
-            <FieldLabel>Measurable Lesions</FieldLabel>
+            <FieldLabel>{t('oncologyForm.measurableLesions')}</FieldLabel>
             <div className="space-y-2">
               {formData.staging.measurable_lesions.map((lesion, idx) => (
                 <div key={idx} className="border border-slate-200 rounded-lg p-3">
                   <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-semibold text-slate-800">{lesion.site || 'New Lesion'}</h4>
+                    <h4 className="font-semibold text-slate-800">{lesion.site || t('oncologyForm.newLesion')}</h4>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -1503,6 +1529,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                           setEditingLesionIdx(idx);
                         }}
                         className="text-slate-500 hover:text-slate-700"
+                        aria-label={t('oncologyForm.edit')}
                       >
                         ✎
                       </button>
@@ -1510,13 +1537,14 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                         type="button"
                         onClick={() => removeFromArray('staging.measurable_lesions', idx)}
                         className="text-red-500 hover:text-red-700"
+                        aria-label={t('oncologyForm.remove')}
                       >
                         ×
                       </button>
                     </div>
                   </div>
                   <div className="text-sm text-slate-600">
-                    <div>{lesion.modality}: {lesion.longest_diam_mm}mm {lesion.target && '(Target)'}</div>
+                    <div>{lesion.modality}: {lesion.longest_diam_mm}mm {lesion.target && `(${t('oncologyForm.targetLesion')})`}</div>
                   </div>
                 </div>
               ))}
@@ -1533,38 +1561,39 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                   setEditingLesionIdx(null);
                 }}
               >
-                Add Lesion
+                {t('oncologyForm.addLesion')}
               </button>
 
               {editingLesion && (
                 <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
                   <div className="col-span-12">
-                    <FieldLabel required>Site</FieldLabel>
+                    <FieldLabel required>{t('oncologyForm.lesionSite')}</FieldLabel>
                     <Input
-                      placeholder="Lesion site"
+                      placeholder={t('oncologyForm.lesionSite')}
                       value={editingLesion.site}
                       onChange={(e) => setEditingLesion(s => ({...s, site: e.target.value}))}
                     />
                   </div>
                   <div className="col-span-12 md:col-span-6">
-                    <FieldLabel>Modality</FieldLabel>
+                    <FieldLabel>{t('oncologyForm.modality')}</FieldLabel>
                     <Select
                       name="lesion_modality"
                       value={editingLesion.modality}
                       onChange={(e) => setEditingLesion(s => ({...s, modality: e.target.value}))}
                       options={[
-                        { value: 'CT', label: 'CT' },
-                        { value: 'MRI', label: 'MRI' },
-                        { value: 'PET-CT', label: 'PET-CT' },
-                        { value: 'US', label: 'US' }
+                        { value: 'CT', label: t('oncologyForm.ct') },
+                        { value: 'MRI', label: t('oncologyForm.mri') },
+                        { value: 'PET-CT', label: t('oncologyForm.petCt') },
+                        { value: 'US', label: t('oncologyForm.us') }
                       ]}
+                      selectPlaceholder={t('oncologyForm.select')}
                     />
                   </div>
                   <div className="col-span-12 md:col-span-6">
-                    <FieldLabel>Longest Diameter (mm)</FieldLabel>
+                    <FieldLabel>{t('oncologyForm.longestDiameter')}</FieldLabel>
                     <Input
                       type="number"
-                      placeholder="Diameter"
+                      placeholder={t('oncologyForm.diameter')}
                       value={editingLesion.longest_diam_mm}
                       onChange={(e) => setEditingLesion(s => ({...s, longest_diam_mm: e.target.value}))}
                     />
@@ -1577,7 +1606,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                         onChange={(e) => setEditingLesion(s => ({...s, target: e.target.checked}))}
                         className="w-4 h-4 rounded"
                       />
-                      <label className="text-sm text-slate-600">Target Lesion</label>
+                      <label className="text-sm text-slate-600">{t('oncologyForm.targetLesion')}</label>
                     </div>
                   </div>
                   <div className="col-span-12 flex justify-end gap-3">
@@ -1586,7 +1615,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                       className="px-4 py-2 border rounded-lg hover:bg-slate-50"
                       onClick={() => {setEditingLesion(null); setEditingLesionIdx(null);}}
                     >
-                      Cancel
+                      {t('oncologyForm.cancel')}
                     </button>
                     <button
                       type="button"
@@ -1599,7 +1628,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                         setEditingLesion(null); setEditingLesionIdx(null);
                       }}
                     >
-                      Save
+                      {t('oncologyForm.save')}
                     </button>
                   </div>
                 </div>
@@ -1611,14 +1640,14 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Diagnostics Plan */}
       <Card 
-        title="Diagnostics Plan" 
+        title={t('oncologyForm.diagnostics')} 
         collapsible 
         isOpen={!collapsedSections.diagnostics}
         onToggle={() => toggleSection('diagnostics')}
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel>Imaging Studies</FieldLabel>
+            <FieldLabel>{t('oncologyForm.imagingStudies')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.diagnostics.imaging.map((img, i) => (
                 <Chip key={i} onRemove={() => removeFromArray('diagnostics.imaging', i)}>{img}</Chip>
@@ -1642,7 +1671,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
           </div>
           <div>
-            <FieldLabel>Procedures</FieldLabel>
+            <FieldLabel>{t('oncologyForm.procedure')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.diagnostics.procedures.map((proc, i) => (
                 <Chip key={i} onRemove={() => removeFromArray('diagnostics.procedures', i)}>{proc}</Chip>
@@ -1650,7 +1679,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
             <input
               type="text"
-              placeholder="Add procedure..."
+              placeholder={t('oncologyForm.addProcedure')}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -1664,10 +1693,10 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             />
           </div>
           <div>
-            <FieldLabel>Notes</FieldLabel>
+            <FieldLabel>{t('oncologyForm.testNotes')}</FieldLabel>
             <TextArea
               name="diagnostics_notes"
-              placeholder="Additional diagnostic notes..."
+              placeholder={t('oncologyForm.additionalTestNotes')}
               value={formData.diagnostics.notes}
               onChange={(e) => updateFormData('diagnostics.notes', e.target.value)}
               rows={3}
@@ -1678,20 +1707,20 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Diagnosis */}
       <Card 
-        title="Diagnosis" 
+        title={t('oncologyForm.diagnosis')} 
         collapsible 
         isOpen={!collapsedSections.diagnosis}
         onToggle={() => toggleSection('diagnosis')}
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel required>Main Diagnosis</FieldLabel>
+            <FieldLabel required>{t('oncologyForm.primaryDiagnosis')}</FieldLabel>
             <div className="space-y-2">
               {formData.diagnosis.main && typeof formData.diagnosis.main === 'object' && (formData.diagnosis.main.code || formData.diagnosis.main.term) ? (
                 <div className="flex gap-2 items-start">
                   <div className="flex gap-2 items-start flex-1">
                     <Input
-                      placeholder="ICD-11 code"
+                      placeholder={t('oncologyForm.icd11Code')}
                       value={formData.diagnosis.main.code || ''}
                       onChange={(e) => {
                         const current = typeof formData.diagnosis.main === 'object' ? formData.diagnosis.main : { code: '', term: '' };
@@ -1700,7 +1729,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                       className="w-40"
                     />
                     <Input
-                      placeholder="Diagnosis term"
+                      placeholder={t('oncologyForm.diagnosisTerm')}
                       value={formData.diagnosis.main.term || ''}
                       onChange={(e) => {
                         const current = typeof formData.diagnosis.main === 'object' ? formData.diagnosis.main : { code: '', term: '' };
@@ -1714,12 +1743,12 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     onClick={() => updateFormData('diagnosis.main', '')}
                     className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
                   >
-                    Clear
+                    {t('oncologyForm.clear')}
                   </button>
                 </div>
               ) : null}
               <IcdCodeSearchInput
-                placeholder="Search ICD-11 code or diagnosis..."
+                placeholder={t('oncologyForm.searchIcd11Code')}
                 onSelect={(selected) => {
                   updateFormData('diagnosis.main', selected);
                 }}
@@ -1730,7 +1759,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             )}
           </div>
           <div>
-            <FieldLabel>Secondary Diagnoses</FieldLabel>
+            <FieldLabel>{t('oncologyForm.secondaryDiagnoses')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.diagnosis.secondary.map((diag, index) => (
                 <Chip
@@ -1743,7 +1772,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
             <input
               type="text"
-              placeholder="Add secondary diagnosis..."
+              placeholder={t('oncologyForm.addSecondaryDiagnosis')}
               className="w-full px-3 py-2 border border-slate-200 rounded-lg"
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
@@ -1757,7 +1786,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             />
           </div>
           <div>
-            <FieldLabel>Diagnosis Codes</FieldLabel>
+            <FieldLabel>{t('oncologyForm.diagnosisCodes')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.diagnosis.codes.map((code, index) => (
                 <Chip
@@ -1769,7 +1798,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
               ))}
             </div>
             <IcdCodeSearchInput
-              placeholder="Search ICD-11 code to add..."
+              placeholder={t('oncologyForm.searchIcd11CodeToAdd')}
               onSelect={(selected) => {
                 addToArray('diagnosis.codes', {
                   system: 'ICD11',
@@ -1785,7 +1814,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
       {/* Plan & Treatment (Initial mode only) */}
       {mode === 'initial' && (
         <Card 
-          title="Systemic Therapy Plan" 
+          title={t('oncologyForm.treatmentPlan')} 
           collapsible 
           isOpen={!collapsedSections.plan}
           onToggle={() => toggleSection('plan')}
@@ -1807,28 +1836,29 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <FieldLabel>BSA (m²)</FieldLabel>
+                <FieldLabel>{t('oncologyForm.bsa')}</FieldLabel>
                 <Input
                   name="bsa"
-                  placeholder="Auto-calculated"
+                  placeholder={t('oncologyForm.autoCalculated')}
                   value={formData.plan.bsa}
                   onChange={(e) => updateFormData('plan.bsa', e.target.value)}
                 />
               </div>
               <div>
-                <FieldLabel>Regimen</FieldLabel>
+                <FieldLabel>{t('oncologyForm.regimen')}</FieldLabel>
                 <Select
                   name="regimen"
                   value={formData.plan.regimen}
                   onChange={(e) => updateFormData('plan.regimen', e.target.value)}
                   options={CHEMO_PRESETS.map(r => ({ value: r, label: r }))}
+                  selectPlaceholder={t('oncologyForm.select')}
                 />
               </div>
               <div>
-                <FieldLabel>Line</FieldLabel>
+                <FieldLabel>{t('oncologyForm.line')}</FieldLabel>
                 <Input
                   name="line"
-                  placeholder="1, 2, etc."
+                  placeholder={t('oncologyForm.linePlaceholder')}
                   value={formData.plan.line}
                   onChange={(e) => updateFormData('plan.line', e.target.value)}
                 />
@@ -1836,41 +1866,42 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <FieldLabel>Type</FieldLabel>
+                <FieldLabel>{t('oncologyForm.type')}</FieldLabel>
                 <Select
                   name="plan_type"
                   value={formData.plan.type}
                   onChange={(e) => updateFormData('plan.type', e.target.value)}
                   options={[
-                    { value: 'chemo', label: 'Chemotherapy' },
-                    { value: 'io', label: 'Immunotherapy' },
-                    { value: 'tt', label: 'Targeted Therapy' },
+                    { value: 'chemo', label: t('oncologyForm.chemo') },
+                    { value: 'io', label: t('oncologyForm.immuno') },
+                    { value: 'tt', label: t('oncologyForm.systemicTreatment') },
                     { value: 'endocrine', label: 'Endocrine' },
                     { value: 'supportive', label: 'Supportive' }
                   ]}
+                  selectPlaceholder={t('oncologyForm.select')}
                 />
               </div>
               <div>
-                <FieldLabel>Schedule</FieldLabel>
+                <FieldLabel>{t('oncologyForm.schedule')}</FieldLabel>
                 <Input
                   name="schedule_schema"
-                  placeholder="q3w, q2w, etc."
+                  placeholder={t('oncologyForm.schedulePlaceholder')}
                   value={formData.plan.schedule.schema}
                   onChange={(e) => updateFormData('plan.schedule.schema', e.target.value)}
                 />
               </div>
               <div>
-                <FieldLabel>Cycles Planned</FieldLabel>
+                <FieldLabel>{t('oncologyForm.cyclesPlanned')}</FieldLabel>
                 <Input
                   name="cycles_planned"
-                  placeholder="Number of cycles"
+                  placeholder={t('oncologyForm.cycle')}
                   value={formData.plan.schedule.cycles_planned}
                   onChange={(e) => updateFormData('plan.schedule.cycles_planned', e.target.value)}
                 />
               </div>
             </div>
             <div>
-              <FieldLabel>Dosing</FieldLabel>
+              <FieldLabel>{t('oncologyForm.dosing')}</FieldLabel>
               <div className="space-y-2">
                 {formData.plan.dosing.map((dose, idx) => {
                   const label = `${dose.drug} ${dose.dose_mg_per_m2} mg/m² D${dose.day}`;
@@ -1884,6 +1915,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                           setEditingDosingIdx(idx);
                         }}
                         className="text-slate-500 hover:text-slate-700"
+                        aria-label={t('oncologyForm.edit')}
                       >
                         ✎
                       </button>
@@ -1891,6 +1923,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                         type="button"
                         onClick={() => removeFromArray('plan.dosing', idx)}
                         className="text-red-500 hover:text-red-700"
+                        aria-label={t('oncologyForm.remove')}
                       >
                         ×
                       </button>
@@ -1909,33 +1942,33 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     setEditingDosingIdx(null);
                   }}
                 >
-                  + Add Drug
+                  {t('oncologyForm.addDrug')}
                 </button>
               </div>
 
               {editingDosing && (
                 <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
                   <div className="col-span-12">
-                    <FieldLabel required>Drug</FieldLabel>
+                    <FieldLabel required>{t('oncologyForm.drug')}</FieldLabel>
                     <Input
-                      placeholder="Drug name"
+                      placeholder={t('oncologyForm.drugName')}
                       value={editingDosing.drug}
                       onChange={(e) => setEditingDosing(s => ({...s, drug: e.target.value}))}
                     />
                   </div>
                   <div className="col-span-12 md:col-span-6">
-                    <FieldLabel required>Dose (mg/m²)</FieldLabel>
+                    <FieldLabel required>{t('oncologyForm.doseMgPerM2')}</FieldLabel>
                     <Input
                       type="number"
-                      placeholder="Dose per m²"
+                      placeholder={t('oncologyForm.dosePerM2')}
                       value={editingDosing.dose_mg_per_m2}
                       onChange={(e) => setEditingDosing(s => ({...s, dose_mg_per_m2: e.target.value}))}
                     />
                   </div>
                   <div className="col-span-12 md:col-span-6">
-                    <FieldLabel required>Day</FieldLabel>
+                    <FieldLabel required>{t('oncologyForm.day')}</FieldLabel>
                     <Input
-                      placeholder="Day of cycle (1, 2, etc.)"
+                      placeholder={t('oncologyForm.dayOfCycle')}
                       value={editingDosing.day}
                       onChange={(e) => setEditingDosing(s => ({...s, day: e.target.value}))}
                     />
@@ -1946,7 +1979,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                       className="px-4 py-2 border rounded-lg hover:bg-slate-50"
                       onClick={() => {setEditingDosing(null); setEditingDosingIdx(null);}}
                     >
-                      Cancel
+                      {t('oncologyForm.cancel')}
                     </button>
                     <button
                       type="button"
@@ -1959,7 +1992,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                         setEditingDosing(null); setEditingDosingIdx(null);
                       }}
                     >
-                      Save
+                      {t('oncologyForm.save')}
                     </button>
                   </div>
                 </div>
@@ -1967,26 +2000,28 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <FieldLabel>Antiemesis Risk</FieldLabel>
+                <FieldLabel>{t('oncologyForm.antiemesisRisk')}</FieldLabel>
                 <Select
                   name="antiemesis_risk"
                   value={formData.plan.antiemesis_risk}
                   onChange={(e) => updateFormData('plan.antiemesis_risk', e.target.value)}
                   options={ANTIEMESIS_RISK.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+                  selectPlaceholder={t('oncologyForm.select')}
                 />
               </div>
               <div>
-                <FieldLabel>VTE Prophylaxis</FieldLabel>
+                <FieldLabel>{t('oncologyForm.vteProphylaxis')}</FieldLabel>
                 <Select
                   name="vte_prophylaxis"
                   value={formData.plan.vte_prophylaxis}
                   onChange={(e) => updateFormData('plan.vte_prophylaxis', e.target.value)}
-                  options={VTE_PROPH.map(v => ({ value: v, label: v === 'none' ? 'None' : v }))}
+                  options={VTE_PROPH.map(v => ({ value: v, label: v === 'none' ? t('oncologyForm.none') : v }))}
+                  selectPlaceholder={t('oncologyForm.select')}
                 />
               </div>
             </div>
             <div>
-              <FieldLabel>Follow-up</FieldLabel>
+              <FieldLabel>{t('oncologyForm.followUp')}</FieldLabel>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Select
                   name="follow_up"
@@ -1999,12 +2034,13 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     { value: 'q6w', label: 'Q6 weeks' },
                     { value: 'PRN', label: 'PRN' }
                   ]}
+                  selectPlaceholder={t('oncologyForm.select')}
                 />
                 {formData.plan.follow_up === 'PRN' && (
                   <Input
                     name="follow_up_date"
                     type="date"
-                    placeholder="Specific date"
+                    placeholder={t('oncologyForm.specificDate')}
                     value={formData.plan.follow_up_date}
                     onChange={(e) => updateFormData('plan.follow_up_date', e.target.value)}
                   />
@@ -2020,7 +2056,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Local Therapy */}
       <Card 
-        title="Local Therapy" 
+        title={t('oncologyForm.localTreatment')} 
         collapsible 
         isOpen={!collapsedSections.local}
         onToggle={() => toggleSection('local')}
@@ -2034,19 +2070,19 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 onChange={(e) => updateFormData('surgery.planned', e.target.checked)}
                 className="w-4 h-4 rounded"
               />
-              <label className="text-sm font-medium text-slate-700">Surgery Planned</label>
+              <label className="text-sm font-medium text-slate-700">{t('oncologyForm.surgery')} {t('oncologyForm.ordered')}</label>
             </div>
             {formData.surgery.planned && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
                 <Input
                   name="surgery_type"
-                  placeholder="Surgery type..."
+                  placeholder={t('oncologyForm.surgeryType')}
                   value={formData.surgery.type}
                   onChange={(e) => updateFormData('surgery.type', e.target.value)}
                 />
                 <Input
                   name="surgery_margins"
-                  placeholder="Margins..."
+                  placeholder={t('oncologyForm.margins')}
                   value={formData.surgery.margins}
                   onChange={(e) => updateFormData('surgery.margins', e.target.value)}
                 />
@@ -2061,7 +2097,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 onChange={(e) => updateFormData('radiation.planned', e.target.checked)}
                 className="w-4 h-4 rounded"
               />
-              <label className="text-sm font-medium text-slate-700">Radiation Planned</label>
+              <label className="text-sm font-medium text-slate-700">{t('oncologyForm.radiation')} {t('oncologyForm.ordered')}</label>
             </div>
             {formData.radiation.planned && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
@@ -2070,10 +2106,11 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                   value={formData.radiation.technique}
                   onChange={(e) => updateFormData('radiation.technique', e.target.value)}
                   options={RADIATION_TECH.map(t => ({ value: t, label: t }))}
+                  selectPlaceholder={t('oncologyForm.select')}
                 />
                 <Input
                   name="total_dose_gy"
-                  placeholder="Total dose (Gy)"
+                  placeholder={t('oncologyForm.dose')}
                   value={formData.radiation.total_dose_gy}
                   onChange={(e) => updateFormData('radiation.total_dose_gy', e.target.value)}
                 />
@@ -2085,7 +2122,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Toxicities */}
       <Card 
-        title="Toxicities (CTCAE v5.0)" 
+        title={t('oncologyForm.toxicitiesCtcae')} 
         collapsible 
         isOpen={!collapsedSections.toxicities}
         onToggle={() => toggleSection('toxicities')}
@@ -2097,7 +2134,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
             return (
               <div key={idx} className="border border-slate-200 rounded-lg p-4">
                 <div className="flex justify-between items-start mb-2">
-                  <h4 className="font-semibold text-slate-800">{obj.term || 'New Toxicity'}</h4>
+                  <h4 className="font-semibold text-slate-800">{obj.term || t('oncologyForm.newToxicity')}</h4>
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -2106,6 +2143,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                         setEditingToxicityIdx(idx);
                       }}
                       className="text-slate-500 hover:text-slate-700"
+                      aria-label={t('oncologyForm.edit')}
                     >
                       ✎
                     </button>
@@ -2113,15 +2151,16 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                       type="button"
                       onClick={() => removeFromArray('toxicities', idx)}
                       className="text-red-500 hover:text-red-700"
+                      aria-label={t('oncologyForm.remove')}
                     >
                       ×
                     </button>
                   </div>
                 </div>
                 <div className="text-sm text-slate-600">
-                  <div>Grade: {obj.grade}</div>
-                  {obj.onset && <div>Onset: {obj.onset}</div>}
-                  {obj.action && <div>Action: {obj.action}</div>}
+                  <div>{t('oncologyForm.grade')}: {obj.grade}</div>
+                  {obj.onset && <div>{t('oncologyForm.onsetDate')}: {obj.onset}</div>}
+                  {obj.action && <div>{t('oncologyForm.managementAction')}: {obj.action}</div>}
                 </div>
               </div>
             );
@@ -2142,30 +2181,31 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
               setEditingToxicityIdx(null);
             }}
           >
-            Add Toxicity
+            {t('oncologyForm.addToxicity')}
           </button>
 
           {editingToxicity && (
             <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
               <div className="col-span-12">
-                <FieldLabel required>Term</FieldLabel>
+                <FieldLabel required>{t('oncologyForm.term')}</FieldLabel>
                 <Input
-                  placeholder="Toxicity term"
+                  placeholder={t('oncologyForm.toxicityTerm')}
                   value={editingToxicity.term}
                   onChange={(e) => setEditingToxicity(s => ({...s, term: e.target.value}))}
                 />
               </div>
               <div className="col-span-12 md:col-span-6">
-                <FieldLabel required>Grade</FieldLabel>
+                <FieldLabel required>{t('oncologyForm.grade')}</FieldLabel>
                 <Select
                   name="tox_grade"
                   value={editingToxicity.grade}
                   onChange={(e) => setEditingToxicity(s => ({...s, grade: e.target.value}))}
-                  options={CTCAE_GRADES.map(g => ({ value: g, label: `Grade ${g}` }))}
+                  options={CTCAE_GRADES.map(g => ({ value: g, label: `${t('oncologyForm.grade')} ${g}` }))}
+                  selectPlaceholder={t('oncologyForm.select')}
                 />
               </div>
               <div className="col-span-12 md:col-span-6">
-                <FieldLabel>Onset Date</FieldLabel>
+                <FieldLabel>{t('oncologyForm.onsetDate')}</FieldLabel>
                 <Input
                   type="date"
                   value={editingToxicity.onset}
@@ -2173,7 +2213,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 />
               </div>
               <div className="col-span-12 md:col-span-6">
-                <FieldLabel>Resolution Date</FieldLabel>
+                <FieldLabel>{t('oncologyForm.resolutionDate')}</FieldLabel>
                 <Input
                   type="date"
                   value={editingToxicity.offset || ''}
@@ -2181,17 +2221,17 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 />
               </div>
               <div className="col-span-12 md:col-span-6">
-                <FieldLabel>Outcome</FieldLabel>
+                <FieldLabel>{t('oncologyForm.outcome')}</FieldLabel>
                 <Input
-                  placeholder="Resolved, ongoing, etc."
+                  placeholder={t('oncologyForm.outcomePlaceholder')}
                   value={editingToxicity.outcome || ''}
                   onChange={(e) => setEditingToxicity(s => ({...s, outcome: e.target.value}))}
                 />
               </div>
               <div className="col-span-12">
-                <FieldLabel>Management Action</FieldLabel>
+                <FieldLabel>{t('oncologyForm.managementAction')}</FieldLabel>
                 <TextArea
-                  placeholder="Actions taken..."
+                  placeholder={t('oncologyForm.actionsTaken')}
                   value={editingToxicity.action || ''}
                   onChange={(e) => setEditingToxicity(s => ({...s, action: e.target.value}))}
                   rows={2}
@@ -2203,7 +2243,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                   className="px-4 py-2 border rounded-lg hover:bg-slate-50"
                   onClick={() => {setEditingToxicity(null); setEditingToxicityIdx(null);}}
                 >
-                  Cancel
+                  {t('oncologyForm.cancel')}
                 </button>
                 <button
                   type="button"
@@ -2216,7 +2256,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     setEditingToxicity(null); setEditingToxicityIdx(null);
                   }}
                 >
-                  Save
+                  {t('oncologyForm.save')}
                 </button>
               </div>
             </div>
@@ -2226,7 +2266,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Response Assessment */}
       <Card 
-        title="Response Assessment & MRD" 
+        title={t('oncologyForm.responseAssessment')} 
         collapsible 
         isOpen={!collapsedSections.response}
         onToggle={() => toggleSection('response')}
@@ -2234,16 +2274,17 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>Criteria</FieldLabel>
+              <FieldLabel>{t('oncologyForm.criteria')}</FieldLabel>
               <Select
                 name="response_criteria"
                 value={formData.response.criteria}
                 onChange={(e) => updateFormData('response.criteria', e.target.value)}
                 options={RECIST_CRITERIA.map(c => ({ value: c, label: c }))}
+                selectPlaceholder={t('oncologyForm.select')}
               />
             </div>
             <div>
-              <FieldLabel>Timepoint</FieldLabel>
+              <FieldLabel>{t('oncologyForm.timepoint')}</FieldLabel>
               <Input
                 name="response_timepoint"
                 type="date"
@@ -2252,27 +2293,28 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
               />
             </div>
             <div>
-              <FieldLabel>Best Response</FieldLabel>
+              <FieldLabel>{t('oncologyForm.bestResponse')}</FieldLabel>
               <Select
                 name="best_response"
                 value={formData.response.best_response}
                 onChange={(e) => updateFormData('response.best_response', e.target.value)}
                 options={[
-                  { value: 'CR', label: 'CR (Complete Response)' },
-                  { value: 'PR', label: 'PR (Partial Response)' },
-                  { value: 'SD', label: 'SD (Stable Disease)' },
-                  { value: 'PD', label: 'PD (Progressive Disease)' }
+                  { value: 'CR', label: t('oncologyForm.completeResponse') },
+                  { value: 'PR', label: t('oncologyForm.partialResponse') },
+                  { value: 'SD', label: t('oncologyForm.stableDisease') },
+                  { value: 'PD', label: t('oncologyForm.progressiveDisease') }
                 ]}
+                selectPlaceholder={t('oncologyForm.select')}
               />
             </div>
           </div>
           <div>
-            <FieldLabel>Target Lesions</FieldLabel>
+            <FieldLabel>{t('oncologyForm.targetLesions')}</FieldLabel>
             <div className="space-y-2">
               {formData.response.target_lesions.map((lesion, idx) => (
                 <div key={idx} className="border border-slate-200 rounded-lg p-3">
                   <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-semibold text-slate-800">{lesion.site || 'New Lesion'}</h4>
+                    <h4 className="font-semibold text-slate-800">{lesion.site || t('oncologyForm.newLesion')}</h4>
                     <div className="flex gap-2">
                       <button
                         type="button"
@@ -2281,6 +2323,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                           setEditingTargetLesionIdx(idx);
                         }}
                         className="text-slate-500 hover:text-slate-700"
+                        aria-label={t('oncologyForm.edit')}
                       >
                         ✎
                       </button>
@@ -2288,6 +2331,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                         type="button"
                         onClick={() => removeFromArray('response.target_lesions', idx)}
                         className="text-red-500 hover:text-red-700"
+                        aria-label={t('oncologyForm.remove')}
                       >
                         ×
                       </button>
@@ -2314,24 +2358,24 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                   setEditingTargetLesionIdx(null);
                 }}
               >
-                Add Target Lesion
+                {t('oncologyForm.addTargetLesion')}
               </button>
 
               {editingTargetLesion && (
                 <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
                   <div className="col-span-12">
-                    <FieldLabel required>Site</FieldLabel>
+                    <FieldLabel required>{t('oncologyForm.site')}</FieldLabel>
                     <Input
-                      placeholder="Lesion site"
+                      placeholder={t('oncologyForm.lesionSite')}
                       value={editingTargetLesion.site}
                       onChange={(e) => setEditingTargetLesion(s => ({...s, site: e.target.value}))}
                     />
                   </div>
                   <div className="col-span-12 md:col-span-4">
-                    <FieldLabel required>Baseline (mm)</FieldLabel>
+                    <FieldLabel required>{t('oncologyForm.baseline')}</FieldLabel>
                     <Input
                       type="number"
-                      placeholder="Baseline diameter"
+                      placeholder={t('oncologyForm.baselineDiameter')}
                       value={editingTargetLesion.baseline_mm}
                       onChange={(e) => {
                         const newVal = e.target.value;
@@ -2347,10 +2391,10 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     />
                   </div>
                   <div className="col-span-12 md:col-span-4">
-                    <FieldLabel required>Current (mm)</FieldLabel>
+                    <FieldLabel required>{t('oncologyForm.current')}</FieldLabel>
                     <Input
                       type="number"
-                      placeholder="Current diameter"
+                      placeholder={t('oncologyForm.currentDiameter')}
                       value={editingTargetLesion.current_mm}
                       onChange={(e) => {
                         const newVal = e.target.value;
@@ -2366,9 +2410,9 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     />
                   </div>
                   <div className="col-span-12 md:col-span-4">
-                    <FieldLabel>% Change</FieldLabel>
+                    <FieldLabel>{t('oncologyForm.percentChange')}</FieldLabel>
                     <Input
-                      placeholder="Auto-calculated"
+                      placeholder={t('oncologyForm.autoCalculated')}
                       value={editingTargetLesion.percent_change || ''}
                       readOnly
                       className="bg-slate-50"
@@ -2380,7 +2424,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                       className="px-4 py-2 border rounded-lg hover:bg-slate-50"
                       onClick={() => {setEditingTargetLesion(null); setEditingTargetLesionIdx(null);}}
                     >
-                      Cancel
+                      {t('oncologyForm.cancel')}
                     </button>
                     <button
                       type="button"
@@ -2393,7 +2437,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                         setEditingTargetLesion(null); setEditingTargetLesionIdx(null);
                       }}
                     >
-                      Save
+                      {t('oncologyForm.save')}
                     </button>
                   </div>
                 </div>
@@ -2402,20 +2446,20 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Non-Target Findings</FieldLabel>
+              <FieldLabel>{t('oncologyForm.nonTargetFindings')}</FieldLabel>
               <TextArea
                 name="non_target_findings"
-                placeholder="Non-target lesions..."
+                placeholder={t('oncologyForm.nonTargetLesions')}
                 value={formData.response.non_target_findings}
                 onChange={(e) => updateFormData('response.non_target_findings', e.target.value)}
                 rows={3}
               />
             </div>
             <div>
-              <FieldLabel>New Lesions</FieldLabel>
+              <FieldLabel>{t('oncologyForm.newLesions')}</FieldLabel>
               <TextArea
                 name="new_lesions"
-                placeholder="New lesions..."
+                placeholder={t('oncologyForm.newLesionsPlaceholder')}
                 value={formData.response.new_lesions}
                 onChange={(e) => updateFormData('response.new_lesions', e.target.value)}
                 rows={3}
@@ -2430,7 +2474,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 onChange={(e) => updateFormData('response.mrd.assessed', e.target.checked)}
                 className="w-4 h-4 rounded"
               />
-              <label className="text-sm font-medium text-slate-700">MRD Assessed</label>
+              <label className="text-sm font-medium text-slate-700">{t('oncologyForm.mrdAssessed')}</label>
             </div>
             {formData.response.mrd.assessed && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 ml-6">
@@ -2439,20 +2483,21 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                   value={formData.response.mrd.method}
                   onChange={(e) => updateFormData('response.mrd.method', e.target.value)}
                   options={[
-                    { value: 'flow', label: 'Flow Cytometry' },
-                    { value: 'NGS', label: 'NGS' },
-                    { value: 'PCR', label: 'PCR' }
+                    { value: 'flow', label: t('oncologyForm.flowCytometry') },
+                    { value: 'NGS', label: t('oncologyForm.ngs') },
+                    { value: 'PCR', label: t('oncologyForm.pcr') }
                   ]}
+                  selectPlaceholder={t('oncologyForm.select')}
                 />
                 <Input
                   name="mrd_value"
-                  placeholder="MRD value"
+                  placeholder={t('oncologyForm.mrdValue')}
                   value={formData.response.mrd.value}
                   onChange={(e) => updateFormData('response.mrd.value', e.target.value)}
                 />
                 <Input
                   name="mrd_threshold"
-                  placeholder="Threshold"
+                  placeholder={t('oncologyForm.threshold')}
                   value={formData.response.mrd.threshold}
                   onChange={(e) => updateFormData('response.mrd.threshold', e.target.value)}
                 />
@@ -2464,7 +2509,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Tests & References */}
       <Card 
-        title="Tests & Referenced Documents" 
+        title={t('oncologyForm.testsReferencedDocuments')} 
         collapsible 
         isOpen={!collapsedSections.imaging}
         onToggle={() => toggleSection('imaging')}
@@ -2472,17 +2517,17 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel>Test Notes</FieldLabel>
+            <FieldLabel>{t('oncologyForm.testNotes')}</FieldLabel>
             <TextArea
               name="tests_notes"
-              placeholder="Additional test notes..."
+              placeholder={t('oncologyForm.additionalTestNotes')}
               value={formData.tests.notes}
               onChange={(e) => updateFormData('tests.notes', e.target.value)}
               rows={3}
             />
           </div>
           <div>
-            <FieldLabel>Referenced Documents</FieldLabel>
+            <FieldLabel>{t('oncologyForm.referencedDocuments')}</FieldLabel>
             <div className="space-y-2">
               {formData.tests.referenced_docs.map((doc, index) => (
                 <div key={index} className="flex items-center gap-2 p-2 bg-slate-50 rounded">
@@ -2493,6 +2538,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     type="button"
                     onClick={() => removeFromArray('tests.referenced_docs', index)}
                     className="text-red-500 hover:text-red-700"
+                    aria-label={t('oncologyForm.remove')}
                   >
                     ×
                   </button>
@@ -2507,7 +2553,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                   date: new Date().toISOString().split('T')[0]
                 })}
               >
-                + Add Reference
+                {t('oncologyForm.addReference')}
               </button>
             </div>
           </div>
@@ -2516,7 +2562,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Imaging Studies */}
       <Card 
-        title="Imaging Studies" 
+        title={t('oncologyForm.imagingStudies')} 
         collapsible 
         isOpen={!collapsedSections.imaging}
         onToggle={() => toggleSection('imaging')}
@@ -2531,17 +2577,17 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                 console.log('Auto-loading imaging studies...');
               }}
             >
-              Load Imaging (Auto)
+              {t('oncologyForm.loadImagingAuto')}
             </button>
             <input
               type="text"
-              placeholder="Search studies..."
+              placeholder={t('oncologyForm.searchStudies')}
               className="flex-1 px-3 py-2 border border-slate-200 rounded-lg"
             />
           </div>
 
           <div>
-            <FieldLabel>Available Studies</FieldLabel>
+            <FieldLabel>{t('oncologyForm.availableStudies')}</FieldLabel>
             <div className="space-y-2">
               {availableImaging.map((study, index) => (
                 <div key={index} className="flex items-center justify-between p-3 border border-slate-200 rounded-lg">
@@ -2558,14 +2604,14 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                       className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
                       onClick={() => openImagingViewer(study)}
                     >
-                      Open Viewer
+                      {t('oncologyForm.openViewer')}
                     </button>
                     <button
                       type="button"
                       className="px-3 py-1 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700"
                       onClick={() => addImagingToReport(study)}
                     >
-                      Add to Report
+                      {t('oncologyForm.addToReport')}
                     </button>
                   </div>
                 </div>
@@ -2574,7 +2620,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
 
           <div>
-            <FieldLabel>Selected Studies</FieldLabel>
+            <FieldLabel>{t('oncologyForm.selectedStudies')}</FieldLabel>
             <div className="space-y-2">
               {formData.imaging_links.map((imaging, index) => (
                 <div key={index} className="flex items-center gap-2 p-2 bg-slate-50 rounded">
@@ -2589,14 +2635,14 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                       updateFormData('imaging_links', next);
                     }}
                   >
-                    <option value="reference_only">Reference only</option>
-                    <option value="embed_in_pdf">Embed in PDF</option>
+                    <option value="reference_only">{t('oncologyForm.referenceOnly')}</option>
+                    <option value="embed_in_pdf">{t('oncologyForm.embedInPDF')}</option>
                   </select>
                   <button
                     type="button"
                     onClick={() => openImagingViewer(imaging)}
                     className="text-blue-600 hover:text-blue-800"
-                    aria-label="Open viewer"
+                    aria-label={t('oncologyForm.openViewer')}
                   >
                     🔗
                   </button>
@@ -2604,6 +2650,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
                     type="button"
                     onClick={() => removeImagingFromReport(index)}
                     className="text-red-500 hover:text-red-700"
+                    aria-label={t('oncologyForm.remove')}
                   >
                     ×
                   </button>
@@ -2617,7 +2664,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
       {/* Outcome & Recommendations (Discharge mode only) */}
       {mode === 'discharge' && (
         <Card 
-          title="Outcome & Recommendations" 
+          title={t('oncologyForm.outcomeRecommendations')} 
           collapsible 
           isOpen={!collapsedSections.outcome}
           onToggle={() => toggleSection('outcome')}
@@ -2687,7 +2734,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Attachments */}
       <Card 
-        title="Attachments" 
+        title={t('oncologyForm.attachments')} 
         collapsible 
         isOpen={!collapsedSections.attachments}
         onToggle={() => toggleSection('attachments')}
@@ -2695,12 +2742,12 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
       >
         <div className="space-y-4">
           <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
-            <p className="text-slate-500 mb-2">Drop files here or click to upload</p>
+            <p className="text-slate-500 mb-2">{t('oncologyForm.dropFilesHere')}</p>
             <button
               type="button"
               className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
             >
-              Choose Files
+              {t('oncologyForm.chooseFiles')}
             </button>
           </div>
           <div className="space-y-2">
@@ -2725,7 +2772,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
       <div className="sticky bottom-0 bg-white border-t border-slate-200 p-4 shadow-lg">
         <div className="flex justify-between items-center">
           <div className="text-sm text-slate-500">
-            {lastSaved && `Last saved: ${lastSaved.toLocaleTimeString()}`}
+            {lastSaved && `${t('oncologyForm.lastSavedLabel')} ${lastSaved.toLocaleTimeString()}`}
           </div>
           <div className="flex gap-3">
             <button
@@ -2733,14 +2780,14 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
               onClick={handleSaveDraft}
               className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
             >
-              Save Draft
+              {t('oncologyForm.saveDraft')}
             </button>
             <button
               type="button"
               onClick={handlePreview}
               className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
             >
-              Preview
+              {t('oncologyForm.preview')}
             </button>
             <button
               type="button"
@@ -2751,7 +2798,7 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
               }}
               className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
             >
-              Finalize & Save
+              {t('oncologyForm.finalizeSave')}
             </button>
           </div>
         </div>

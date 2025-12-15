@@ -1,6 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Body, status, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, root_validator
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 import uuid
@@ -11,8 +11,33 @@ from app.common.auth.auth_service import AuthService, ACCESS_TOKEN_EXPIRE_MINUTE
 
 
 class LoginRequest(BaseModel):
-    email: str
+    email: Optional[str] = None
+    phone: Optional[str] = None
     password: str
+    
+    @root_validator(skip_on_failure=True)
+    def validate_identifier(cls, values):
+        """Ensure at least one of email or phone is provided."""
+        email = values.get('email')
+        phone = values.get('phone')
+        
+        # Normalize empty strings to None
+        if email and isinstance(email, str) and email.strip() == '':
+            email = None
+        if phone and isinstance(phone, str) and phone.strip() == '':
+            phone = None
+        
+        # Support legacy 'email' field that might contain phone number
+        if email and '@' not in email:
+            # If email field contains something without @, treat it as phone
+            values['phone'] = email.strip()
+            values['email'] = None
+            phone = values['phone']
+        
+        if not email and not phone:
+            raise ValueError('Either email or phone number must be provided')
+        
+        return values
 
 
 class UserPayload(BaseModel):
@@ -40,18 +65,31 @@ async def unified_login(
     payload: LoginRequest = Body(...),
     db: Session = Depends(get_db),
 ):
-    """Unified login for all portals by email/password.
+    """Unified login for all portals by email/phone/username and password.
     Returns an access token and basic user payload.
     """
-    email_or_username = (payload.email or "").strip()
     user: Optional[User] = None
-    if "@" in email_or_username:
-        user = db.query(User).filter(User.email.ilike(email_or_username)).first()
-    else:
-        # try username fallback when a non-email was provided
-        user = db.query(User).filter(User.username.ilike(email_or_username)).first()
+    
+    # Try to find user by email, phone, or username
+    if payload.email:
+        email_or_username = payload.email.strip()
+        if "@" in email_or_username:
+            # It's an email
+            user = db.query(User).filter(User.email.ilike(email_or_username)).first()
+        else:
+            # Might be username or phone number
+            # Try username first
+            user = db.query(User).filter(User.username.ilike(email_or_username)).first()
+            # If not found, try phone number
+            if not user:
+                user = db.query(User).filter(User.phone == email_or_username.strip()).first()
+    elif payload.phone:
+        # Find by phone number
+        phone = payload.phone.strip()
+        user = db.query(User).filter(User.phone == phone).first()
+    
     if not user:
-        raise HTTPException(status_code=401, detail="User not found. Please check your email/username and try again.")
+        raise HTTPException(status_code=401, detail="User not found. Please check your email/phone/username and try again.")
     if not user.is_active or user.status != UserStatus.ACTIVE:
         raise HTTPException(status_code=403, detail="Your account is inactive. Please contact support for assistance.")
     if not AuthService.verify_password(payload.password or "", user.password_hash):

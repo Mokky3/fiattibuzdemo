@@ -186,7 +186,9 @@ async def register_patient(
         middle_names = name_parts[1:-1] if len(name_parts) > 2 else []
 
         # Build telecom array
-        telecom = [{"system": "phone", "value": payload.phone_number, "use": "mobile"}]
+        telecom = []
+        if payload.phone_number:
+            telecom.append({"system": "phone", "value": payload.phone_number, "use": "mobile"})
         if payload.email:
             telecom.append({"system": "email", "value": payload.email, "use": "home"})
 
@@ -342,6 +344,20 @@ async def register_patient(
         registration_status = "created"
         if duplicate_check["is_duplicate"]:
             registration_status = "created_with_duplicate_warning"
+
+        # Send profile creation notification
+        try:
+            from app.common.services.notification_service import send_profile_creation_notification
+            await send_profile_creation_notification(
+                phone_number=payload.phone_number,
+                email=payload.email,
+                patient_name=payload.full_name
+            )
+        except Exception as e:
+            # Log error but don't fail registration
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send profile creation notification: {str(e)}")
 
         return SuccessResponse(
             data=PatientRegistrationResult(

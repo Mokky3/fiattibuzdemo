@@ -1,5 +1,5 @@
 """Enhanced Reception portal patient registration schemas for surgical edits integration."""
-from pydantic import BaseModel, Field, EmailStr, validator
+from pydantic import BaseModel, Field, EmailStr, validator, root_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from enum import Enum
@@ -36,7 +36,7 @@ class PatientRegisterRequest(BaseModel):
     full_name: str = Field(..., min_length=2, max_length=100, description="Full name")
     date_of_birth: str = Field(..., description="Date of birth YYYY-MM-DD")
     gender: GenderEnum = Field(..., description="Gender")
-    phone_number: str = Field(..., min_length=10, max_length=20, description="Phone number")
+    phone_number: Optional[str] = Field(None, min_length=10, max_length=20, description="Phone number")
     email: Optional[EmailStr] = Field(None, description="Email address")
     address: Optional[str] = Field(None, max_length=200, description="Address")
     pinfl: str = Field(..., min_length=14, max_length=14, description="Personal identification number")
@@ -84,6 +84,23 @@ class PatientRegisterRequest(BaseModel):
             if len(v) < 10 or len(v) > 15:
                 raise ValueError('Phone number must be between 10 and 15 digits')
         return v
+    
+    @root_validator(skip_on_failure=True)
+    def validate_contact_info(cls, values):
+        """Ensure at least one of email or phone_number is provided."""
+        email = values.get('email')
+        phone_number = values.get('phone_number')
+        
+        # Normalize empty strings to None
+        if email and isinstance(email, str) and email.strip() == '':
+            email = None
+        if phone_number and isinstance(phone_number, str) and phone_number.strip() == '':
+            phone_number = None
+        
+        if not email and not phone_number:
+            raise ValueError('Either email or phone number must be provided')
+        
+        return values
 
     @validator('date_of_birth')
     def _validate_dob(cls, v):

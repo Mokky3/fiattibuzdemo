@@ -152,6 +152,7 @@ class UserProfile(Base):
     license_expiry = Column(Date, nullable=True)
     qualification = Column(String(200), nullable=True)
     years_of_experience = Column(Integer, nullable=True)
+    organization = Column(String(200), nullable=True)  # Organization/hospital name
     
     # Bio and education
     bio = Column(Text, nullable=True)

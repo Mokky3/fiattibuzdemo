@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, validator, EmailStr
+from pydantic import BaseModel, Field, validator, EmailStr, root_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date, time
 from enum import Enum
@@ -24,10 +24,46 @@ class UserStatusEnum(str, Enum):
 
 class LoginRequest(BaseModel):
     """User login request"""
-    email: EmailStr = Field(..., description="User email address")
+    email: Optional[EmailStr] = Field(None, description="User email address")
+    phone: Optional[str] = Field(None, min_length=10, max_length=20, description="User phone number")
+    username_or_email: Optional[str] = Field(None, description="Legacy field: username, email, or phone")
     password: str = Field(..., min_length=6, max_length=100, description="User password")
     remember_me: bool = Field(default=False, description="Remember login session")
     device_info: Optional[Dict[str, str]] = Field(None, description="Device information for security")
+    
+    @root_validator(skip_on_failure=True)
+    def validate_identifier(cls, values):
+        """Ensure at least one identifier is provided and normalize legacy fields."""
+        email = values.get('email')
+        phone = values.get('phone')
+        username_or_email = values.get('username_or_email')
+        
+        # Normalize empty strings to None
+        if email and isinstance(email, str) and email.strip() == '':
+            email = None
+        if phone and isinstance(phone, str) and phone.strip() == '':
+            phone = None
+        if username_or_email and isinstance(username_or_email, str) and username_or_email.strip() == '':
+            username_or_email = None
+        
+        # Support legacy 'username_or_email' field
+        if username_or_email and not email and not phone:
+            identifier = str(username_or_email).strip()
+            if '@' in identifier:
+                # It's an email
+                values['email'] = identifier
+            elif identifier.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '').isdigit():
+                # It looks like a phone number
+                values['phone'] = identifier
+            else:
+                # It's a username - keep it in username_or_email for backward compatibility
+                pass
+        
+        # Validate that at least one identifier is provided
+        if not values.get('email') and not values.get('phone') and not values.get('username_or_email'):
+            raise ValueError('Either email, phone number, or username must be provided')
+        
+        return values
 
 class LoginResponse(BaseModel):
     """User login response"""

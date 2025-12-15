@@ -49,14 +49,30 @@ async def doctor_login(
     db: Session = Depends(get_db),
 ):
     """Doctor login using shared LoginRequest/LoginResponse schemas."""
-    # Find user by username or email
+    # Find user by email, phone, or username
     user: Optional[User] = None
-    if "@" in payload.username_or_email:
-        user = db.query(User).filter(User.email.ilike(payload.username_or_email)).first()
-    else:
-        user = db.query(User).filter(User.username.ilike(payload.username_or_email)).first()
+    
+    if payload.phone:
+        # Find by phone number
+        user = db.query(User).filter(User.phone == payload.phone.strip()).first()
+    elif payload.email:
+        # Find by email
+        user = db.query(User).filter(User.email.ilike(payload.email)).first()
+    elif payload.username_or_email:
+        # Legacy support: try email, username, or phone
+        identifier = payload.username_or_email.strip()
+        if "@" in identifier:
+            # It's an email
+            user = db.query(User).filter(User.email.ilike(identifier)).first()
+        else:
+            # Try username first
+            user = db.query(User).filter(User.username.ilike(identifier)).first()
+            # If not found, try phone number
+            if not user:
+                user = db.query(User).filter(User.phone == identifier).first()
+    
     if not user:
-        raise HTTPException(status_code=401, detail="User not found. Please check your email/username and try again.")
+        raise HTTPException(status_code=401, detail="User not found. Please check your email/phone/username and try again.")
     if user.role != UserRole.DOCTOR:
         raise HTTPException(status_code=401, detail="Access denied. This portal is for doctors only.")
     if not user.is_active or user.status != UserStatus.ACTIVE:
