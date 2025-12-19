@@ -261,7 +261,8 @@ async def get_hospital(
 async def create_hospital(
     request: Request,
     payload: HospitalCreate = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     """Create a new hospital."""
     try:
@@ -274,13 +275,19 @@ async def create_hospital(
             "is_active": True  # Map from status
         }
         hospital = hospital_crud.create(db=db, obj_in=hospital_data)
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.HOSPITAL_CREATED,
-            description=f"Created hospital: {payload.name}",
-            affected_resource_id=str(hospital.id)
-        )
+        # Log admin activity - wrap in try-except to prevent breaking hospital creation if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.HOSPITAL_CREATED,
+                description=f"Created hospital: {payload.name}",
+                affected_resource_id=str(hospital.id)
+            )
+        except Exception as log_error:
+            # Log error but don't fail the hospital creation
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
         hospital_response = HospitalResponse(
             id=str(hospital.id),
             name=hospital.name,
@@ -320,7 +327,8 @@ async def update_hospital(
     request: Request,
     hospital_id: str,
     payload: HospitalUpdate = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     """Update hospital information."""
     try:
@@ -362,13 +370,19 @@ async def update_hospital(
             # Map status to is_active
             update_data['is_active'] = payload.status.upper() == "ACTIVE"
         updated_hospital = hospital_crud.update(db=db, db_obj=hospital, obj_in=update_data)
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.HOSPITAL_UPDATED,
-            description=f"Updated hospital: {hospital.name}",
-            affected_resource_id=str(hospital.id)
-        )
+        # Log admin activity - wrap in try-except to prevent breaking hospital update if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.HOSPITAL_UPDATED,
+                description=f"Updated hospital: {hospital.name}",
+                affected_resource_id=str(hospital.id)
+            )
+        except Exception as log_error:
+            # Log error but don't fail the hospital update
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
         hospital_response = HospitalResponse(
             id=str(updated_hospital.id),
             name=updated_hospital.name,
@@ -407,7 +421,8 @@ async def update_hospital(
 async def delete_hospital(
     request: Request,
     hospital_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     """Delete a hospital (soft delete)."""
     try:
@@ -436,13 +451,19 @@ async def delete_hospital(
             )
             raise HTTPException(status_code=404, detail=problem.dict())
         hospital_crud.soft_delete(db=db, id=hospital_id)
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.HOSPITAL_DELETED,
-            description=f"Deleted hospital: {hospital.name}",
-            affected_resource_id=str(hospital.id)
-        )
+        # Log admin activity - wrap in try-except to prevent breaking hospital deletion if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.HOSPITAL_DELETED,
+                description=f"Deleted hospital: {hospital.name}",
+                affected_resource_id=str(hospital.id)
+            )
+        except Exception as log_error:
+            # Log error but don't fail the hospital deletion
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
         return SuccessResponse(
             data={"status": "deleted"},
             message="Hospital deleted successfully"
@@ -1013,7 +1034,8 @@ async def create_department(
     request: Request,
     hospital_id: str,
     payload: DepartmentCreate = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     """Create a new department for a hospital."""
     try:
@@ -1065,14 +1087,15 @@ async def create_department(
         try:
             admin_crud.log_admin_activity(
                 db=db,
-                admin_id=uuid4(),
+                admin_id=current_user.user_id,
                 activity_type=ActivityType.DEPARTMENT_CREATED,
                 description=f"Created department '{payload.name}' in hospital '{hospital.name}'",
                 affected_resource_id=str(department.id)
             )
         except Exception as log_error:
             # Log the error but don't fail the department creation
-            print(f"Admin logging error: {log_error}")
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
         department_response = DepartmentResponse(
             id=str(department.id),
             name=department.name,
@@ -1556,7 +1579,8 @@ async def create_clinic_staff(
     request: Request,
     hospital_id: str,
     payload: ClinicStaffCreateRequest = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     try:
         # Convert string ID to UUID for PostgreSQL compatibility
@@ -1603,14 +1627,20 @@ async def create_clinic_staff(
         db.commit()
         db.refresh(user)
 
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.USER_CREATED,
-            description=f"Created clinic staff: {user.email}",
-            affected_resource_id=str(user.id),
-            affected_resource_type="clinic_staff",
-        )
+        # Log admin activity - wrap in try-except to prevent breaking staff creation if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.USER_CREATED,
+                description=f"Created clinic staff: {user.email}",
+                affected_resource_id=str(user.id),
+                affected_resource_type="clinic_staff",
+            )
+        except Exception as log_error:
+            # Log error but don't fail the staff creation
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
 
         return SuccessResponse(
             data=ClinicStaffResponse(
@@ -1644,7 +1674,8 @@ async def update_clinic_staff(
     hospital_id: str,
     user_id: str,
     payload: ClinicStaffUpdateRequest = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     try:
         # Convert string ID to UUID for PostgreSQL compatibility
@@ -1694,14 +1725,20 @@ async def update_clinic_staff(
         db.commit()
         db.refresh(user)
 
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.USER_UPDATED,
-            description=f"Updated clinic staff: {user.email}",
-            affected_resource_id=str(user.id),
-            affected_resource_type="clinic_staff",
-        )
+        # Log admin activity - wrap in try-except to prevent breaking staff update if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.USER_UPDATED,
+                description=f"Updated clinic staff: {user.email}",
+                affected_resource_id=str(user.id),
+                affected_resource_type="clinic_staff",
+            )
+        except Exception as log_error:
+            # Log error but don't fail the staff update
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
 
         return SuccessResponse(
             data=ClinicStaffResponse(
@@ -1734,7 +1771,8 @@ async def delete_clinic_staff(
     request: Request,
     hospital_id: str,
     user_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     try:
         # Convert string ID to UUID for PostgreSQL compatibility
@@ -1765,14 +1803,20 @@ async def delete_clinic_staff(
             raise HTTPException(status_code=404, detail=problem.dict())
         db.delete(user)
         db.commit()
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.USER_DELETED,
-            description=f"Deleted clinic staff: {user.email}",
-            affected_resource_id=str(user.id),
-            affected_resource_type="clinic_staff",
-        )
+        # Log admin activity - wrap in try-except to prevent breaking staff deletion if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.USER_DELETED,
+                description=f"Deleted clinic staff: {user.email}",
+                affected_resource_id=str(user.id),
+                affected_resource_type="clinic_staff",
+            )
+        except Exception as log_error:
+            # Log error but don't fail the staff deletion
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
         return SuccessResponse(data={"status": "deleted"}, message="Clinic staff deleted successfully")
     except HTTPException:
         raise

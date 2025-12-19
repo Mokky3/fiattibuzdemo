@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
+import i18n from '../../i18n'
 
 export const Header = () => {
   const { t } = useTranslation()
@@ -8,8 +9,10 @@ export const Header = () => {
   const navigate = useNavigate()
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false)
   const dropdownRef = useRef(null)
   const mobileMenuRef = useRef(null)
+  const languageDropdownRef = useRef(null)
   
   // Dark mode state - read from saved preference
   const [darkMode, setDarkMode] = useState(() => {
@@ -18,15 +21,100 @@ export const Header = () => {
     return document.documentElement.classList.contains('dark');
   });
 
-  // Apply theme on mount
+  // Current language
+  const [currentLanguage, setCurrentLanguage] = useState(i18n.language || 'en');
+
+  // Apply theme on mount and when darkMode changes
   useEffect(() => {
     const root = document.documentElement;
     if (darkMode) {
       root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
     } else {
       root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
     }
+    // Dispatch custom event for theme change
+    window.dispatchEvent(new Event('themechange'));
   }, [darkMode]);
+
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    setDarkMode(prev => !prev);
+  };
+
+  // Handle language change
+  const handleLanguageChange = async (lang) => {
+    try {
+      // Ensure language is normalized (remove any region codes)
+      const normalizedLang = lang.split('-')[0];
+
+      // Save to localStorage first
+      localStorage.setItem('i18nextLng', normalizedLang);
+
+      // Change language and wait for it to complete
+      await i18n.changeLanguage(normalizedLang);
+      
+      // Verify language was changed
+      console.log('Header: Language changed to', normalizedLang, 'i18n.language is now:', i18n.language);
+      
+      // Check if resources are loaded
+      const resources = i18n.getResourceBundle(normalizedLang, 'translation');
+      console.log('Header: Resources for', normalizedLang, ':', resources ? 'Loaded' : 'NOT LOADED');
+      
+      // Check all available languages
+      console.log('Header: All available languages:', i18n.languages);
+      console.log('Header: Current language:', i18n.language);
+      console.log('Header: Resource store:', i18n.store?.data);
+      
+      if (resources) {
+        console.log('Header: doctorReport exists:', !!resources.doctorReport);
+        console.log('Header: doctorReport.patientPortal:', resources.doctorReport?.patientPortal);
+      } else {
+        // Try to access resources directly from options
+        const optionsResources = i18n.options?.resources?.[normalizedLang]?.translation;
+        console.log('Header: Resources from options:', optionsResources ? 'Found' : 'NOT FOUND');
+        if (optionsResources) {
+          console.log('Header: doctorReport from options:', optionsResources.doctorReport?.patientPortal);
+        }
+      }
+      
+      // Test translation
+      const testTranslation = i18n.t('doctorReport.patientPortal');
+      console.log('Header: Test translation for doctorReport.patientPortal:', testTranslation);
+
+      // Update state
+      setCurrentLanguage(normalizedLang);
+      setLanguageDropdownOpen(false);
+
+      // Double-check localStorage was saved
+      if (localStorage.getItem('i18nextLng') !== normalizedLang) {
+        localStorage.setItem('i18nextLng', normalizedLang);
+      }
+
+      // Dispatch a custom event to notify other components
+      window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: normalizedLang } }));
+      
+      // Force a small delay to ensure all components update
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('languageChanged', { detail: { language: normalizedLang } }));
+      }, 100);
+
+    } catch (error) {
+      console.error('Error changing language:', error);
+      // Fallback: still try to set it
+      localStorage.setItem('i18nextLng', lang);
+      i18n.changeLanguage(lang);
+      setCurrentLanguage(lang);
+    }
+  };
+
+  // Available languages
+  const languages = [
+    { code: 'en', name: 'English', flag: '🇬🇧' },
+    { code: 'uz', name: "O'zbek", flag: '🇺🇿' },
+    { code: 'ru', name: 'Русский', flag: '🇷🇺' }
+  ];
 
   const isActive = (path) => {
     const active = location.pathname === path
@@ -42,6 +130,9 @@ export const Header = () => {
       if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target)) {
         setMobileMenuOpen(false)
       }
+      if (languageDropdownRef.current && !languageDropdownRef.current.contains(event.target)) {
+        setLanguageDropdownOpen(false)
+      }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
@@ -51,7 +142,7 @@ export const Header = () => {
     { name: t('appointment'), path: "/doctor/appointment" },
     { name: t('patient'), path: "/doctor/patient" },
     { name: t('data'), path: "/doctor/stats" },
-    { name: t('resources'), path: "/doctor/resources" },
+    // { name: t('resources'), path: "/doctor/resources" }, // Disabled
     { name: t('messages'), path: "/doctor/messages" }
   ]
 
@@ -117,6 +208,76 @@ export const Header = () => {
               </svg>
             </button>
           </div>
+
+          {/* Language Selector */}
+          <div className="relative" ref={languageDropdownRef}>
+            <button
+              onClick={() => setLanguageDropdownOpen(!languageDropdownOpen)}
+              className={`flex items-center space-x-1 px-2 py-1.5 rounded-md transition-colors ${
+                darkMode
+                  ? 'hover:bg-[#133037] text-white'
+                  : 'hover:bg-white hover:bg-opacity-20 text-white'
+              }`}
+              aria-label="Select language"
+            >
+              <span className="text-sm sm:text-base">
+                {languages.find(lang => lang.code === currentLanguage)?.flag || '🌐'}
+              </span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {languageDropdownOpen && (
+              <div className={`absolute right-0 mt-2 w-40 rounded-lg shadow-lg z-50 border transition-colors ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037]'
+                  : 'bg-white border-gray-200'
+              }`}>
+                {languages.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => handleLanguageChange(lang.code)}
+                    className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center space-x-2 ${
+                      currentLanguage === lang.code
+                        ? darkMode
+                          ? 'bg-[#133037] text-[#79CAC2]'
+                          : 'bg-gray-100 text-gray-900'
+                        : darkMode
+                        ? 'text-[#F5FEFF] hover:bg-[#133037]'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span>{lang.flag}</span>
+                    <span>{lang.name}</span>
+                    {currentLanguage === lang.code && (
+                      <span className="ml-auto">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Dark Mode Toggle */}
+          <button
+            onClick={toggleDarkMode}
+            className={`p-2 rounded-md transition-colors ${
+              darkMode
+                ? 'hover:bg-[#133037] text-white'
+                : 'hover:bg-white hover:bg-opacity-20 text-white'
+            }`}
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
 
           {/* Mobile Menu Button */}
           <button
@@ -221,6 +382,59 @@ export const Header = () => {
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
+              </button>
+            </div>
+
+            {/* Mobile Language Selector */}
+            <div className={`mb-4 p-3 rounded-md ${
+              darkMode ? 'bg-[#07181D]' : 'bg-white bg-opacity-20'
+            }`}>
+              <label className={`block text-xs font-medium mb-2 ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-white text-opacity-80'
+              }`}>
+                Language
+              </label>
+              <div className="flex space-x-2">
+                {languages.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => handleLanguageChange(lang.code)}
+                    className={`flex-1 px-3 py-2 rounded-md text-sm transition-colors ${
+                      currentLanguage === lang.code
+                        ? darkMode
+                          ? 'bg-[#133037] text-[#79CAC2]'
+                          : 'bg-white bg-opacity-30 text-white'
+                        : darkMode
+                        ? 'bg-[#133037] text-[#C1D9DD] hover:bg-[#1A3A3A]'
+                        : 'bg-white bg-opacity-10 text-white hover:bg-opacity-20'
+                    }`}
+                  >
+                    {lang.flag} {lang.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Mobile Dark Mode Toggle */}
+            <div className={`mb-4 p-3 rounded-md flex items-center justify-between ${
+              darkMode ? 'bg-[#07181D]' : 'bg-white bg-opacity-20'
+            }`}>
+              <span className={`text-sm font-medium ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-white'
+              }`}>
+                Dark Mode
+              </span>
+              <button
+                onClick={toggleDarkMode}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                  darkMode ? 'bg-[#79CAC2]' : 'bg-white bg-opacity-30'
+                }`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    darkMode ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
               </button>
             </div>
             

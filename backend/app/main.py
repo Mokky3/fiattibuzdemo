@@ -157,6 +157,7 @@ from app.portals.radiology.routes.reports import router as radiology_reports_rou
 # Import medication API routes
 from app.api.v1.medications import router as medications_router
 from app.api.v1.telegram_bot import router as telegram_bot_router
+from app.api.v1.telegram_gateway import router as telegram_gateway_router
 
 # Configure logging
 logging.basicConfig(
@@ -926,6 +927,13 @@ app.include_router(
     telegram_bot_router,
     prefix="/api/v1",
     tags=["Integrations · Telegram Bot"]
+)
+
+# Telegram Conversational Gateway
+app.include_router(
+    telegram_gateway_router,
+    prefix="/api/v1",
+    tags=["Integrations · Telegram Gateway"]
 )
 
 # ================================

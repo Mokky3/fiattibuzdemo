@@ -785,33 +785,6 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
               selectPlaceholder={t('oncologyForm.select')}
             />
           </div>
-          <div>
-            <FieldLabel>{t('oncologyForm.patient')}</FieldLabel>
-            <div className="text-slate-600">
-              {patient ? `${patient.first_name} ${patient.last_name}` : t('oncologyForm.johnDoe')} 
-              {patient && ` (${patient.age || t('oncologyForm.na')} ${t('oncologyForm.years')}, ${patient.gender || t('oncologyForm.na')})`}
-            </div>
-          </div>
-          <div>
-            <FieldLabel>{t('oncologyForm.clinic')}</FieldLabel>
-            <div className="text-slate-600">{t('oncologyForm.oncologyDepartment')}</div>
-          </div>
-          <div>
-            <FieldLabel>{t('oncologyForm.physician')}</FieldLabel>
-            <div className="text-slate-600">{t('oncologyForm.drSmith')}</div>
-          </div>
-          <div>
-            <FieldLabel>{t('oncologyForm.encounter')}</FieldLabel>
-            <div className="text-slate-600">
-              {formData.meta.encounter_id} - {new Date(formData.meta.datetime).toLocaleString()}
-            </div>
-          </div>
-          <div>
-            <FieldLabel>{t('oncologyForm.lastSaved')}</FieldLabel>
-            <div className="text-slate-600">
-              {lastSaved ? lastSaved.toLocaleTimeString() : t('oncologyForm.notSavedYet')}
-            </div>
-          </div>
         </div>
       </Card>
 
@@ -1264,20 +1237,35 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
               ))}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-              {ONCOMARKERS.map(marker => (
-                <button
-                  key={marker}
-                  type="button"
-                  className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
-                  onClick={() => {
-                    if (!formData.labs.tumor_markers.includes(marker)) {
-                      addToArray('labs.tumor_markers', marker);
-                    }
-                  }}
-                >
-                  {marker}
-                </button>
-              ))}
+              {ONCOMARKERS.map(marker => {
+                const keyMap = {
+                  'PSA': 'psa',
+                  'CEA': 'cea',
+                  'CA-125': 'ca125',
+                  'CA19-9': 'ca199',
+                  'AFP': 'afp',
+                  'β-hCG': 'betaHcg',
+                  'LDH': 'ldh',
+                  'β2-microglobulin': 'beta2Microglobulin',
+                  'CA15-3': 'ca153',
+                  'Calcitonin': 'calcitonin'
+                };
+                const tKey = keyMap[marker] || marker.toLowerCase();
+                return (
+                  <button
+                    key={marker}
+                    type="button"
+                    className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
+                    onClick={() => {
+                      if (!formData.labs.tumor_markers.includes(marker)) {
+                        addToArray('labs.tumor_markers', marker);
+                      }
+                    }}
+                  >
+                    {t(`oncologyForm.${tKey}`, { defaultValue: marker })}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1654,20 +1642,30 @@ const OncologyReportForm = ({ patient, encounter, onSave }) => {
               ))}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {IMAGING_PRESETS.map(img => (
-                <button
-                  key={img}
-                  type="button"
-                  className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
-                  onClick={() => {
-                    if (!formData.diagnostics.imaging.includes(img)) {
-                      addToArray('diagnostics.imaging', img);
-                    }
-                  }}
-                >
-                  {img}
-                </button>
-              ))}
+              {IMAGING_PRESETS.map(img => {
+                const keyMap = {
+                  'CT head non-contrast': 'ctHeadNonContrast',
+                  'CT-angiography': 'ctAngiography',
+                  'MR DWI/FLAIR': 'mrDwiFlair',
+                  'MRA head/neck': 'mraHeadNeck',
+                  'Carotid Doppler': 'carotidDoppler'
+                };
+                const tKey = keyMap[img] || img.toLowerCase().replace(/\s+/g, '');
+                return (
+                  <button
+                    key={img}
+                    type="button"
+                    className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
+                    onClick={() => {
+                      if (!formData.diagnostics.imaging.includes(img)) {
+                        addToArray('diagnostics.imaging', img);
+                      }
+                    }}
+                  >
+                    {t(`oncologyForm.${tKey}`, { defaultValue: img })}
+                  </button>
+                );
+              })}
             </div>
           </div>
           <div>

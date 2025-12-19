@@ -18,6 +18,7 @@ from app.db.session import get_db
 from app.common.models.user import User, UserRole
 from app.common.models.patient import Patient
 from app.common.auth.auth_service import AuthService
+from app.common.models.hospital import HospitalDepartment, Hospital
 from app.crud.patient_portal import patient_portal_crud
 from app.crud.general_reports import general_report
 
@@ -109,6 +110,13 @@ class ReportItem(BaseModel):
     chief_complaint: Optional[str] = None
     status: Optional[str] = None
     created_at: Optional[datetime] = None
+
+
+class DepartmentItem(BaseModel):
+    id: str
+    name: str
+    hospital_id: Optional[str] = None
+    hospital_name: Optional[str] = None
 
 
 # ----------------------- endpoints ----------------------- #
@@ -222,6 +230,54 @@ def patient_reports(
                 chief_complaint=rep.chief_complaint,
                 status=rep.status.value if rep.status else None,
                 created_at=rep.created_at,
+            )
+        )
+    return items
+
+
+@router.get(
+    "/departments",
+    response_model=List[DepartmentItem],
+    status_code=status.HTTP_200_OK,
+)
+def list_departments(
+    hospital_id: Optional[str] = Query(
+        None, description="Optional hospital UUID to filter departments"
+    ),
+    limit: int = Query(200, ge=1, le=1000),
+    db: Session = Depends(get_db),
+    _bot: None = Depends(require_bot_token),
+) -> List[DepartmentItem]:
+    """
+    List active departments (optionally filtered by hospital).
+
+    This is a bot-only endpoint protected by X-Telegram-Bot-Token.
+    """
+    q = db.query(HospitalDepartment, Hospital).join(
+        Hospital, Hospital.id == HospitalDepartment.hospital_id
+    )
+
+    if hospital_id:
+        try:
+            hospital_uuid = UUID(hospital_id)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Invalid hospital_id")
+        q = q.filter(HospitalDepartment.hospital_id == hospital_uuid)
+
+    q = q.filter(
+        HospitalDepartment.is_active == True,  # noqa: E712
+        HospitalDepartment.is_accepting_patients == True,  # noqa: E712
+    ).order_by(Hospital.name.asc(), HospitalDepartment.name.asc())
+
+    rows = q.limit(limit).all()
+    items: List[DepartmentItem] = []
+    for dept, hosp in rows:
+        items.append(
+            DepartmentItem(
+                id=str(dept.id),
+                name=dept.name or "Department",
+                hospital_id=str(dept.hospital_id) if dept.hospital_id else None,
+                hospital_name=hosp.name if hosp else None,
             )
         )
     return items

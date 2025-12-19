@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { medicalReportsAPI } from '../../services/apiService';
 
 const ViewReport = () => {
@@ -149,9 +150,12 @@ const ViewReport = () => {
             ) : report.specialty === 'Traumatology' || report.doc_type?.startsWith('trauma.') ? (
               // Traumatology-specific report view
               <TraumaOrthoReportView report={report} />
-            ) : report.specialty === 'Midwifery' || report.specialty === 'Gynecology' || report.doc_type?.startsWith('midwifery.') || report.doc_type?.startsWith('gynecology.') ? (
+            ) : report.specialty === 'Midwifery' || report.doc_type?.startsWith('midwifery.') ? (
               // Midwifery-specific report view
               <MidwiferyReportView report={report} />
+            ) : report.specialty === 'Gynecology' || report.doc_type?.startsWith('gynecology.') ? (
+              // Gynecology-specific report view
+              <GynecologyReportView report={report} />
             ) : report.specialty === 'Urology' || report.doc_type?.startsWith('uro.') ? (
               // Urology-specific report view
               <UrologyReportView report={report} />
@@ -164,6 +168,15 @@ const ViewReport = () => {
             ) : report.specialty === 'Allergy & Immunology' || report.specialty === 'Allergology' || report.doc_type?.startsWith('allergy.') ? (
               // Allergy & Immunology-specific report view
               <AllergyImmunologyReportView report={report} />
+            ) : report.specialty === 'Endocrinology' || report.doc_type?.startsWith('endocrinology.') ? (
+              // Endocrinology-specific report view
+              <EndocrinologyReportView report={report} />
+            ) : report.specialty === 'ENT' || report.specialty === 'Otolaryngology' || report.doc_type?.startsWith('ent.') ? (
+              // ENT-specific report view
+              <ENTReportView report={report} />
+            ) : report.specialty === 'Proctology' || report.doc_type?.startsWith('proctology.') ? (
+              // Proctology-specific report view
+              <ProctologyReportView report={report} />
             ) : (
               // General report view (default)
               <>
@@ -808,7 +821,9 @@ const OphthalmologyReportView = ({ report }) => {
 
 // Neurology-specific report view component
 const NeurologyReportView = ({ report }) => {
+  const { t } = useTranslation();
   const reportData = report.reportData || {};
+  const meta = reportData.meta || {};
   
   // Helper to check if section has data
   const hasData = (obj) => {
@@ -913,8 +928,60 @@ const NeurologyReportView = ({ report }) => {
     return parts.join('\n\n') || report.treatmentPlan || 'No treatment plan specified';
   };
   
+  // Get patient information
+  const patientName = report.patient?.name || 
+    (report.patient?.first_name && report.patient?.last_name 
+      ? `${report.patient.first_name} ${report.patient.last_name}` 
+      : report.patient?.patient_name) || 'N/A';
+  const patientAge = report.patient?.age || meta.patient_age || null;
+  const patientGender = report.patient?.gender || meta.patient_gender || null;
+  
+  // Get clinic information
+  const clinicName = t('neurologyReport.neurologyDepartment') || 'Неврологическое отделение';
+  
+  // Get physician information
+  const physicianName = report.doctor?.name || report.doctor_info?.name || t('neurologyReport.drSmith') || 'Др. Смит';
+  
+  // Get encounter information
+  const encounterId = meta.encounter_id || 'N/A';
+  const encounterDate = meta.datetime ? new Date(meta.datetime).toLocaleString() : (report.date || 'N/A');
+  
+  // Get last saved information
+  const lastSaved = report.updated_at || report.date || null;
+  const lastSavedText = lastSaved ? new Date(lastSaved).toLocaleString() : (t('neurologyReport.notSavedYet') || 'Еще не сохранено');
+  
   return (
     <>
+      {/* Report Header Information */}
+      <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm mb-6">
+        <h3 className="text-md font-bold text-[#5ACCC3] mb-4">Report Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-800">
+          <div>
+            <p className="font-semibold text-gray-700">{t('neurologyReport.patient') || 'Пациент'}</p>
+            <p className="text-gray-800">
+              {patientName}
+              {patientAge && patientGender && ` (${patientAge} ${t('neurologyReport.years') || 'лет'}, ${patientGender})`}
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('neurologyReport.clinic') || 'Клиника'}</p>
+            <p className="text-gray-800">{clinicName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('neurologyReport.physician') || 'Врач'}</p>
+            <p className="text-gray-800">{physicianName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('neurologyReport.encounter') || 'Встреча'}</p>
+            <p className="text-gray-800">{encounterId} - {encounterDate}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('neurologyReport.lastSaved') || 'Последнее сохранение'}</p>
+            <p className="text-gray-800">{lastSavedText}</p>
+          </div>
+        </div>
+      </div>
+      
       <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint} />
       
       {/* HPI Section */}
@@ -1391,6 +1458,7 @@ const NeurologyReportView = ({ report }) => {
 
 // Traumatology-specific report view component
 const TraumaOrthoReportView = ({ report }) => {
+  const { t } = useTranslation();
   const reportData = report.reportData || {};
   
   // Helper to check if section has data
@@ -1457,7 +1525,7 @@ const TraumaOrthoReportView = ({ report }) => {
     const parts = [];
     
     if (plan.tests && plan.tests.length > 0) {
-      parts.push('Tests:\n' + plan.tests.map(t => {
+      parts.push(`${t('traumaOrthoReport.tests')}:\n` + plan.tests.map(t => {
         if (typeof t === 'object') {
           return `- ${t.name || ''} ${t.date || ''}`.trim();
         }
@@ -1466,7 +1534,7 @@ const TraumaOrthoReportView = ({ report }) => {
     }
     
     if (plan.referrals && plan.referrals.length > 0) {
-      parts.push('Referrals:\n' + plan.referrals.map(r => {
+      parts.push(`${t('traumaOrthoReport.referrals')}:\n` + plan.referrals.map(r => {
         if (typeof r === 'object') {
           return `- ${r.name || ''} ${r.date || ''}`.trim();
         }
@@ -1475,7 +1543,7 @@ const TraumaOrthoReportView = ({ report }) => {
     }
     
     if (plan.meds && plan.meds.length > 0) {
-      parts.push('Medications:\n' + plan.meds.map(m => {
+      parts.push(`${t('traumaOrthoReport.medications')}:\n` + plan.meds.map(m => {
         if (typeof m === 'object') {
           return `- ${m.name || m.med || ''} ${m.dosage || ''} ${m.frequency || ''} ${m.duration || ''}`.trim();
         }
@@ -1485,66 +1553,120 @@ const TraumaOrthoReportView = ({ report }) => {
     
     if (plan.immobilization && plan.immobilization.applied) {
       const immo = plan.immobilization;
-      parts.push(`Immobilization: ${immo.type || 'N/A'} - ${immo.side || 'N/A'} ${immo.region || ''}`.trim());
+      parts.push(`${t('traumaOrthoReport.immobilization')}: ${immo.type || t('traumaOrthoReport.na')} - ${immo.side || t('traumaOrthoReport.na')} ${immo.region || ''}`.trim());
     }
     
     if (plan.weight_bearing) {
-      parts.push(`Weight Bearing: ${plan.weight_bearing}`);
+      parts.push(`${t('traumaOrthoReport.weightBearing')}: ${plan.weight_bearing}`);
     }
     
     if (plan.dvt_prophylaxis) {
-      parts.push(`DVT Prophylaxis: ${plan.dvt_prophylaxis}`);
+      parts.push(`${t('traumaOrthoReport.dvtProphylaxis')}: ${plan.dvt_prophylaxis}`);
     }
     
     if (plan.sick_leave_days && plan.sick_leave_days > 0) {
-      parts.push(`Sick Leave: ${plan.sick_leave_days} days`);
+      parts.push(`${t('traumaOrthoReport.sickLeave')}: ${plan.sick_leave_days} ${t('traumaOrthoReport.days')}`);
     }
     
     if (plan.work_restrictions) {
-      parts.push(`Work Restrictions: ${plan.work_restrictions}`);
+      parts.push(`${t('traumaOrthoReport.workRestrictions')}: ${plan.work_restrictions}`);
     }
     
     if (plan.physio) {
-      parts.push(`Physiotherapy: ${plan.physio}`);
+      parts.push(`${t('traumaOrthoReport.physiotherapy')}: ${plan.physio}`);
     }
     
     if (plan.follow_up) {
-      parts.push(`Follow-up: ${plan.follow_up}`);
+      parts.push(`${t('traumaOrthoReport.followUp')}: ${plan.follow_up}`);
     }
     
-    return parts.join('\n\n') || report.treatmentPlan || 'No treatment plan specified';
+    return parts.join('\n\n') || report.treatmentPlan || t('traumaOrthoReport.notRecorded');
   };
+  
+  // Get meta information
+  const meta = reportData.meta || {};
+  
+  // Get patient information
+  const patientName = report.patient?.first_name && report.patient?.last_name
+    ? `${report.patient.first_name} ${report.patient.last_name}`
+    : report.patient?.name || report.patient?.patient_name || 'N/A';
+  const patientAge = report.patient?.age || meta.patient_age || null;
+  const patientGender = report.patient?.gender || meta.patient_gender || null;
+  
+  // Get clinic information
+  const clinicName = t('traumaOrthoReport.traumatologyDepartment') || 'Отделение травматологии';
+  
+  // Get physician information
+  const physicianName = report.doctor?.name || report.doctor_info?.name || t('traumaOrthoReport.drSmith') || 'Др. Иванов';
+  
+  // Get encounter information
+  const encounterId = meta.encounter_id || 'N/A';
+  const encounterDate = meta.datetime ? new Date(meta.datetime).toLocaleString() : (report.date || 'N/A');
+  
+  // Get last saved information
+  const lastSaved = report.updated_at || report.date || null;
+  const lastSavedText = lastSaved ? new Date(lastSaved).toLocaleString() : (t('traumaOrthoReport.notSavedYet') || 'Еще не сохранено');
   
   return (
     <>
-      <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint} />
+      {/* Report Header Information */}
+      <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm mb-6">
+        <h3 className="text-md font-bold text-[#5ACCC3] mb-4">Report Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-800">
+          <div>
+            <p className="font-semibold text-gray-700">{t('traumaOrthoReport.patient') || 'Пациент'}</p>
+            <p className="text-gray-800">
+              {patientName}
+              {patientAge && patientGender && ` (${patientAge} ${t('traumaOrthoReport.years') || 'лет'}, ${patientGender})`}
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('traumaOrthoReport.clinic') || 'Клиника'}</p>
+            <p className="text-gray-800">{clinicName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('traumaOrthoReport.physician') || 'Врач'}</p>
+            <p className="text-gray-800">{physicianName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('traumaOrthoReport.encounter') || 'Встреча'}</p>
+            <p className="text-gray-800">{encounterId} - {encounterDate}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('traumaOrthoReport.lastSaved') || 'Последнее сохранение'}</p>
+            <p className="text-gray-800">{lastSavedText}</p>
+          </div>
+        </div>
+      </div>
+      
+      <Section title={t('traumaOrthoReport.chiefComplaint')} content={reportData.chief_complaint || report.chiefComplaint} />
       
       {/* Injury Section */}
       {hasData(reportData.injury) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Injury Details</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">{t('traumaOrthoReport.injuryDetails')}</h3>
           <div className="text-gray-800 space-y-2">
-            {shouldDisplay(reportData.injury.date) && <p><strong>Date of Injury:</strong> {reportData.injury.date || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.injury.mechanism) && <p><strong>Mechanism:</strong> {reportData.injury.mechanism || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.injury.context) && <p><strong>Context:</strong> {reportData.injury.context || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.injury.side) && <p><strong>Side:</strong> {reportData.injury.side || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.injury.date) && <p><strong>{t('traumaOrthoReport.dateOfInjury')}:</strong> {reportData.injury.date || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.injury.mechanism) && <p><strong>{t('traumaOrthoReport.mechanism')}:</strong> {reportData.injury.mechanism || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.injury.context) && <p><strong>{t('traumaOrthoReport.context')}:</strong> {reportData.injury.context || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.injury.side) && <p><strong>{t('traumaOrthoReport.side')}:</strong> {reportData.injury.side || t('traumaOrthoReport.notRecorded')}</p>}
             {reportData.injury.region && reportData.injury.region.length > 0 && (
-              <p><strong>Region:</strong> {reportData.injury.region.join(', ')}</p>
+              <p><strong>{t('traumaOrthoReport.regions')}:</strong> {reportData.injury.region.join(', ')}</p>
             )}
             {reportData.injury.type && reportData.injury.type.length > 0 && (
-              <p><strong>Type:</strong> {reportData.injury.type.join(', ')}</p>
+              <p><strong>{t('traumaOrthoReport.types')}:</strong> {reportData.injury.type.join(', ')}</p>
             )}
-            {shouldDisplay(reportData.injury.open_status) && <p><strong>Open Status:</strong> {reportData.injury.open_status || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.injury.open_status) && <p><strong>{t('traumaOrthoReport.openStatus')}:</strong> {reportData.injury.open_status || t('traumaOrthoReport.notRecorded')}</p>}
             {reportData.injury.pain_scale !== undefined && reportData.injury.pain_scale !== null && (
-              <p><strong>Pain Scale:</strong> {reportData.injury.pain_scale}/10</p>
+              <p><strong>{t('traumaOrthoReport.painScale')}:</strong> {reportData.injury.pain_scale}/10</p>
             )}
             {reportData.injury.red_flags && reportData.injury.red_flags.length > 0 && (
-              <p><strong>Red Flags:</strong> {reportData.injury.red_flags.join(', ')}</p>
+              <p><strong>{t('traumaOrthoReport.redFlags')}:</strong> {reportData.injury.red_flags.join(', ')}</p>
             )}
             {reportData.injury.work_accident !== undefined && (
-              <p><strong>Work Accident:</strong> {reportData.injury.work_accident ? 'Yes' : 'No'}</p>
+              <p><strong>{t('traumaOrthoReport.workAccident')}:</strong> {reportData.injury.work_accident ? t('traumaOrthoReport.yes') : t('traumaOrthoReport.no')}</p>
             )}
-            {shouldDisplay(reportData.injury.police_report_no) && <p><strong>Police Report No:</strong> {reportData.injury.police_report_no || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.injury.police_report_no) && <p><strong>{t('traumaOrthoReport.policeReportNumber')}:</strong> {reportData.injury.police_report_no || t('traumaOrthoReport.notRecorded')}</p>}
           </div>
         </div>
       )}
@@ -1552,14 +1674,14 @@ const TraumaOrthoReportView = ({ report }) => {
       {/* History Section */}
       {hasData(reportData.history) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">History</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">{t('traumaOrthoReport.history')}</h3>
           <div className="text-gray-800 space-y-2">
-            {shouldDisplay(reportData.history.hpi) && <p><strong>History of Present Illness:</strong> {reportData.history.hpi || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.history.pmh) && <p><strong>Past Medical History:</strong> {reportData.history.pmh || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.history.meds) && <p><strong>Current Medications:</strong> {reportData.history.meds || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.history.allergies) && <p><strong>Allergies:</strong> {reportData.history.allergies || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.history.tetanus_status) && <p><strong>Tetanus Status:</strong> {reportData.history.tetanus_status || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.history.osteoporosis_risk) && <p><strong>Osteoporosis Risk:</strong> {reportData.history.osteoporosis_risk || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.history.hpi) && <p><strong>{t('traumaOrthoReport.historyOfPresentIllness')}:</strong> {reportData.history.hpi || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.history.pmh) && <p><strong>{t('traumaOrthoReport.pastMedicalHistory')}:</strong> {reportData.history.pmh || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.history.meds) && <p><strong>{t('traumaOrthoReport.currentMedications')}:</strong> {reportData.history.meds || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.history.allergies) && <p><strong>{t('traumaOrthoReport.allergies')}:</strong> {reportData.history.allergies || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.history.tetanus_status) && <p><strong>{t('traumaOrthoReport.tetanusStatus')}:</strong> {reportData.history.tetanus_status || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.history.osteoporosis_risk) && <p><strong>{t('traumaOrthoReport.osteoporosisRisk')}:</strong> {reportData.history.osteoporosis_risk || t('traumaOrthoReport.notRecorded')}</p>}
           </div>
         </div>
       )}
@@ -1567,21 +1689,21 @@ const TraumaOrthoReportView = ({ report }) => {
       {/* Examination Section */}
       {hasData(reportData.examination) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Examination</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">{t('traumaOrthoReport.examination')}</h3>
           <div className="text-gray-800 space-y-2">
-            {shouldDisplay(reportData.examination.vitals) && <p><strong>Vitals:</strong> {reportData.examination.vitals || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.examination.look) && <p><strong>Look (Inspection):</strong> {reportData.examination.look || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.examination.feel) && <p><strong>Feel (Palpation):</strong> {reportData.examination.feel || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.examination.move) && <p><strong>Move (Range of Motion):</strong> {reportData.examination.move || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.examination.vitals) && <p><strong>{t('traumaOrthoReport.vitals')}:</strong> {reportData.examination.vitals || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.examination.look) && <p><strong>{t('traumaOrthoReport.lookInspection')}:</strong> {reportData.examination.look || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.examination.feel) && <p><strong>{t('traumaOrthoReport.feelPalpation')}:</strong> {reportData.examination.feel || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.examination.move) && <p><strong>{t('traumaOrthoReport.moveRangeOfMotion')}:</strong> {reportData.examination.move || t('traumaOrthoReport.notRecorded')}</p>}
             {reportData.examination.special_tests && reportData.examination.special_tests.length > 0 && (
               <div>
-                <strong>Special Tests:</strong>
+                <strong>{t('traumaOrthoReport.specialTests')}:</strong>
                 <div className="ml-4 mt-1">
                   {reportData.examination.special_tests.map((test, idx) => (
                     <div key={idx} className="text-sm">
                       {typeof test === 'object' ? (
                         <>
-                          {test.name && <p>{test.name}: {test.result || 'N/A'}</p>}
+                          {test.name && <p>{test.name}: {test.result || t('traumaOrthoReport.na')}</p>}
                         </>
                       ) : (
                         <p>{test}</p>
@@ -1593,25 +1715,25 @@ const TraumaOrthoReportView = ({ report }) => {
             )}
             {reportData.examination.neurovascular && (
               <div>
-                <strong>Neurovascular Assessment:</strong>
+                <strong>{t('traumaOrthoReport.neurovascularAssessment')}:</strong>
                 <div className="ml-4 mt-1 text-sm space-y-1">
-                  {shouldDisplay(reportData.examination.neurovascular.pulses) && <p>Pulses: {reportData.examination.neurovascular.pulses || 'N/A'}</p>}
-                  {shouldDisplay(reportData.examination.neurovascular.cap_refill) && <p>Capillary Refill: {reportData.examination.neurovascular.cap_refill || 'N/A'}</p>}
-                  {shouldDisplay(reportData.examination.neurovascular.motor) && <p>Motor: {reportData.examination.neurovascular.motor || 'N/A'}</p>}
-                  {shouldDisplay(reportData.examination.neurovascular.sensory) && <p>Sensory: {reportData.examination.neurovascular.sensory || 'N/A'}</p>}
+                  {shouldDisplay(reportData.examination.neurovascular.pulses) && <p>{t('traumaOrthoReport.pulses')}: {reportData.examination.neurovascular.pulses || t('traumaOrthoReport.na')}</p>}
+                  {shouldDisplay(reportData.examination.neurovascular.cap_refill) && <p>{t('traumaOrthoReport.capillaryRefill')}: {reportData.examination.neurovascular.cap_refill || t('traumaOrthoReport.na')}</p>}
+                  {shouldDisplay(reportData.examination.neurovascular.motor) && <p>{t('traumaOrthoReport.motor')}: {reportData.examination.neurovascular.motor || t('traumaOrthoReport.na')}</p>}
+                  {shouldDisplay(reportData.examination.neurovascular.sensory) && <p>{t('traumaOrthoReport.sensory')}: {reportData.examination.neurovascular.sensory || t('traumaOrthoReport.na')}</p>}
                 </div>
               </div>
             )}
             {reportData.examination.open_fracture && (
               <div>
-                <strong>Open Fracture Assessment:</strong>
+                <strong>{t('traumaOrthoReport.openFractureAssessment')}:</strong>
                 <div className="ml-4 mt-1 text-sm space-y-1">
-                  {shouldDisplay(reportData.examination.open_fracture.gustilo) && <p>Gustilo Classification: {reportData.examination.open_fracture.gustilo || 'N/A'}</p>}
-                  {shouldDisplay(reportData.examination.open_fracture.contamination) && <p>Contamination: {reportData.examination.open_fracture.contamination || 'N/A'}</p>}
+                  {shouldDisplay(reportData.examination.open_fracture.gustilo) && <p>{t('traumaOrthoReport.gustiloClassification')}: {reportData.examination.open_fracture.gustilo || t('traumaOrthoReport.na')}</p>}
+                  {shouldDisplay(reportData.examination.open_fracture.contamination) && <p>{t('traumaOrthoReport.contamination')}: {reportData.examination.open_fracture.contamination || t('traumaOrthoReport.na')}</p>}
                 </div>
               </div>
             )}
-            {shouldDisplay(reportData.examination.soft_tissue) && <p><strong>Soft Tissue:</strong> {reportData.examination.soft_tissue || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.examination.soft_tissue) && <p><strong>{t('traumaOrthoReport.softTissue')}:</strong> {reportData.examination.soft_tissue || t('traumaOrthoReport.notRecorded')}</p>}
           </div>
         </div>
       )}
@@ -1619,7 +1741,7 @@ const TraumaOrthoReportView = ({ report }) => {
       {/* Imaging Studies */}
       {reportData.imaging_links && reportData.imaging_links.length > 0 && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Imaging Studies</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">{t('traumaOrthoReport.imagingStudies')}</h3>
           <div className="text-gray-800 space-y-2">
             {reportData.imaging_links.map((study, idx) => (
               <div key={idx} className="border border-gray-200 rounded p-3">
@@ -1627,8 +1749,8 @@ const TraumaOrthoReportView = ({ report }) => {
                   <div>
                     <p className="font-medium">{study.modality} - {study.description}</p>
                     <p className="text-sm text-gray-600">{study.date}</p>
-                    {study.study_uid && <p className="text-sm text-gray-600">Study UID: {study.study_uid}</p>}
-                    {study.note && <p className="text-sm text-gray-600 mt-1">Note: {study.note}</p>}
+                    {study.study_uid && <p className="text-sm text-gray-600">{t('traumaOrthoReport.imagingStudies')} UID: {study.study_uid}</p>}
+                    {study.note && <p className="text-sm text-gray-600 mt-1">{t('traumaOrthoReport.note')}: {study.note}</p>}
                   </div>
                   {study.attach && <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">{study.attach}</span>}
                 </div>
@@ -1641,17 +1763,17 @@ const TraumaOrthoReportView = ({ report }) => {
       {/* Classification */}
       {hasData(reportData.classification) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Classification</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">{t('traumaOrthoReport.classification')}</h3>
           <div className="text-gray-800 space-y-1">
-            {shouldDisplay(reportData.classification.site) && <p><strong>Site:</strong> {reportData.classification.site || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.classification.side) && <p><strong>Side:</strong> {reportData.classification.side || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.classification.system) && <p><strong>System:</strong> {reportData.classification.system || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.classification.code) && <p><strong>Code:</strong> {reportData.classification.code || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.classification.displacement) && <p><strong>Displacement:</strong> {reportData.classification.displacement || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.classification.site) && <p><strong>{t('traumaOrthoReport.site')}:</strong> {reportData.classification.site || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.classification.side) && <p><strong>{t('traumaOrthoReport.side')}:</strong> {reportData.classification.side || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.classification.system) && <p><strong>{t('traumaOrthoReport.system')}:</strong> {reportData.classification.system || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.classification.code) && <p><strong>{t('traumaOrthoReport.code')}:</strong> {reportData.classification.code || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.classification.displacement) && <p><strong>{t('traumaOrthoReport.displacement')}:</strong> {reportData.classification.displacement || t('traumaOrthoReport.notRecorded')}</p>}
             {reportData.classification.intra_articular !== undefined && (
-              <p><strong>Intra-articular:</strong> {reportData.classification.intra_articular ? 'Yes' : 'No'}</p>
+              <p><strong>{t('traumaOrthoReport.intraArticular')}:</strong> {reportData.classification.intra_articular ? t('traumaOrthoReport.yes') : t('traumaOrthoReport.no')}</p>
             )}
-            {shouldDisplay(reportData.classification.stability) && <p><strong>Stability:</strong> {reportData.classification.stability || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.classification.stability) && <p><strong>{t('traumaOrthoReport.stability')}:</strong> {reportData.classification.stability || t('traumaOrthoReport.notRecorded')}</p>}
           </div>
         </div>
       )}
@@ -1659,19 +1781,19 @@ const TraumaOrthoReportView = ({ report }) => {
       {/* Procedures Done */}
       {reportData.procedures && reportData.procedures.length > 0 && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Procedures Done</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">{t('traumaOrthoReport.proceduresOperations')}</h3>
           <div className="text-gray-800 space-y-3">
             {reportData.procedures.map((proc, idx) => (
               <div key={idx} className="border border-gray-200 rounded p-3">
-                <p className="font-medium">{typeof proc === 'object' ? (proc.name || `Procedure ${idx + 1}`) : proc}</p>
+                <p className="font-medium">{typeof proc === 'object' ? (proc.name || `${t('traumaOrthoReport.proceduresOperations')} ${idx + 1}`) : proc}</p>
                 {typeof proc === 'object' && (
                   <div className="mt-1 text-sm space-y-1">
-                    {proc.date && <p>Date: {proc.date}</p>}
-                    {proc.description && <p>Description: {proc.description}</p>}
-                    {proc.technique && <p>Technique: {proc.technique}</p>}
-                    {proc.findings && <p>Findings: {proc.findings}</p>}
-                    {proc.result && <p>Result: {proc.result}</p>}
-                    {proc.complications && <p>Complications: {proc.complications}</p>}
+                    {proc.date && <p>{t('traumaOrthoReport.date')}: {proc.date}</p>}
+                    {proc.description && <p>{t('traumaOrthoReport.proceduresOperations')}: {proc.description}</p>}
+                    {proc.technique && <p>{t('traumaOrthoReport.technique')}: {proc.technique}</p>}
+                    {proc.findings && <p>{t('traumaOrthoReport.findings')}: {proc.findings}</p>}
+                    {proc.result && <p>{t('traumaOrthoReport.result')}: {proc.result}</p>}
+                    {proc.complications && <p>{t('traumaOrthoReport.complications')}: {proc.complications}</p>}
                   </div>
                 )}
               </div>
@@ -1681,18 +1803,18 @@ const TraumaOrthoReportView = ({ report }) => {
       )}
       
       {/* Diagnosis */}
-      <Section title="Diagnosis" content={formatDiagnosis()} />
+      <Section title={t('traumaOrthoReport.diagnosis')} content={formatDiagnosis()} />
       
       {/* Plan & Treatment (for initial mode) */}
-      {reportData.plan && <Section title="Treatment Plan" content={formatPlan()} />}
+      {reportData.plan && <Section title={t('traumaOrthoReport.planTreatment')} content={formatPlan()} />}
       
       {/* Outcome (for discharge mode) */}
       {reportData.outcome && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Outcome</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">{t('traumaOrthoReport.outcomeRecommendations')}</h3>
           <div className="text-gray-800 space-y-1">
-            {shouldDisplay(reportData.outcome.condition) && <p><strong>Condition:</strong> {reportData.outcome.condition || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.outcome.course) && <p><strong>Course:</strong> {reportData.outcome.course || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.outcome.condition) && <p><strong>{t('traumaOrthoReport.currentCondition')}:</strong> {reportData.outcome.condition || t('traumaOrthoReport.notRecorded')}</p>}
+            {shouldDisplay(reportData.outcome.course) && <p><strong>{t('traumaOrthoReport.hospitalCourse')}:</strong> {reportData.outcome.course || t('traumaOrthoReport.notRecorded')}</p>}
           </div>
         </div>
       )}
@@ -1700,7 +1822,7 @@ const TraumaOrthoReportView = ({ report }) => {
       {/* Recommendations (for discharge mode) */}
       {reportData.recommendations && reportData.recommendations.length > 0 && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Recommendations</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">{t('traumaOrthoReport.recommendations')}</h3>
           <div className="text-gray-800">
             <ul className="list-disc list-inside space-y-1">
               {reportData.recommendations.map((rec, idx) => (
@@ -1730,7 +1852,9 @@ const TraumaOrthoReportView = ({ report }) => {
 
 // Midwifery-specific report view component
 const MidwiferyReportView = ({ report }) => {
+  const { t } = useTranslation();
   const reportData = report.reportData || {};
+  const meta = reportData.meta || {};
   
   // Helper to check if section has data
   const hasData = (obj) => {
@@ -1754,142 +1878,641 @@ const MidwiferyReportView = ({ report }) => {
     return true;
   };
   
+  // Get patient information from backend
+  const patientName = report.patient?.name || 
+    (report.patient?.first_name && report.patient?.last_name 
+      ? `${report.patient.first_name} ${report.patient.last_name}` 
+      : report.patient?.patient_name) || 'N/A';
+  const patientAge = report.patient?.age || meta.patient_age || null;
+  const patientGender = report.patient?.gender || meta.patient_gender || null;
+  const patientDob = report.patient?.dob || report.patient?.date_of_birth || null;
+  const patientId = report.patient?.id || report.patient?.mrn || report.patient?.patient_id || 'N/A';
+  const patientPhone = report.patient?.phone || report.patient?.phoneNumber || report.patient?.contact_number || null;
+  const patientAddress = report.patient?.address || null;
+  const patientEmergencyContact = report.patient?.emergency_contact || null;
+  const patientMaritalStatus = report.patient?.marital_status || report.patient?.maritalStatus || null;
+  
+  // Get clinic information
+  const clinicName = report.clinic?.name || meta.clinic_name || t('midwiferyForm.clinic') || 'Клиника';
+  
+  // Get physician information
+  const physicianName = report.doctor?.name || report.doctor_info?.name || t('midwiferyForm.physician') || 'Врач';
+  
+  // Get encounter information
+  const encounterId = meta.encounter_id || 'N/A';
+  const encounterDate = meta.datetime ? new Date(meta.datetime).toLocaleString() : (report.date || 'N/A');
+  
+  // Get last saved information
+  const lastSaved = report.updated_at || report.date || null;
+  const lastSavedText = lastSaved ? new Date(lastSaved).toLocaleString() : (t('midwiferyForm.notSavedYet') || 'Еще не сохранено');
+  
+  // Format diagnosis
+  const formatDiagnosis = () => {
+    const diagnosis = reportData.diagnosis || {};
+    const codes = reportData.diagnosis_codes || [];
+    
+    let text = '';
+    if (diagnosis && typeof diagnosis === 'object' && (diagnosis.code || diagnosis.term)) {
+      text = `${diagnosis.code || ''} ${diagnosis.term || ''}`.trim();
+    } else if (diagnosis) {
+      text = String(diagnosis);
+    }
+    
+    if (codes.length > 0) {
+      const codesText = codes.map(c => {
+        if (typeof c === 'object') {
+          return `${c.code || ''} ${c.term || ''}`.trim();
+        }
+        return String(c);
+      }).filter(c => c).join(', ');
+      if (codesText) {
+        text += (text ? '\n\n' : '') + `Additional Diagnoses: ${codesText}`;
+      }
+    }
+    
+    return text || report.diagnosis || 'No diagnosis specified';
+  };
+  
   return (
     <>
-      {/* Patient Information */}
-      {(shouldDisplay(reportData.patientName) || shouldDisplay(reportData.dateOfBirth) || shouldDisplay(reportData.age) || shouldDisplay(reportData.contactNumber) || shouldDisplay(reportData.address) || shouldDisplay(reportData.emergencyContact)) && (
-        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Patient Information</h3>
-          <div className="text-gray-800 space-y-1">
-            {shouldDisplay(reportData.patientName) && <p><strong>Patient Name:</strong> {reportData.patientName || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.dateOfBirth) && <p><strong>Date of Birth:</strong> {reportData.dateOfBirth || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.age) && <p><strong>Age:</strong> {reportData.age || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.contactNumber) && <p><strong>Contact Number:</strong> {reportData.contactNumber || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.address) && <p><strong>Address:</strong> {reportData.address || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.emergencyContact) && <p><strong>Emergency Contact:</strong> {reportData.emergencyContact || 'Not recorded'}</p>}
+      {/* Report Header Information */}
+      <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm mb-6">
+        <h3 className="text-md font-bold text-[#5ACCC3] mb-4">{t('midwiferyForm.patientInformation') || 'Информация о пациенте'}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-800">
+          <div>
+            <p className="font-semibold text-gray-700">{t('midwiferyForm.patient') || 'Пациент'}</p>
+            <p className="text-gray-800">
+              {patientName}
+              {patientAge && patientGender && ` (${patientAge} ${t('midwiferyForm.years') || 'лет'}, ${patientGender})`}
+            </p>
+            {patientDob && (
+              <p className="text-sm text-gray-600 mt-1">{t('midwiferyForm.dateOfBirth') || 'Дата рождения'}: {new Date(patientDob).toLocaleDateString()}</p>
+            )}
+            {patientId && patientId !== 'N/A' && (
+              <p className="text-sm text-gray-600">{t('midwiferyForm.idMrn') || 'ID/MRN'}: {patientId}</p>
+            )}
+            {patientPhone && (
+              <p className="text-sm text-gray-600">{t('midwiferyForm.contactNumber') || 'Контактный номер'}: {patientPhone}</p>
+            )}
+            {patientAddress && (
+              <p className="text-sm text-gray-600">{t('midwiferyForm.address') || 'Адрес'}: {patientAddress}</p>
+            )}
+            {patientEmergencyContact && (
+              <p className="text-sm text-gray-600">{t('midwiferyForm.emergencyContact') || 'Экстренный контакт'}: {patientEmergencyContact}</p>
+            )}
+            {patientMaritalStatus && (
+              <p className="text-sm text-gray-600">{t('midwiferyForm.maritalStatus') || 'Семейное положение'}: {patientMaritalStatus}</p>
+            )}
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('midwiferyForm.clinic') || 'Клиника'}</p>
+            <p className="text-gray-800">{clinicName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('midwiferyForm.physician') || 'Врач'}</p>
+            <p className="text-gray-800">{physicianName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('midwiferyForm.encounter') || 'Встреча'}</p>
+            <p className="text-gray-800">{encounterId} - {encounterDate}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('midwiferyForm.lastSaved') || 'Последнее сохранение'}</p>
+            <p className="text-gray-800">{lastSavedText}</p>
           </div>
         </div>
-      )}
+      </div>
       
-      {/* Medical History */}
-      {(shouldDisplay(reportData.bloodGroup) || shouldDisplay(reportData.allergies) || shouldDisplay(reportData.previousPregnancies) || shouldDisplay(reportData.complications) || shouldDisplay(reportData.currentMedications) || shouldDisplay(reportData.familyHistory)) && (
+      {/* Obstetric & Medical History */}
+      {(hasData(reportData.obstetric_medical_history) || shouldDisplay(reportData.bloodGroup) || shouldDisplay(reportData.allergies) || shouldDisplay(reportData.previousPregnancies) || shouldDisplay(reportData.complications) || shouldDisplay(reportData.currentMedications) || shouldDisplay(reportData.familyHistory)) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Medical History</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Obstetric & Medical History</h3>
           <div className="text-gray-800 space-y-2">
-            {shouldDisplay(reportData.bloodGroup) && <p><strong>Blood Group:</strong> {reportData.bloodGroup || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.allergies) && <p><strong>Allergies:</strong> {reportData.allergies || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.previousPregnancies) && <p><strong>Previous Pregnancies:</strong> {reportData.previousPregnancies || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.complications) && <p><strong>Complications:</strong> {reportData.complications || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.currentMedications) && <p><strong>Current Medications:</strong> {reportData.currentMedications || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.familyHistory) && <p><strong>Family History:</strong> {reportData.familyHistory || 'Not recorded'}</p>}
+            {hasData(reportData.obstetric_medical_history?.obstetric_summary) && (
+              <div>
+                <h4 className="font-semibold mb-2">Obstetric Summary</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.obstetric_medical_history.obstetric_summary.gravida) && <p><strong>Gravida (G):</strong> {reportData.obstetric_medical_history.obstetric_summary.gravida}</p>}
+                  {shouldDisplay(reportData.obstetric_medical_history.obstetric_summary.para) && <p><strong>Para (P):</strong> {reportData.obstetric_medical_history.obstetric_summary.para}</p>}
+                  {shouldDisplay(reportData.obstetric_medical_history.obstetric_summary.abortions_miscarriages) && <p><strong>Abortions / Miscarriages:</strong> {reportData.obstetric_medical_history.obstetric_summary.abortions_miscarriages}</p>}
+                  {shouldDisplay(reportData.obstetric_medical_history.obstetric_summary.living_children) && <p><strong>Living Children:</strong> {reportData.obstetric_medical_history.obstetric_summary.living_children}</p>}
+                  {reportData.obstetric_medical_history.obstetric_summary.previous_modes_of_delivery && reportData.obstetric_medical_history.obstetric_summary.previous_modes_of_delivery.length > 0 && (
+                    <p><strong>Previous Mode(s) of Delivery:</strong> {reportData.obstetric_medical_history.obstetric_summary.previous_modes_of_delivery.join(', ')}</p>
+                  )}
+                  {shouldDisplay(reportData.obstetric_medical_history.obstetric_summary.previous_obstetric_complications) && (
+                    <p><strong>Previous Obstetric Complications:</strong> {reportData.obstetric_medical_history.obstetric_summary.previous_obstetric_complications}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {hasData(reportData.obstetric_medical_history?.general_medical_history) && (
+              <div>
+                <h4 className="font-semibold mb-2">General Medical History</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.obstetric_medical_history.general_medical_history.blood_group || reportData.bloodGroup) && <p><strong>Blood Group:</strong> {reportData.obstetric_medical_history.general_medical_history.blood_group || reportData.bloodGroup || 'Not recorded'}</p>}
+                  {shouldDisplay(reportData.obstetric_medical_history.general_medical_history.allergies || reportData.allergies) && <p><strong>Allergies:</strong> {reportData.obstetric_medical_history.general_medical_history.allergies || reportData.allergies || 'Not recorded'}</p>}
+                  {shouldDisplay(reportData.obstetric_medical_history.general_medical_history.medical_conditions) && <p><strong>Medical Conditions:</strong> {reportData.obstetric_medical_history.general_medical_history.medical_conditions}</p>}
+                  {shouldDisplay(reportData.obstetric_medical_history.general_medical_history.surgical_history) && <p><strong>Surgical History:</strong> {reportData.obstetric_medical_history.general_medical_history.surgical_history}</p>}
+                  {reportData.obstetric_medical_history.general_medical_history.current_medications && reportData.obstetric_medical_history.general_medical_history.current_medications.length > 0 && (
+                    <p><strong>Current Medications:</strong> {Array.isArray(reportData.obstetric_medical_history.general_medical_history.current_medications) ? reportData.obstetric_medical_history.general_medical_history.current_medications.join(', ') : reportData.obstetric_medical_history.general_medical_history.current_medications}</p>
+                  )}
+                  {shouldDisplay(reportData.obstetric_medical_history.general_medical_history.family_history || reportData.familyHistory) && <p><strong>Family History:</strong> {reportData.obstetric_medical_history.general_medical_history.family_history || reportData.familyHistory || 'Not recorded'}</p>}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
       
       {/* Current Pregnancy */}
-      {(shouldDisplay(reportData.lastMenstrualPeriod) || shouldDisplay(reportData.expectedDueDate) || shouldDisplay(reportData.gestationalAge) || shouldDisplay(reportData.pregnancyType) || shouldDisplay(reportData.pregnancyNumber) || shouldDisplay(reportData.highRiskFactors)) && (
+      {(hasData(reportData.current_pregnancy) || shouldDisplay(reportData.lastMenstrualPeriod) || shouldDisplay(reportData.expectedDueDate) || shouldDisplay(reportData.gestationalAge) || shouldDisplay(reportData.pregnancyType) || shouldDisplay(reportData.pregnancyNumber) || shouldDisplay(reportData.highRiskFactors)) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
           <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Current Pregnancy</h3>
           <div className="text-gray-800 space-y-1">
-            {shouldDisplay(reportData.lastMenstrualPeriod) && <p><strong>Last Menstrual Period:</strong> {reportData.lastMenstrualPeriod || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.expectedDueDate) && <p><strong>Expected Due Date:</strong> {reportData.expectedDueDate || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.gestationalAge) && <p><strong>Gestational Age:</strong> {reportData.gestationalAge || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.pregnancyType) && <p><strong>Pregnancy Type:</strong> {reportData.pregnancyType || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.pregnancyNumber) && <p><strong>Pregnancy Number:</strong> {reportData.pregnancyNumber || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.highRiskFactors) && <p><strong>High Risk Factors:</strong> {reportData.highRiskFactors || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.current_pregnancy?.last_menstrual_period || reportData.lastMenstrualPeriod) && <p><strong>Last Menstrual Period:</strong> {reportData.current_pregnancy?.last_menstrual_period || reportData.lastMenstrualPeriod || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.current_pregnancy?.estimated_due_date || reportData.expectedDueDate) && <p><strong>Expected Due Date:</strong> {reportData.current_pregnancy?.estimated_due_date || reportData.expectedDueDate || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.current_pregnancy?.gestational_age || reportData.gestationalAge) && <p><strong>Gestational Age:</strong> {reportData.current_pregnancy?.gestational_age || reportData.gestationalAge || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.current_pregnancy?.pregnancy_type || reportData.pregnancyType) && <p><strong>Pregnancy Type:</strong> {reportData.current_pregnancy?.pregnancy_type || reportData.pregnancyType || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.current_pregnancy?.visit_number || reportData.pregnancyNumber) && <p><strong>Visit Number:</strong> {reportData.current_pregnancy?.visit_number || reportData.pregnancyNumber || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.current_pregnancy?.high_risk_factors || reportData.highRiskFactors) && <p><strong>High Risk Factors:</strong> {reportData.current_pregnancy?.high_risk_factors || reportData.highRiskFactors || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.current_pregnancy?.current_pregnancy_complaints) && <p><strong>Current Pregnancy Complaints:</strong> {reportData.current_pregnancy.current_pregnancy_complaints}</p>}
           </div>
         </div>
       )}
       
       {/* Vital Signs */}
-      {(shouldDisplay(reportData.bloodPressure) || shouldDisplay(reportData.pulseRate) || shouldDisplay(reportData.temperature) || shouldDisplay(reportData.weight) || shouldDisplay(reportData.height) || shouldDisplay(reportData.bmi)) && (
+      {(hasData(reportData.vital_signs) || shouldDisplay(reportData.bloodPressure) || shouldDisplay(reportData.pulseRate) || shouldDisplay(reportData.temperature) || shouldDisplay(reportData.weight) || shouldDisplay(reportData.height) || shouldDisplay(reportData.bmi)) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
           <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Vital Signs</h3>
           <div className="text-gray-800 space-y-1">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {shouldDisplay(reportData.bloodPressure) && <p><strong>Blood Pressure:</strong> {reportData.bloodPressure || 'N/A'}</p>}
-              {shouldDisplay(reportData.pulseRate) && <p><strong>Pulse Rate:</strong> {reportData.pulseRate || 'N/A'}</p>}
-              {shouldDisplay(reportData.temperature) && <p><strong>Temperature:</strong> {reportData.temperature || 'N/A'}°C</p>}
-              {shouldDisplay(reportData.weight) && <p><strong>Weight:</strong> {reportData.weight || 'N/A'} kg</p>}
-              {shouldDisplay(reportData.height) && <p><strong>Height:</strong> {reportData.height || 'N/A'} cm</p>}
-              {shouldDisplay(reportData.bmi) && <p><strong>BMI:</strong> {reportData.bmi || 'N/A'}</p>}
+              {shouldDisplay(reportData.vital_signs?.blood_pressure || reportData.bloodPressure) && <p><strong>Blood Pressure:</strong> {reportData.vital_signs?.blood_pressure || reportData.bloodPressure || 'N/A'}</p>}
+              {shouldDisplay(reportData.vital_signs?.pulse_rate || reportData.pulseRate) && <p><strong>Pulse Rate:</strong> {reportData.vital_signs?.pulse_rate || reportData.pulseRate || 'N/A'} bpm</p>}
+              {shouldDisplay(reportData.vital_signs?.respiratory_rate) && <p><strong>Respiratory Rate:</strong> {reportData.vital_signs.respiratory_rate || 'N/A'} breaths/min</p>}
+              {shouldDisplay(reportData.vital_signs?.temperature || reportData.temperature) && <p><strong>Temperature:</strong> {reportData.vital_signs?.temperature || reportData.temperature || 'N/A'}°C</p>}
+              {shouldDisplay(reportData.vital_signs?.spo2) && <p><strong>SpO₂:</strong> {reportData.vital_signs.spo2 || 'N/A'}%</p>}
+              {shouldDisplay(reportData.vital_signs?.weight || reportData.weight) && <p><strong>Weight:</strong> {reportData.vital_signs?.weight || reportData.weight || 'N/A'} kg</p>}
+              {shouldDisplay(reportData.vital_signs?.height || reportData.height) && <p><strong>Height:</strong> {reportData.vital_signs?.height || reportData.height || 'N/A'} cm</p>}
+              {shouldDisplay(reportData.vital_signs?.bmi || reportData.bmi) && <p><strong>BMI:</strong> {reportData.vital_signs?.bmi || reportData.bmi || 'N/A'}</p>}
             </div>
           </div>
         </div>
       )}
       
       {/* Obstetric Examination */}
-      {(shouldDisplay(reportData.fundalHeight) || shouldDisplay(reportData.fetalHeartRate) || shouldDisplay(reportData.fetalPosition) || shouldDisplay(reportData.fetalMovement) || shouldDisplay(reportData.cervicalDilation) || shouldDisplay(reportData.station)) && (
+      {(hasData(reportData.obstetric_examination) || shouldDisplay(reportData.fundalHeight) || shouldDisplay(reportData.fetalHeartRate) || shouldDisplay(reportData.fetalPosition) || shouldDisplay(reportData.fetalMovement) || shouldDisplay(reportData.cervicalDilation) || shouldDisplay(reportData.station)) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
           <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Obstetric Examination</h3>
-          <div className="text-gray-800 space-y-1">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {shouldDisplay(reportData.fundalHeight) && <p><strong>Fundal Height:</strong> {reportData.fundalHeight || 'N/A'} cm</p>}
-              {shouldDisplay(reportData.fetalHeartRate) && <p><strong>Fetal Heart Rate:</strong> {reportData.fetalHeartRate || 'N/A'} bpm</p>}
-              {shouldDisplay(reportData.fetalPosition) && <p><strong>Fetal Position:</strong> {reportData.fetalPosition || 'N/A'}</p>}
-              {shouldDisplay(reportData.fetalMovement) && <p><strong>Fetal Movement:</strong> {reportData.fetalMovement || 'N/A'}</p>}
-              {shouldDisplay(reportData.cervicalDilation) && <p><strong>Cervical Dilation:</strong> {reportData.cervicalDilation || 'N/A'} cm</p>}
-              {shouldDisplay(reportData.station) && <p><strong>Station:</strong> {reportData.station || 'N/A'}</p>}
-            </div>
+          <div className="text-gray-800 space-y-4">
+            {hasData(reportData.obstetric_examination?.general) && (
+              <div>
+                <h4 className="font-semibold mb-2">General</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.obstetric_examination.general.general_appearance) && <p><strong>General Appearance:</strong> {reportData.obstetric_examination.general.general_appearance}</p>}
+                  {shouldDisplay(reportData.obstetric_examination.general.oedema) && <p><strong>Oedema:</strong> {reportData.obstetric_examination.general.oedema}</p>}
+                </div>
+              </div>
+            )}
+            {hasData(reportData.obstetric_examination?.uterus_fetus) && (
+              <div>
+                <h4 className="font-semibold mb-2">Uterus & Fetus</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.obstetric_examination.uterus_fetus.fundal_height || reportData.fundalHeight) && <p><strong>Fundal Height:</strong> {reportData.obstetric_examination.uterus_fetus.fundal_height || reportData.fundalHeight || 'N/A'} cm</p>}
+                  {shouldDisplay(reportData.obstetric_examination.uterus_fetus.fetal_heart_rate || reportData.fetalHeartRate) && <p><strong>Fetal Heart Rate:</strong> {reportData.obstetric_examination.uterus_fetus.fetal_heart_rate || reportData.fetalHeartRate || 'N/A'} bpm</p>}
+                  {shouldDisplay(reportData.obstetric_examination.uterus_fetus.fetal_lie) && <p><strong>Fetal Lie:</strong> {reportData.obstetric_examination.uterus_fetus.fetal_lie}</p>}
+                  {shouldDisplay(reportData.obstetric_examination.uterus_fetus.presentation || reportData.fetalPosition) && <p><strong>Presentation:</strong> {reportData.obstetric_examination.uterus_fetus.presentation || reportData.fetalPosition || 'N/A'}</p>}
+                  {shouldDisplay(reportData.obstetric_examination.uterus_fetus.fetal_movement || reportData.fetalMovement) && <p><strong>Fetal Movement:</strong> {reportData.obstetric_examination.uterus_fetus.fetal_movement || reportData.fetalMovement || 'N/A'}</p>}
+                </div>
+              </div>
+            )}
+            {hasData(reportData.obstetric_examination?.cervical_assessment) && (
+              <div>
+                <h4 className="font-semibold mb-2">Cervical Assessment</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.obstetric_examination.cervical_assessment.cervical_dilation || reportData.cervicalDilation) && <p><strong>Cervical Dilation:</strong> {reportData.obstetric_examination.cervical_assessment.cervical_dilation || reportData.cervicalDilation || 'N/A'} cm</p>}
+                  {shouldDisplay(reportData.obstetric_examination.cervical_assessment.effacement) && <p><strong>Effacement:</strong> {reportData.obstetric_examination.cervical_assessment.effacement}</p>}
+                  {shouldDisplay(reportData.obstetric_examination.cervical_assessment.station || reportData.station) && <p><strong>Station:</strong> {reportData.obstetric_examination.cervical_assessment.station || reportData.station || 'N/A'}</p>}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
       
       {/* Laboratory Tests */}
-      {(shouldDisplay(reportData.hemoglobin) || shouldDisplay(reportData.bloodSugar) || shouldDisplay(reportData.urineAnalysis) || shouldDisplay(reportData.hivStatus) || shouldDisplay(reportData.hepatitisB) || shouldDisplay(reportData.syphilis)) && (
+      {(hasData(reportData.laboratory_tests) || shouldDisplay(reportData.hemoglobin) || shouldDisplay(reportData.bloodSugar) || shouldDisplay(reportData.urineAnalysis) || shouldDisplay(reportData.hivStatus) || shouldDisplay(reportData.hepatitisB) || shouldDisplay(reportData.syphilis)) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
           <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Laboratory Tests</h3>
           <div className="text-gray-800 space-y-1">
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {shouldDisplay(reportData.hemoglobin) && <p><strong>Hemoglobin:</strong> {reportData.hemoglobin || 'N/A'} g/dL</p>}
-              {shouldDisplay(reportData.bloodSugar) && <p><strong>Blood Sugar:</strong> {reportData.bloodSugar || 'N/A'} mg/dL</p>}
-              {shouldDisplay(reportData.urineAnalysis) && <p><strong>Urine Analysis:</strong> {reportData.urineAnalysis || 'Not recorded'}</p>}
-              {shouldDisplay(reportData.hivStatus) && <p><strong>HIV Status:</strong> {reportData.hivStatus || 'N/A'}</p>}
-              {shouldDisplay(reportData.hepatitisB) && <p><strong>Hepatitis B:</strong> {reportData.hepatitisB || 'N/A'}</p>}
-              {shouldDisplay(reportData.syphilis) && <p><strong>Syphilis:</strong> {reportData.syphilis || 'N/A'}</p>}
+              {shouldDisplay(reportData.laboratory_tests?.hemoglobin || reportData.hemoglobin) && <p><strong>Hemoglobin:</strong> {reportData.laboratory_tests?.hemoglobin || reportData.hemoglobin || 'N/A'} g/dL</p>}
+              {shouldDisplay(reportData.laboratory_tests?.blood_sugar_glucose || reportData.bloodSugar) && <p><strong>Blood Sugar / Glucose:</strong> {reportData.laboratory_tests?.blood_sugar_glucose || reportData.bloodSugar || 'N/A'}</p>}
+              {shouldDisplay(reportData.laboratory_tests?.gdm_screening_ogtt_result) && <p><strong>GDM Screening / OGTT:</strong> {reportData.laboratory_tests.gdm_screening_ogtt_result}</p>}
+              {shouldDisplay(reportData.laboratory_tests?.urine_analysis || reportData.urineAnalysis) && <p><strong>Urine Analysis:</strong> {reportData.laboratory_tests?.urine_analysis || reportData.urineAnalysis || 'Not recorded'}</p>}
+              {shouldDisplay(reportData.laboratory_tests?.hiv_status || reportData.hivStatus) && <p><strong>HIV Status:</strong> {reportData.laboratory_tests?.hiv_status || reportData.hivStatus || 'N/A'}</p>}
+              {shouldDisplay(reportData.laboratory_tests?.hepatitis_b_status || reportData.hepatitisB) && <p><strong>Hepatitis B:</strong> {reportData.laboratory_tests?.hepatitis_b_status || reportData.hepatitisB || 'N/A'}</p>}
+              {shouldDisplay(reportData.laboratory_tests?.syphilis || reportData.syphilis) && <p><strong>Syphilis:</strong> {reportData.laboratory_tests?.syphilis || reportData.syphilis || 'N/A'}</p>}
             </div>
           </div>
         </div>
       )}
       
-      {/* Ultrasound Findings */}
-      {(shouldDisplay(reportData.placentaPosition) || shouldDisplay(reportData.amnioticFluid) || shouldDisplay(reportData.estimatedFetalWeight) || shouldDisplay(reportData.ultrasoundDate) || shouldDisplay(reportData.additionalFindings)) && (
+      {/* Ultrasound & Fetal Assessment */}
+      {(hasData(reportData.ultrasound_fetal_assessment) || shouldDisplay(reportData.placentaPosition) || shouldDisplay(reportData.amnioticFluid) || shouldDisplay(reportData.estimatedFetalWeight) || shouldDisplay(reportData.ultrasoundDate) || shouldDisplay(reportData.additionalFindings)) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Ultrasound Findings</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Ultrasound & Fetal Assessment</h3>
           <div className="text-gray-800 space-y-1">
-            {shouldDisplay(reportData.placentaPosition) && <p><strong>Placenta Position:</strong> {reportData.placentaPosition || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.amnioticFluid) && <p><strong>Amniotic Fluid:</strong> {reportData.amnioticFluid || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.estimatedFetalWeight) && <p><strong>Estimated Fetal Weight:</strong> {reportData.estimatedFetalWeight || 'N/A'} grams</p>}
-            {shouldDisplay(reportData.ultrasoundDate) && <p><strong>Ultrasound Date:</strong> {reportData.ultrasoundDate || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.additionalFindings) && <p><strong>Additional Findings:</strong> {reportData.additionalFindings || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.ultrasound_fetal_assessment?.number_of_fetuses) && <p><strong>Number of Fetuses:</strong> {reportData.ultrasound_fetal_assessment.number_of_fetuses}</p>}
+            {shouldDisplay(reportData.ultrasound_fetal_assessment?.ultrasound_date || reportData.ultrasoundDate) && <p><strong>Ultrasound Date:</strong> {reportData.ultrasound_fetal_assessment?.ultrasound_date || reportData.ultrasoundDate || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.ultrasound_fetal_assessment?.gestational_age_by_ultrasound) && <p><strong>Gestational Age by Ultrasound:</strong> {reportData.ultrasound_fetal_assessment.gestational_age_by_ultrasound}</p>}
+            {shouldDisplay(reportData.ultrasound_fetal_assessment?.placenta_position || reportData.placentaPosition) && <p><strong>Placenta Position:</strong> {reportData.ultrasound_fetal_assessment?.placenta_position || reportData.placentaPosition || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.ultrasound_fetal_assessment?.amniotic_fluid || reportData.amnioticFluid) && <p><strong>Amniotic Fluid:</strong> {reportData.ultrasound_fetal_assessment?.amniotic_fluid || reportData.amnioticFluid || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.ultrasound_fetal_assessment?.estimated_fetal_weight || reportData.estimatedFetalWeight) && <p><strong>Estimated Fetal Weight:</strong> {reportData.ultrasound_fetal_assessment?.estimated_fetal_weight || reportData.estimatedFetalWeight || 'N/A'} grams</p>}
+            {shouldDisplay(reportData.ultrasound_fetal_assessment?.additional_ultrasound_findings || reportData.additionalFindings) && <p><strong>Additional Findings:</strong> {reportData.ultrasound_fetal_assessment?.additional_ultrasound_findings || reportData.additionalFindings || 'Not recorded'}</p>}
           </div>
         </div>
       )}
       
-      {/* Care Plan */}
-      {(shouldDisplay(reportData.nextVisitDate) || shouldDisplay(reportData.recommendedTests) || shouldDisplay(reportData.medicationsPrescribed) || shouldDisplay(reportData.dietaryRecommendations) || shouldDisplay(reportData.activityRestrictions) || shouldDisplay(reportData.emergencyInstructions)) && (
+      {/* Risk Assessment & Summary */}
+      {hasData(reportData.risk_assessment_summary) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Care Plan</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Risk Assessment & Summary</h3>
           <div className="text-gray-800 space-y-2">
-            {shouldDisplay(reportData.nextVisitDate) && <p><strong>Next Visit Date:</strong> {reportData.nextVisitDate || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.recommendedTests) && <p><strong>Recommended Tests:</strong> {reportData.recommendedTests || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.medicationsPrescribed) && <p><strong>Medications Prescribed:</strong> {reportData.medicationsPrescribed || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.dietaryRecommendations) && <p><strong>Dietary Recommendations:</strong> {reportData.dietaryRecommendations || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.activityRestrictions) && <p><strong>Activity Restrictions:</strong> {reportData.activityRestrictions || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.emergencyInstructions) && <p><strong>Emergency Instructions:</strong> {reportData.emergencyInstructions || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.risk_assessment_summary.overall_risk_category) && <p><strong>Overall Risk Category:</strong> {reportData.risk_assessment_summary.overall_risk_category}</p>}
+            {shouldDisplay(reportData.risk_assessment_summary.key_risk_factors) && <p><strong>Key Risk Factors:</strong> {reportData.risk_assessment_summary.key_risk_factors}</p>}
+            {shouldDisplay(reportData.risk_assessment_summary.clinical_impression) && <p><strong>Clinical Impression / Summary:</strong> {reportData.risk_assessment_summary.clinical_impression}</p>}
           </div>
         </div>
       )}
       
-      {/* Notes and Observations */}
-      {(shouldDisplay(reportData.generalObservations) || shouldDisplay(reportData.patientConcerns) || shouldDisplay(reportData.providerNotes) || shouldDisplay(reportData.followUpPlan)) && (
+      {/* Diagnosis */}
+      <Section title="Diagnosis" content={formatDiagnosis()} />
+      
+      {/* Care Plan & Follow-up */}
+      {(hasData(reportData.care_plan_followup) || shouldDisplay(reportData.nextVisitDate) || shouldDisplay(reportData.recommendedTests) || shouldDisplay(reportData.medicationsPrescribed) || shouldDisplay(reportData.dietaryRecommendations) || shouldDisplay(reportData.activityRestrictions) || shouldDisplay(reportData.emergencyInstructions)) && (
         <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
-          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Notes and Observations</h3>
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Care Plan & Follow-up</h3>
           <div className="text-gray-800 space-y-2">
-            {shouldDisplay(reportData.generalObservations) && <p><strong>General Observations:</strong> {reportData.generalObservations || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.patientConcerns) && <p><strong>Patient Concerns:</strong> {reportData.patientConcerns || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.providerNotes) && <p><strong>Provider Notes:</strong> {reportData.providerNotes || 'Not recorded'}</p>}
-            {shouldDisplay(reportData.followUpPlan) && <p><strong>Follow-up Plan:</strong> {reportData.followUpPlan || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.care_plan_followup?.next_visit_date || reportData.nextVisitDate) && <p><strong>Next Visit Date:</strong> {reportData.care_plan_followup?.next_visit_date || reportData.nextVisitDate || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.care_plan_followup?.next_visit_type) && <p><strong>Next Visit Type:</strong> {reportData.care_plan_followup.next_visit_type}</p>}
+            {shouldDisplay(reportData.care_plan_followup?.recommended_tests || reportData.recommendedTests) && <p><strong>Recommended Tests:</strong> {reportData.care_plan_followup?.recommended_tests || reportData.recommendedTests || 'Not recorded'}</p>}
+            {(reportData.care_plan_followup?.medications_prescribed && reportData.care_plan_followup.medications_prescribed.length > 0) || shouldDisplay(reportData.medicationsPrescribed) ? (
+              <div>
+                <strong>Medications Prescribed:</strong>
+                {reportData.care_plan_followup?.medications_prescribed && reportData.care_plan_followup.medications_prescribed.length > 0 ? (
+                  <ul className="ml-4 mt-1 list-disc">
+                    {reportData.care_plan_followup.medications_prescribed.map((med, idx) => (
+                      <li key={idx} className="text-sm">
+                        {typeof med === 'object' ? `${med.name || med.med || ''} ${med.dosage || ''} ${med.frequency || ''}`.trim() : med}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="ml-4">{reportData.medicationsPrescribed || 'Not recorded'}</p>
+                )}
+              </div>
+            ) : null}
+            {shouldDisplay(reportData.care_plan_followup?.dietary_recommendations || reportData.dietaryRecommendations) && <p><strong>Dietary Recommendations:</strong> {reportData.care_plan_followup?.dietary_recommendations || reportData.dietaryRecommendations || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.care_plan_followup?.activity_work_restrictions || reportData.activityRestrictions) && <p><strong>Activity & Work Restrictions:</strong> {reportData.care_plan_followup?.activity_work_restrictions || reportData.activityRestrictions || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.care_plan_followup?.emergency_instructions || reportData.emergencyInstructions) && <p><strong>Emergency Instructions:</strong> {reportData.care_plan_followup?.emergency_instructions || reportData.emergencyInstructions || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.care_plan_followup?.planned_place_of_delivery) && <p><strong>Planned Place of Delivery:</strong> {reportData.care_plan_followup.planned_place_of_delivery}</p>}
+            {shouldDisplay(reportData.care_plan_followup?.planned_mode_of_delivery) && <p><strong>Planned Mode of Delivery:</strong> {reportData.care_plan_followup.planned_mode_of_delivery}</p>}
+          </div>
+        </div>
+      )}
+      
+      {/* Notes, Counselling & Sign-off */}
+      {(hasData(reportData.notes_counselling_signoff) || shouldDisplay(reportData.generalObservations) || shouldDisplay(reportData.patientConcerns) || shouldDisplay(reportData.providerNotes) || shouldDisplay(reportData.followUpPlan)) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Notes, Counselling & Sign-off</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.notes_counselling_signoff?.general_observations || reportData.generalObservations) && <p><strong>General Observations:</strong> {reportData.notes_counselling_signoff?.general_observations || reportData.generalObservations || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.notes_counselling_signoff?.patient_concerns || reportData.patientConcerns) && <p><strong>Patient Concerns / Questions:</strong> {reportData.notes_counselling_signoff?.patient_concerns || reportData.patientConcerns || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.notes_counselling_signoff?.counselling_provided || reportData.counsellingProvided) && <p><strong>Counselling Provided:</strong> {reportData.notes_counselling_signoff?.counselling_provided || reportData.counsellingProvided || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.notes_counselling_signoff?.follow_up_plan_narrative || reportData.followUpPlan) && <p><strong>Follow-up Plan (narrative):</strong> {reportData.notes_counselling_signoff?.follow_up_plan_narrative || reportData.followUpPlan || 'Not recorded'}</p>}
+            {shouldDisplay(reportData.notes_counselling_signoff?.provider_signature) && <p><strong>Provider Signature / Name:</strong> {reportData.notes_counselling_signoff.provider_signature}</p>}
+            {shouldDisplay(reportData.notes_counselling_signoff?.documentation_date_time) && <p><strong>Date & Time of Documentation:</strong> {reportData.notes_counselling_signoff.documentation_date_time}</p>}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+// Gynecology-specific report view component
+const GynecologyReportView = ({ report }) => {
+  const { t } = useTranslation();
+  const reportData = report.reportData || {};
+  const meta = reportData.meta || {};
+  
+  // Helper to check if section has data
+  const hasData = (obj) => {
+    if (!obj) return false;
+    if (typeof obj === 'string') return true;
+    if (Array.isArray(obj)) return true;
+    if (typeof obj === 'object') {
+      return Object.keys(obj).length > 0;
+    }
+    return Boolean(obj);
+  };
+  
+  // Helper to check if a field value should be displayed
+  const shouldDisplay = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    if (typeof value === 'boolean') return true;
+    if (typeof value === 'number') return true;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'object') return Object.keys(value).length > 0;
+    return true;
+  };
+  
+  // Get patient information from backend
+  const patientName = report.patient?.name || 
+    (report.patient?.first_name && report.patient?.last_name 
+      ? `${report.patient.first_name} ${report.patient.last_name}` 
+      : report.patient?.patient_name) || 'N/A';
+  const patientAge = report.patient?.age || meta.patient_age || null;
+  const patientGender = report.patient?.gender || meta.patient_gender || null;
+  const patientDob = report.patient?.dob || report.patient?.date_of_birth || null;
+  const patientId = report.patient?.id || report.patient?.mrn || report.patient?.patient_id || 'N/A';
+  const patientPhone = report.patient?.phone || report.patient?.phoneNumber || report.patient?.contact_number || null;
+  const patientAddress = report.patient?.address || null;
+  const patientEmergencyContact = report.patient?.emergency_contact || null;
+  const patientMaritalStatus = report.patient?.marital_status || report.patient?.maritalStatus || null;
+  const patientOccupation = report.patient?.occupation || null;
+  
+  // Get clinic information
+  const clinicName = report.clinic?.name || meta.clinic_name || t('gynecologyForm.clinic') || 'Клиника';
+  
+  // Get physician information
+  const physicianName = report.doctor?.name || report.doctor_info?.name || t('gynecologyForm.physician') || 'Врач';
+  
+  // Get encounter information
+  const encounterId = meta.encounter_id || 'N/A';
+  const encounterDate = meta.datetime ? new Date(meta.datetime).toLocaleString() : (report.date || 'N/A');
+  
+  // Get visit type
+  const visitType = reportData.visit_type || null;
+  
+  // Get last saved information
+  const lastSaved = report.updated_at || report.date || null;
+  const lastSavedText = lastSaved ? new Date(lastSaved).toLocaleString() : (t('gynecologyForm.notSavedYet') || 'Еще не сохранено');
+  
+  // Format diagnosis
+  const formatDiagnosis = () => {
+    const diagnosis = reportData.diagnosis || {};
+    const codes = reportData.diagnosis_codes || [];
+    
+    let text = '';
+    if (diagnosis && typeof diagnosis === 'object' && (diagnosis.code || diagnosis.term)) {
+      text = `${diagnosis.code || ''} ${diagnosis.term || ''}`.trim();
+    } else if (diagnosis) {
+      text = String(diagnosis);
+    }
+    
+    if (codes.length > 0) {
+      const codesText = codes.map(c => {
+        if (typeof c === 'object') {
+          return `${c.code || ''} ${c.term || ''}`.trim();
+        }
+        return String(c);
+      }).filter(c => c).join(', ');
+      if (codesText) {
+        text += (text ? '\n\n' : '') + `Additional Diagnoses: ${codesText}`;
+      }
+    }
+    
+    return text || report.diagnosis || 'No diagnosis specified';
+  };
+  
+  return (
+    <>
+      {/* Report Header Information */}
+      <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm mb-6">
+        <h3 className="text-md font-bold text-[#5ACCC3] mb-4">{t('gynecologyForm.patientInformation') || 'Информация о пациенте'}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-800">
+          <div>
+            <p className="font-semibold text-gray-700">{t('gynecologyForm.patient') || 'Пациент'}</p>
+            <p className="text-gray-800">
+              {patientName}
+              {patientAge && patientGender && ` (${patientAge} ${t('gynecologyForm.years') || 'лет'}, ${patientGender})`}
+            </p>
+            {patientDob && (
+              <p className="text-sm text-gray-600 mt-1">{t('gynecologyForm.dateOfBirth') || 'Дата рождения'}: {new Date(patientDob).toLocaleDateString()}</p>
+            )}
+            {patientId && patientId !== 'N/A' && (
+              <p className="text-sm text-gray-600">{t('gynecologyForm.idMrn') || 'ID/MRN'}: {patientId}</p>
+            )}
+            {patientPhone && (
+              <p className="text-sm text-gray-600">{t('gynecologyForm.contactNumber') || 'Контактный номер'}: {patientPhone}</p>
+            )}
+            {patientAddress && (
+              <p className="text-sm text-gray-600">{t('gynecologyForm.address') || 'Адрес'}: {patientAddress}</p>
+            )}
+            {patientEmergencyContact && (
+              <p className="text-sm text-gray-600">{t('gynecologyForm.emergencyContact') || 'Экстренный контакт'}: {patientEmergencyContact}</p>
+            )}
+            {patientMaritalStatus && (
+              <p className="text-sm text-gray-600">{t('gynecologyForm.maritalStatus') || 'Семейное положение'}: {patientMaritalStatus}</p>
+            )}
+            {patientOccupation && (
+              <p className="text-sm text-gray-600">{t('gynecologyForm.occupation') || 'Профессия'}: {patientOccupation}</p>
+            )}
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('gynecologyForm.clinic') || 'Клиника'}</p>
+            <p className="text-gray-800">{clinicName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('gynecologyForm.physician') || 'Врач'}</p>
+            <p className="text-gray-800">{physicianName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('gynecologyForm.encounter') || 'Встреча'}</p>
+            <p className="text-gray-800">{encounterId} - {encounterDate}</p>
+            {visitType && (
+              <p className="text-sm text-gray-600 mt-1">{t('gynecologyForm.visitType') || 'Тип визита'}: {visitType}</p>
+            )}
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('gynecologyForm.lastSaved') || 'Последнее сохранение'}</p>
+            <p className="text-gray-800">{lastSavedText}</p>
+          </div>
+        </div>
+      </div>
+      
+      <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint || reportData.presenting_complaint_hpi?.presenting_complaint} />
+      
+      {/* Presenting Complaint & HPI */}
+      {hasData(reportData.presenting_complaint_hpi) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Presenting Complaint & History of Present Illness</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.presenting_complaint_hpi.duration_of_symptoms) && (
+              <p><strong>Duration of Symptoms:</strong> {reportData.presenting_complaint_hpi.duration_of_symptoms}</p>
+            )}
+            {shouldDisplay(reportData.presenting_complaint_hpi.history_of_present_illness) && (
+              <p><strong>History of Present Illness:</strong> {reportData.presenting_complaint_hpi.history_of_present_illness}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Menstrual & Reproductive History */}
+      {hasData(reportData.menstrual_reproductive_history) && (
+        <div className="bg-white p-4 border-l-4 border-pink-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-pink-600 mb-2">Menstrual & Reproductive History</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.menstrual_reproductive_history.menarche_age) && (
+              <p><strong>Menarche Age:</strong> {reportData.menstrual_reproductive_history.menarche_age} years</p>
+            )}
+            {shouldDisplay(reportData.menstrual_reproductive_history.cycle_pattern) && (
+              <p><strong>Cycle Pattern:</strong> {reportData.menstrual_reproductive_history.cycle_pattern}</p>
+            )}
+            {shouldDisplay(reportData.menstrual_reproductive_history.last_menstrual_period) && (
+              <p><strong>Last Menstrual Period:</strong> {reportData.menstrual_reproductive_history.last_menstrual_period}</p>
+            )}
+            {shouldDisplay(reportData.menstrual_reproductive_history.flow_amount) && (
+              <p><strong>Flow Amount:</strong> {reportData.menstrual_reproductive_history.flow_amount}</p>
+            )}
+            {shouldDisplay(reportData.menstrual_reproductive_history.dysmenorrhea) && (
+              <p><strong>Dysmenorrhea:</strong> {reportData.menstrual_reproductive_history.dysmenorrhea}</p>
+            )}
+            {shouldDisplay(reportData.menstrual_reproductive_history.contraception_use) && (
+              <p><strong>Contraception Use:</strong> {reportData.menstrual_reproductive_history.contraception_use}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Physical Examination */}
+      {hasData(reportData.physical_examination) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Physical Examination</h3>
+          <div className="text-gray-800 space-y-4">
+            {hasData(reportData.physical_examination.vitals) && (
+              <div>
+                <h4 className="font-semibold mb-2">Vital Signs</h4>
+                <div className="ml-4 space-y-1 text-sm grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {shouldDisplay(reportData.physical_examination.vitals.blood_pressure) && (
+                    <p><strong>BP:</strong> {reportData.physical_examination.vitals.blood_pressure}</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.vitals.pulse_rate) && (
+                    <p><strong>Pulse:</strong> {reportData.physical_examination.vitals.pulse_rate} bpm</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.vitals.temperature) && (
+                    <p><strong>Temp:</strong> {reportData.physical_examination.vitals.temperature}°C</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.vitals.weight) && (
+                    <p><strong>Weight:</strong> {reportData.physical_examination.vitals.weight} kg</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.vitals.height) && (
+                    <p><strong>Height:</strong> {reportData.physical_examination.vitals.height} cm</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.vitals.bmi) && (
+                    <p><strong>BMI:</strong> {reportData.physical_examination.vitals.bmi}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {hasData(reportData.physical_examination.pelvic_examination) && (
+              <div>
+                <h4 className="font-semibold mb-2">Pelvic Examination</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.physical_examination.pelvic_examination.cervix_appearance) && (
+                    <p><strong>Cervix Appearance:</strong> {reportData.physical_examination.pelvic_examination.cervix_appearance}</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.pelvic_examination.uterus_size) && (
+                    <p><strong>Uterus Size:</strong> {reportData.physical_examination.pelvic_examination.uterus_size}</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.pelvic_examination.uterus_position) && (
+                    <p><strong>Uterus Position:</strong> {reportData.physical_examination.pelvic_examination.uterus_position}</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.pelvic_examination.adnexal_findings) && (
+                    <p><strong>Adnexal Findings:</strong> {reportData.physical_examination.pelvic_examination.adnexal_findings}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Investigations */}
+      {hasData(reportData.investigations) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Investigations</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.investigations.pregnancy_test) && (
+              <p><strong>Pregnancy Test:</strong> {reportData.investigations.pregnancy_test}</p>
+            )}
+            {shouldDisplay(reportData.investigations.laboratory_tests) && (
+              <p><strong>Laboratory Tests:</strong> {reportData.investigations.laboratory_tests}</p>
+            )}
+            {shouldDisplay(reportData.investigations.imaging) && (
+              <p><strong>Imaging:</strong> {reportData.investigations.imaging}</p>
+            )}
+            {shouldDisplay(reportData.investigations.cervical_screening_colposcopy) && (
+              <p><strong>Cervical Screening / Colposcopy:</strong> {reportData.investigations.cervical_screening_colposcopy}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Diagnosis */}
+      <Section title="Diagnosis" content={formatDiagnosis()} />
+      
+      {/* Management Plan */}
+      {hasData(reportData.management_plan) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Management Plan</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.management_plan.problem_list) && (
+              <p><strong>Problem List / Clinical Impression:</strong> {reportData.management_plan.problem_list}</p>
+            )}
+            {reportData.management_plan.medications_prescribed && reportData.management_plan.medications_prescribed.length > 0 && (
+              <div>
+                <strong>Medications Prescribed:</strong>
+                <ul className="ml-4 mt-1 list-disc">
+                  {reportData.management_plan.medications_prescribed.map((med, idx) => (
+                    <li key={idx} className="text-sm">
+                      {typeof med === 'object' ? `${med.name || med.med || ''} ${med.dosage || ''} ${med.frequency || ''}`.trim() : med}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {shouldDisplay(reportData.management_plan.procedures_performed_today) && (
+              <p><strong>Procedures Performed Today:</strong> {reportData.management_plan.procedures_performed_today}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.procedures_planned_referrals) && (
+              <p><strong>Procedures Planned / Referrals:</strong> {reportData.management_plan.procedures_planned_referrals}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.follow_up_plan) && (
+              <p><strong>Follow-up Plan:</strong> {reportData.management_plan.follow_up_plan}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.follow_up_date) && (
+              <p><strong>Follow-up Date:</strong> {reportData.management_plan.follow_up_date}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Counselling & Sign-off */}
+      {hasData(reportData.counselling_signoff) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Counselling & Sign-off</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.counselling_signoff.counselling_provided) && (
+              <p><strong>Counselling Provided:</strong> {reportData.counselling_signoff.counselling_provided}</p>
+            )}
+            {shouldDisplay(reportData.counselling_signoff.safety_warning_signs_explained) && (
+              <p><strong>Safety / Warning Signs Explained:</strong> {reportData.counselling_signoff.safety_warning_signs_explained}</p>
+            )}
+            {shouldDisplay(reportData.counselling_signoff.patient_questions_concerns) && (
+              <p><strong>Patient Questions / Concerns:</strong> {reportData.counselling_signoff.patient_questions_concerns}</p>
+            )}
           </div>
         </div>
       )}
@@ -1899,7 +2522,9 @@ const MidwiferyReportView = ({ report }) => {
 
 // Urology-specific report view component
 const UrologyReportView = ({ report }) => {
+  const { t } = useTranslation();
   const reportData = report.reportData || {};
+  const meta = reportData.meta || {};
   
   // Helper to check if section has data
   const hasData = (obj) => {
@@ -1997,8 +2622,60 @@ const UrologyReportView = ({ report }) => {
     return parts.join('\n\n') || report.treatmentPlan || 'No treatment plan specified';
   };
   
+  // Get patient information
+  const patientName = report.patient?.name || 
+    (report.patient?.first_name && report.patient?.last_name 
+      ? `${report.patient.first_name} ${report.patient.last_name}` 
+      : report.patient?.patient_name) || 'N/A';
+  const patientAge = report.patient?.age || meta.patient_age || null;
+  const patientGender = report.patient?.gender || meta.patient_gender || null;
+  
+  // Get clinic information
+  const clinicName = t('urologyReport.urologyDepartment') || 'Urology Department';
+  
+  // Get physician information
+  const physicianName = report.doctor?.name || report.doctor_info?.name || t('urologyReport.drSmith') || 'Dr. Smith';
+  
+  // Get encounter information
+  const encounterId = meta.encounter_id || 'N/A';
+  const encounterDate = meta.datetime ? new Date(meta.datetime).toLocaleString() : (report.date || 'N/A');
+  
+  // Get last saved information
+  const lastSaved = report.updated_at || report.date || null;
+  const lastSavedText = lastSaved ? new Date(lastSaved).toLocaleString() : (t('urologyReport.notSavedYet') || 'Not saved yet');
+  
   return (
     <>
+      {/* Report Header Information */}
+      <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm mb-6">
+        <h3 className="text-md font-bold text-[#5ACCC3] mb-4">Report Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-800">
+          <div>
+            <p className="font-semibold text-gray-700">{t('urologyReport.patient') || 'Patient'}</p>
+            <p className="text-gray-800">
+              {patientName}
+              {patientAge && patientGender && ` (${patientAge} ${t('urologyReport.years') || 'years'}, ${patientGender})`}
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('urologyReport.clinic') || 'Clinic'}</p>
+            <p className="text-gray-800">{clinicName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('urologyReport.physician') || 'Physician'}</p>
+            <p className="text-gray-800">{physicianName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('urologyReport.encounter') || 'Encounter'}</p>
+            <p className="text-gray-800">{encounterId} - {encounterDate}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('urologyReport.lastSaved') || 'Last Saved'}</p>
+            <p className="text-gray-800">{lastSavedText}</p>
+          </div>
+        </div>
+      </div>
+      
       <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint} />
       
       {/* Scores Section */}
@@ -2373,7 +3050,9 @@ const UrologyReportView = ({ report }) => {
 
 // Oncology-specific report view component
 const OncologyReportView = ({ report }) => {
+  const { t } = useTranslation();
   const reportData = report.reportData || {};
+  const meta = reportData.meta || {};
   
   // Helper to check if section has data
   const hasData = (obj) => {
@@ -2523,8 +3202,60 @@ const OncologyReportView = ({ report }) => {
     return parts.join('\n\n') || report.treatmentPlan || 'No treatment plan specified';
   };
   
+  // Get patient information
+  const patientName = report.patient?.name || 
+    (report.patient?.first_name && report.patient?.last_name 
+      ? `${report.patient.first_name} ${report.patient.last_name}` 
+      : report.patient?.patient_name) || 'N/A';
+  const patientAge = report.patient?.age || meta.patient_age || null;
+  const patientGender = report.patient?.gender || meta.patient_gender || null;
+  
+  // Get clinic information
+  const clinicName = t('oncologyForm.oncologyDepartment') || 'Oncology Department';
+  
+  // Get physician information
+  const physicianName = report.doctor?.name || report.doctor_info?.name || t('oncologyForm.drSmith') || 'Dr. Smith';
+  
+  // Get encounter information
+  const encounterId = meta.encounter_id || 'N/A';
+  const encounterDate = meta.datetime ? new Date(meta.datetime).toLocaleString() : (report.date || 'N/A');
+  
+  // Get last saved information
+  const lastSaved = report.updated_at || report.date || null;
+  const lastSavedText = lastSaved ? new Date(lastSaved).toLocaleString() : (t('oncologyForm.notSavedYet') || 'Not saved yet');
+  
   return (
     <>
+      {/* Report Header Information */}
+      <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm mb-6">
+        <h3 className="text-md font-bold text-[#5ACCC3] mb-4">Report Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-800">
+          <div>
+            <p className="font-semibold text-gray-700">{t('oncologyForm.patient') || 'Patient'}</p>
+            <p className="text-gray-800">
+              {patientName}
+              {patientAge && patientGender && ` (${patientAge} ${t('oncologyForm.years') || 'years'}, ${patientGender})`}
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('oncologyForm.clinic') || 'Clinic'}</p>
+            <p className="text-gray-800">{clinicName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('oncologyForm.physician') || 'Physician'}</p>
+            <p className="text-gray-800">{physicianName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('oncologyForm.encounter') || 'Encounter'}</p>
+            <p className="text-gray-800">{encounterId} - {encounterDate}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('oncologyForm.lastSaved') || 'Last Saved'}</p>
+            <p className="text-gray-800">{lastSavedText}</p>
+          </div>
+        </div>
+      </div>
+      
       <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint} />
       
       {/* Intent & Tumor Board */}
@@ -2937,7 +3668,9 @@ const OncologyReportView = ({ report }) => {
 
 // Cardiology-specific report view component
 const CardiologyReportView = ({ report }) => {
+  const { t } = useTranslation();
   const reportData = report.reportData || {};
+  const meta = reportData.meta || {};
   
   // Helper to check if section has data
   const hasData = (obj) => {
@@ -3036,8 +3769,60 @@ const CardiologyReportView = ({ report }) => {
     return parts.join('\n\n') || report.treatmentPlan || 'No treatment plan specified';
   };
   
+  // Get patient information
+  const patientName = report.patient?.name || 
+    (report.patient?.first_name && report.patient?.last_name 
+      ? `${report.patient.first_name} ${report.patient.last_name}` 
+      : report.patient?.patient_name) || 'N/A';
+  const patientAge = report.patient?.age || meta.patient_age || null;
+  const patientGender = report.patient?.gender || meta.patient_gender || null;
+  
+  // Get clinic information
+  const clinicName = t('cardiologyReport.cardiologyDepartment') || 'Cardiology Department';
+  
+  // Get physician information
+  const physicianName = report.doctor?.name || report.doctor_info?.name || t('cardiologyReport.drSmith') || 'Dr. Smith';
+  
+  // Get encounter information
+  const encounterId = meta.encounter_id || 'N/A';
+  const encounterDate = meta.datetime ? new Date(meta.datetime).toLocaleString() : (report.date || 'N/A');
+  
+  // Get last saved information
+  const lastSaved = report.updated_at || report.date || null;
+  const lastSavedText = lastSaved ? new Date(lastSaved).toLocaleString() : (t('cardiologyReport.notSavedYet') || 'Not saved yet');
+  
   return (
     <>
+      {/* Report Header Information */}
+      <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm mb-6">
+        <h3 className="text-md font-bold text-[#5ACCC3] mb-4">Report Information</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-800">
+          <div>
+            <p className="font-semibold text-gray-700">{t('cardiologyReport.patient') || 'Patient'}</p>
+            <p className="text-gray-800">
+              {patientName}
+              {patientAge && patientGender && ` (${patientAge} ${t('cardiologyReport.years') || 'years'}, ${patientGender})`}
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('cardiologyReport.clinic') || 'Clinic'}</p>
+            <p className="text-gray-800">{clinicName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('cardiologyReport.physician') || 'Physician'}</p>
+            <p className="text-gray-800">{physicianName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('cardiologyReport.encounter') || 'Encounter'}</p>
+            <p className="text-gray-800">{encounterId} - {encounterDate}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('cardiologyReport.lastSaved') || 'Last Saved'}</p>
+            <p className="text-gray-800">{lastSavedText}</p>
+          </div>
+        </div>
+      </div>
+      
       <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint} />
       
       {/* History */}
@@ -3240,7 +4025,9 @@ const CardiologyReportView = ({ report }) => {
 
 // Allergy & Immunology-specific report view component
 const AllergyImmunologyReportView = ({ report }) => {
+  const { t } = useTranslation();
   const reportData = report.reportData || {};
+  const meta = reportData.meta || {};
   
   // Helper to check if section has data
   const hasData = (obj) => {
@@ -3263,6 +4050,28 @@ const AllergyImmunologyReportView = ({ report }) => {
     if (typeof value === 'object') return Object.keys(value).length > 0;
     return true;
   };
+  
+  // Get patient information from backend
+  const patientName = report.patient?.name || 
+    (report.patient?.first_name && report.patient?.last_name 
+      ? `${report.patient.first_name} ${report.patient.last_name}` 
+      : report.patient?.patient_id) || 'N/A';
+  const patientAge = report.patient?.age || meta.patient_age || null;
+  const patientGender = report.patient?.gender || meta.patient_gender || null;
+  
+  // Get clinic information
+  const clinicName = report.clinic?.name || meta.clinic_name || meta.clinic_id || t('allergyImmunologyReport.clinic') || 'Клиника';
+  
+  // Get physician information
+  const physicianName = report.doctor?.name || report.doctor_info?.name || meta.physician_id || t('allergyImmunologyReport.physician') || 'Врач';
+  
+  // Get encounter information
+  const encounterId = meta.encounter_id || 'N/A';
+  const encounterDate = meta.datetime ? new Date(meta.datetime).toLocaleString() : (report.date || 'N/A');
+  
+  // Get last saved information
+  const lastSaved = report.updated_at || report.date || null;
+  const lastSavedText = lastSaved ? new Date(lastSaved).toLocaleString() : (t('allergyImmunologyReport.notSavedYet') || 'Еще не сохранено');
   
   // Format diagnosis
   const formatDiagnosis = () => {
@@ -3375,6 +4184,36 @@ const AllergyImmunologyReportView = ({ report }) => {
   
   return (
     <>
+      {/* Report Header Information */}
+      <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm mb-6">
+        <h3 className="text-md font-bold text-[#5ACCC3] mb-4">{t('allergyImmunologyReport.patientInformation') || 'Информация о пациенте'}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-800">
+          <div>
+            <p className="font-semibold text-gray-700">{t('allergyImmunologyReport.patient') || 'Пациент'}</p>
+            <p className="text-gray-800">
+              {patientName}
+              {patientAge && patientGender && ` (${patientAge} ${t('allergyImmunologyReport.years') || 'лет'}, ${patientGender})`}
+            </p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('allergyImmunologyReport.clinic') || 'Клиника'}</p>
+            <p className="text-gray-800">{clinicName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('allergyImmunologyReport.physician') || 'Врач'}</p>
+            <p className="text-gray-800">{physicianName}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('allergyImmunologyReport.encounter') || 'Встреча'}</p>
+            <p className="text-gray-800">{encounterId} - {encounterDate}</p>
+          </div>
+          <div>
+            <p className="font-semibold text-gray-700">{t('allergyImmunologyReport.lastSaved') || 'Последнее сохранение'}</p>
+            <p className="text-gray-800">{lastSavedText}</p>
+          </div>
+        </div>
+      </div>
+      
       <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint} />
       
       {/* Scores Section */}
@@ -3714,6 +4553,810 @@ const AllergyImmunologyReportView = ({ report }) => {
                 {typeof att === 'object' ? (att.label || att.id || `Attachment ${idx + 1}`) : att} {att.type && `(${att.type})`}
               </div>
             ))}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+// Endocrinology-specific report view component
+const EndocrinologyReportView = ({ report }) => {
+  const reportData = report.reportData || {};
+  
+  // Helper to check if section has data
+  const hasData = (obj) => {
+    if (!obj) return false;
+    if (typeof obj === 'string') return true;
+    if (Array.isArray(obj)) return true;
+    if (typeof obj === 'object') {
+      return Object.keys(obj).length > 0;
+    }
+    return Boolean(obj);
+  };
+  
+  // Helper to check if a field value should be displayed
+  const shouldDisplay = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    if (typeof value === 'boolean') return true;
+    if (typeof value === 'number') return true;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'object') return Object.keys(value).length > 0;
+    return true;
+  };
+  
+  // Format diagnosis
+  const formatDiagnosis = () => {
+    const diagnosis = reportData.diagnosis || {};
+    const codes = reportData.diagnosis_codes || [];
+    
+    let text = '';
+    if (diagnosis && typeof diagnosis === 'object' && (diagnosis.code || diagnosis.term)) {
+      text = `${diagnosis.code || ''} ${diagnosis.term || ''}`.trim();
+    } else if (diagnosis) {
+      text = String(diagnosis);
+    }
+    
+    if (codes.length > 0) {
+      const codesText = codes.map(c => {
+        if (typeof c === 'object') {
+          return `${c.code || ''} ${c.term || ''}`.trim();
+        }
+        return String(c);
+      }).filter(c => c).join(', ');
+      if (codesText) {
+        text += (text ? '\n\n' : '') + `Additional Diagnoses: ${codesText}`;
+      }
+    }
+    
+    return text || report.diagnosis || 'No diagnosis specified';
+  };
+  
+  return (
+    <>
+      <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint || reportData.main_reason_for_visit} />
+      
+      {/* Visit Context */}
+      {(shouldDisplay(reportData.visit_type) || shouldDisplay(reportData.primary_endocrine_problem)) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Visit Context</h3>
+          <div className="text-gray-800 space-y-1">
+            {shouldDisplay(reportData.visit_type) && <p><strong>Visit Type:</strong> {reportData.visit_type}</p>}
+            {reportData.primary_endocrine_problem && reportData.primary_endocrine_problem.length > 0 && (
+              <p><strong>Primary Endocrine Problem:</strong> {reportData.primary_endocrine_problem.join(', ')}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Diabetes Section */}
+      {hasData(reportData.diabetes) && (
+        <div className="bg-white p-4 border-l-4 border-green-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-green-600 mb-2">Diabetes Section</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.diabetes.diabetes_type) && <p><strong>Diabetes Type:</strong> {reportData.diabetes.diabetes_type}</p>}
+            {shouldDisplay(reportData.diabetes.year_of_diagnosis) && <p><strong>Year of Diagnosis:</strong> {reportData.diabetes.year_of_diagnosis}</p>}
+            {reportData.diabetes.current_treatment_regimen && reportData.diabetes.current_treatment_regimen.length > 0 && (
+              <p><strong>Current Treatment Regimen:</strong> {reportData.diabetes.current_treatment_regimen.join(', ')}</p>
+            )}
+            {shouldDisplay(reportData.diabetes.adherence) && <p><strong>Adherence:</strong> {reportData.diabetes.adherence}</p>}
+            {shouldDisplay(reportData.diabetes.recent_hba1c) && <p><strong>Recent HbA1c:</strong> {reportData.diabetes.recent_hba1c}%</p>}
+            {shouldDisplay(reportData.diabetes.date_of_last_hba1c) && <p><strong>Date of Last HbA1c:</strong> {reportData.diabetes.date_of_last_hba1c}</p>}
+            {reportData.diabetes.microvascular_complications && reportData.diabetes.microvascular_complications.length > 0 && (
+              <p><strong>Microvascular Complications:</strong> {reportData.diabetes.microvascular_complications.join(', ')}</p>
+            )}
+            {reportData.diabetes.macrovascular_complications && reportData.diabetes.macrovascular_complications.length > 0 && (
+              <p><strong>Macrovascular Complications:</strong> {reportData.diabetes.macrovascular_complications.join(', ')}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Thyroid Section */}
+      {hasData(reportData.thyroid) && (
+        <div className="bg-white p-4 border-l-4 border-yellow-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-yellow-600 mb-2">Thyroid Section</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.thyroid.main_thyroid_syndrome) && <p><strong>Main Thyroid Syndrome:</strong> {reportData.thyroid.main_thyroid_syndrome}</p>}
+            {reportData.thyroid.key_symptoms && reportData.thyroid.key_symptoms.length > 0 && (
+              <p><strong>Key Symptoms:</strong> {reportData.thyroid.key_symptoms.join(', ')}</p>
+            )}
+            {shouldDisplay(reportData.thyroid.goiter) && <p><strong>Goiter:</strong> {reportData.thyroid.goiter}</p>}
+            {shouldDisplay(reportData.thyroid.nodules_palpable) && <p><strong>Nodules Palpable:</strong> {reportData.thyroid.nodules_palpable}</p>}
+            {shouldDisplay(reportData.thyroid.latest_thyroid_function_summary) && (
+              <p><strong>Latest Thyroid Function Summary:</strong> {reportData.thyroid.latest_thyroid_function_summary}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Obesity & Metabolic Section */}
+      {hasData(reportData.obesity_metabolic) && (
+        <div className="bg-white p-4 border-l-4 border-purple-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-purple-600 mb-2">Obesity & Metabolic / Lipid Section</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.obesity_metabolic.weight_trend) && <p><strong>Weight Trend:</strong> {reportData.obesity_metabolic.weight_trend}</p>}
+            {shouldDisplay(reportData.obesity_metabolic.waist_circumference) && <p><strong>Waist Circumference:</strong> {reportData.obesity_metabolic.waist_circumference} cm</p>}
+            {shouldDisplay(reportData.obesity_metabolic.physical_activity) && <p><strong>Physical Activity:</strong> {reportData.obesity_metabolic.physical_activity}</p>}
+            {shouldDisplay(reportData.obesity_metabolic.smoking_status) && <p><strong>Smoking Status:</strong> {reportData.obesity_metabolic.smoking_status}</p>}
+            {shouldDisplay(reportData.obesity_metabolic.lipid_control_summary) && (
+              <p><strong>Lipid Control Summary:</strong> {reportData.obesity_metabolic.lipid_control_summary}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Physical Exam */}
+      {hasData(reportData.physical_exam) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Physical Examination</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.physical_exam.general_appearance) && <p><strong>General Appearance:</strong> {reportData.physical_exam.general_appearance}</p>}
+            {shouldDisplay(reportData.physical_exam.skin_hair) && <p><strong>Skin & Hair:</strong> {reportData.physical_exam.skin_hair}</p>}
+            {shouldDisplay(reportData.physical_exam.fat_distribution) && <p><strong>Fat Distribution:</strong> {reportData.physical_exam.fat_distribution}</p>}
+            {shouldDisplay(reportData.physical_exam.edema) && <p><strong>Edema:</strong> {reportData.physical_exam.edema}</p>}
+            {shouldDisplay(reportData.physical_exam.other_key_signs) && <p><strong>Other Key Signs:</strong> {reportData.physical_exam.other_key_signs}</p>}
+          </div>
+        </div>
+      )}
+      
+      {/* Investigations */}
+      {hasData(reportData.investigations) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Investigations</h3>
+          <div className="text-gray-800 space-y-2">
+            {reportData.investigations.labs_reviewed_today && reportData.investigations.labs_reviewed_today.length > 0 && (
+              <p><strong>Labs Reviewed Today:</strong> {reportData.investigations.labs_reviewed_today.join(', ')}</p>
+            )}
+            {shouldDisplay(reportData.investigations.main_interpretation_abnormalities) && (
+              <p><strong>Main Interpretation / Abnormalities:</strong> {reportData.investigations.main_interpretation_abnormalities}</p>
+            )}
+            {reportData.investigations.imaging_reviewed_ordered && reportData.investigations.imaging_reviewed_ordered.length > 0 && (
+              <p><strong>Imaging Reviewed / Ordered:</strong> {reportData.investigations.imaging_reviewed_ordered.join(', ')}</p>
+            )}
+            {shouldDisplay(reportData.investigations.key_imaging_impressions) && (
+              <p><strong>Key Imaging Impressions:</strong> {reportData.investigations.key_imaging_impressions}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Diagnosis */}
+      <Section title="Diagnosis" content={formatDiagnosis()} />
+      
+      {/* Management Plan */}
+      {hasData(reportData.management_plan) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Management Plan</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.management_plan.medication_changes_made_today) && (
+              <p><strong>Medication Changes Made Today:</strong> {reportData.management_plan.medication_changes_made_today}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.new_prescriptions) && (
+              <p><strong>New Prescriptions:</strong> {reportData.management_plan.new_prescriptions}</p>
+            )}
+            {reportData.management_plan.lifestyle_counselling_provided && reportData.management_plan.lifestyle_counselling_provided.length > 0 && (
+              <p><strong>Lifestyle Counselling Provided:</strong> {reportData.management_plan.lifestyle_counselling_provided.join(', ')}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.target_hba1c) && (
+              <p><strong>Target HbA1c:</strong> {reportData.management_plan.target_hba1c}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.next_clinic_visit) && (
+              <p><strong>Next Clinic Visit:</strong> {reportData.management_plan.next_clinic_visit}</p>
+            )}
+            {reportData.management_plan.referrals && reportData.management_plan.referrals.length > 0 && (
+              <p><strong>Referrals:</strong> {reportData.management_plan.referrals.join(', ')}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.patient_instructions) && (
+              <div>
+                <strong>Patient Instructions:</strong>
+                <p className="mt-1 whitespace-pre-wrap">{reportData.management_plan.patient_instructions}</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+// ENT-specific report view component
+const ENTReportView = ({ report }) => {
+  const reportData = report.reportData || {};
+  
+  // Helper to check if section has data
+  const hasData = (obj) => {
+    if (!obj) return false;
+    if (typeof obj === 'string') return true;
+    if (Array.isArray(obj)) return true;
+    if (typeof obj === 'object') {
+      return Object.keys(obj).length > 0;
+    }
+    return Boolean(obj);
+  };
+  
+  // Helper to check if a field value should be displayed
+  const shouldDisplay = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    if (typeof value === 'boolean') return true;
+    if (typeof value === 'number') return true;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'object') return Object.keys(value).length > 0;
+    return true;
+  };
+  
+  // Format diagnosis
+  const formatDiagnosis = () => {
+    const diagnosis = reportData.diagnosis || {};
+    const codes = reportData.diagnosis_codes || [];
+    
+    let text = '';
+    if (diagnosis && typeof diagnosis === 'object' && (diagnosis.code || diagnosis.term)) {
+      text = `${diagnosis.code || ''} ${diagnosis.term || ''}`.trim();
+    } else if (diagnosis) {
+      text = String(diagnosis);
+    }
+    
+    if (codes.length > 0) {
+      const codesText = codes.map(c => {
+        if (typeof c === 'object') {
+          return `${c.code || ''} ${c.term || ''}`.trim();
+        }
+        return String(c);
+      }).filter(c => c).join(', ');
+      if (codesText) {
+        text += (text ? '\n\n' : '') + `Additional Diagnoses: ${codesText}`;
+      }
+    }
+    
+    return text || report.diagnosis || 'No diagnosis specified';
+  };
+  
+  return (
+    <>
+      <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint || reportData.reason_hpi?.presenting_ent_complaint} />
+      
+      {/* Reason for ENT Visit & HPI */}
+      {hasData(reportData.reason_hpi) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Reason for ENT Visit & History of Present Illness</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.reason_hpi.duration_of_main_complaint) && <p><strong>Duration:</strong> {reportData.reason_hpi.duration_of_main_complaint}</p>}
+            {shouldDisplay(reportData.reason_hpi.symptom_course) && <p><strong>Symptom Course:</strong> {reportData.reason_hpi.symptom_course}</p>}
+            {shouldDisplay(reportData.reason_hpi.history_of_present_illness) && (
+              <p><strong>History of Present Illness:</strong> {reportData.reason_hpi.history_of_present_illness}</p>
+            )}
+            {shouldDisplay(reportData.reason_hpi.impact_on_daily_life) && (
+              <p><strong>Impact on Daily Life:</strong> {reportData.reason_hpi.impact_on_daily_life}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Ear Symptoms */}
+      {hasData(reportData.ear_symptoms) && (
+        <div className="bg-white p-4 border-l-4 border-green-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-green-600 mb-2">Ear Symptoms</h3>
+          <div className="text-gray-800 space-y-2">
+            {reportData.ear_symptoms.ear_symptoms_present && reportData.ear_symptoms.ear_symptoms_present.length > 0 && (
+              <p><strong>Ear Symptoms Present:</strong> {reportData.ear_symptoms.ear_symptoms_present.join(', ')}</p>
+            )}
+            {shouldDisplay(reportData.ear_symptoms.laterality) && <p><strong>Laterality:</strong> {reportData.ear_symptoms.laterality}</p>}
+            {shouldDisplay(reportData.ear_symptoms.hearing_loss_details) && (
+              <p><strong>Hearing Loss Details:</strong> {reportData.ear_symptoms.hearing_loss_details}</p>
+            )}
+            {shouldDisplay(reportData.ear_symptoms.tinnitus_details) && (
+              <p><strong>Tinnitus Details:</strong> {reportData.ear_symptoms.tinnitus_details}</p>
+            )}
+            {shouldDisplay(reportData.ear_symptoms.dizziness_vertigo_details) && (
+              <p><strong>Dizziness / Vertigo Details:</strong> {reportData.ear_symptoms.dizziness_vertigo_details}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Nose & Sinus Symptoms */}
+      {hasData(reportData.nose_sinus_symptoms) && (
+        <div className="bg-white p-4 border-l-4 border-yellow-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-yellow-600 mb-2">Nose & Sinus Symptoms</h3>
+          <div className="text-gray-800 space-y-2">
+            {reportData.nose_sinus_symptoms.nasal_symptoms_present && reportData.nose_sinus_symptoms.nasal_symptoms_present.length > 0 && (
+              <p><strong>Nasal Symptoms Present:</strong> {reportData.nose_sinus_symptoms.nasal_symptoms_present.join(', ')}</p>
+            )}
+            {shouldDisplay(reportData.nose_sinus_symptoms.nasal_obstruction_details) && (
+              <p><strong>Nasal Obstruction Details:</strong> {reportData.nose_sinus_symptoms.nasal_obstruction_details}</p>
+            )}
+            {shouldDisplay(reportData.nose_sinus_symptoms.allergic_symptoms) && (
+              <p><strong>Allergic Symptoms:</strong> {reportData.nose_sinus_symptoms.allergic_symptoms}</p>
+            )}
+            {shouldDisplay(reportData.nose_sinus_symptoms.epistaxis) && (
+              <p><strong>Epistaxis:</strong> {reportData.nose_sinus_symptoms.epistaxis}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Throat, Voice & Swallowing */}
+      {hasData(reportData.throat_voice_swallowing) && (
+        <div className="bg-white p-4 border-l-4 border-purple-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-purple-600 mb-2">Throat, Voice & Swallowing</h3>
+          <div className="text-gray-800 space-y-2">
+            {reportData.throat_voice_swallowing.throat_voice_symptoms_present && reportData.throat_voice_swallowing.throat_voice_symptoms_present.length > 0 && (
+              <p><strong>Throat & Voice Symptoms Present:</strong> {reportData.throat_voice_swallowing.throat_voice_symptoms_present.join(', ')}</p>
+            )}
+            {shouldDisplay(reportData.throat_voice_swallowing.voice_change_hoarseness) && (
+              <p><strong>Voice Change / Hoarseness:</strong> {reportData.throat_voice_swallowing.voice_change_hoarseness}</p>
+            )}
+            {shouldDisplay(reportData.throat_voice_swallowing.dysphagia) && (
+              <p><strong>Dysphagia:</strong> {reportData.throat_voice_swallowing.dysphagia}</p>
+            )}
+            {shouldDisplay(reportData.throat_voice_swallowing.reflux_symptoms) && (
+              <p><strong>Reflux Symptoms:</strong> {reportData.throat_voice_swallowing.reflux_symptoms}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* ENT Examination */}
+      {hasData(reportData.ent_examination) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">ENT Examination</h3>
+          <div className="text-gray-800 space-y-4">
+            {hasData(reportData.ent_examination.ear) && (
+              <div>
+                <h4 className="font-semibold mb-2">Ear Examination</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.ent_examination.ear.right_tympanic_membrane) && (
+                    <p><strong>Right Tympanic Membrane:</strong> {reportData.ent_examination.ear.right_tympanic_membrane}</p>
+                  )}
+                  {shouldDisplay(reportData.ent_examination.ear.left_tympanic_membrane) && (
+                    <p><strong>Left Tympanic Membrane:</strong> {reportData.ent_examination.ear.left_tympanic_membrane}</p>
+                  )}
+                  {shouldDisplay(reportData.ent_examination.ear.hearing_screening) && (
+                    <p><strong>Hearing Screening:</strong> {reportData.ent_examination.ear.hearing_screening}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {hasData(reportData.ent_examination.nose_sinuses) && (
+              <div>
+                <h4 className="font-semibold mb-2">Nose & Sinuses Examination</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.ent_examination.nose_sinuses.septum) && (
+                    <p><strong>Septum:</strong> {reportData.ent_examination.nose_sinuses.septum}</p>
+                  )}
+                  {shouldDisplay(reportData.ent_examination.nose_sinuses.turbinates) && (
+                    <p><strong>Turbinates:</strong> {reportData.ent_examination.nose_sinuses.turbinates}</p>
+                  )}
+                  {shouldDisplay(reportData.ent_examination.nose_sinuses.nasal_endoscopy_findings) && (
+                    <p><strong>Nasal Endoscopy Findings:</strong> {reportData.ent_examination.nose_sinuses.nasal_endoscopy_findings}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {hasData(reportData.ent_examination.oral_cavity_oropharynx_larynx) && (
+              <div>
+                <h4 className="font-semibold mb-2">Oral Cavity, Oropharynx & Larynx</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.ent_examination.oral_cavity_oropharynx_larynx.tonsils) && (
+                    <p><strong>Tonsils:</strong> {reportData.ent_examination.oral_cavity_oropharynx_larynx.tonsils}</p>
+                  )}
+                  {shouldDisplay(reportData.ent_examination.oral_cavity_oropharynx_larynx.laryngoscopy_stroboscopy_findings) && (
+                    <p><strong>Laryngoscopy / Stroboscopy Findings:</strong> {reportData.ent_examination.oral_cavity_oropharynx_larynx.laryngoscopy_stroboscopy_findings}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {hasData(reportData.ent_examination.neck_cranial_nerve) && (
+              <div>
+                <h4 className="font-semibold mb-2">Neck & Cranial Nerve Examination</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.ent_examination.neck_cranial_nerve.lymph_nodes) && (
+                    <p><strong>Lymph Nodes:</strong> {reportData.ent_examination.neck_cranial_nerve.lymph_nodes}</p>
+                  )}
+                  {shouldDisplay(reportData.ent_examination.neck_cranial_nerve.thyroid_examination) && (
+                    <p><strong>Thyroid Examination:</strong> {reportData.ent_examination.neck_cranial_nerve.thyroid_examination}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* ENT Investigations */}
+      {hasData(reportData.ent_investigations) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">ENT Investigations</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.ent_investigations.audiology_summary) && (
+              <p><strong>Audiology Summary:</strong> {reportData.ent_investigations.audiology_summary}</p>
+            )}
+            {shouldDisplay(reportData.ent_investigations.tympanometry_acoustic_reflexes) && (
+              <p><strong>Tympanometry & Acoustic Reflexes:</strong> {reportData.ent_investigations.tympanometry_acoustic_reflexes}</p>
+            )}
+            {shouldDisplay(reportData.ent_investigations.imaging) && (
+              <p><strong>Imaging:</strong> {reportData.ent_investigations.imaging}</p>
+            )}
+            {shouldDisplay(reportData.ent_investigations.laboratory_tests) && (
+              <p><strong>Laboratory Tests:</strong> {reportData.ent_investigations.laboratory_tests}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Diagnosis */}
+      <Section title="Diagnosis" content={formatDiagnosis()} />
+      
+      {/* Management Plan */}
+      {hasData(reportData.management_plan) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Management Plan</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.management_plan.problem_list) && (
+              <p><strong>Problem List / Clinical Impression:</strong> {reportData.management_plan.problem_list}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.medical_treatment_plan) && (
+              <p><strong>Medical Treatment Plan:</strong> {reportData.management_plan.medical_treatment_plan}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.procedures_performed_today) && (
+              <p><strong>Procedures Performed Today:</strong> {reportData.management_plan.procedures_performed_today}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.planned_ent_procedures_surgery) && (
+              <p><strong>Planned ENT Procedures / Surgery:</strong> {reportData.management_plan.planned_ent_procedures_surgery}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.referrals_multidisciplinary) && (
+              <p><strong>Referrals / Multidisciplinary Input:</strong> {reportData.management_plan.referrals_multidisciplinary}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.follow_up_plan) && (
+              <p><strong>Follow-up Plan:</strong> {reportData.management_plan.follow_up_plan}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.follow_up_date) && (
+              <p><strong>Follow-up Date:</strong> {reportData.management_plan.follow_up_date}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Patient Education & Counselling */}
+      {hasData(reportData.patient_education) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Patient Education & Counselling</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.patient_education.key_explanations_given) && (
+              <p><strong>Key Explanations Given:</strong> {reportData.patient_education.key_explanations_given}</p>
+            )}
+            {shouldDisplay(reportData.patient_education.lifestyle_preventive_advice) && (
+              <p><strong>Lifestyle & Preventive Advice:</strong> {reportData.patient_education.lifestyle_preventive_advice}</p>
+            )}
+            {shouldDisplay(reportData.patient_education.warning_signs_discussed) && (
+              <p><strong>Warning Signs Discussed:</strong> {reportData.patient_education.warning_signs_discussed}</p>
+            )}
+            {shouldDisplay(reportData.patient_education.patient_understanding_agreement) && (
+              <p><strong>Patient Understanding & Agreement:</strong> {reportData.patient_education.patient_understanding_agreement}</p>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
+// Proctology-specific report view component
+const ProctologyReportView = ({ report }) => {
+  const reportData = report.reportData || {};
+  
+  // Helper to check if section has data
+  const hasData = (obj) => {
+    if (!obj) return false;
+    if (typeof obj === 'string') return true;
+    if (Array.isArray(obj)) return true;
+    if (typeof obj === 'object') {
+      return Object.keys(obj).length > 0;
+    }
+    return Boolean(obj);
+  };
+  
+  // Helper to check if a field value should be displayed
+  const shouldDisplay = (value) => {
+    if (value === null || value === undefined) return false;
+    if (typeof value === 'string' && value.trim() === '') return false;
+    if (typeof value === 'boolean') return true;
+    if (typeof value === 'number') return true;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'object') return Object.keys(value).length > 0;
+    return true;
+  };
+  
+  // Format diagnosis
+  const formatDiagnosis = () => {
+    const diagnosis = reportData.diagnosis || {};
+    const codes = reportData.diagnosis_codes || [];
+    
+    let text = '';
+    if (diagnosis && typeof diagnosis === 'object' && (diagnosis.code || diagnosis.term)) {
+      text = `${diagnosis.code || ''} ${diagnosis.term || ''}`.trim();
+    } else if (diagnosis) {
+      text = String(diagnosis);
+    }
+    
+    if (codes.length > 0) {
+      const codesText = codes.map(c => {
+        if (typeof c === 'object') {
+          return `${c.code || ''} ${c.term || ''}`.trim();
+        }
+        return String(c);
+      }).filter(c => c).join(', ');
+      if (codesText) {
+        text += (text ? '\n\n' : '') + `Additional Diagnoses: ${codesText}`;
+      }
+    }
+    
+    return text || report.diagnosis || 'No diagnosis specified';
+  };
+  
+  return (
+    <>
+      <Section title="Chief Complaint" content={reportData.chief_complaint || report.chiefComplaint || reportData.presenting_complaint_hpi?.presenting_complaint} />
+      
+      {/* Presenting Complaint & HPI */}
+      {hasData(reportData.presenting_complaint_hpi) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Presenting Complaint & History of Present Illness</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.presenting_complaint_hpi.duration_of_symptoms) && (
+              <p><strong>Duration of Symptoms:</strong> {reportData.presenting_complaint_hpi.duration_of_symptoms}</p>
+            )}
+            {shouldDisplay(reportData.presenting_complaint_hpi.history_of_present_illness) && (
+              <p><strong>History of Present Illness:</strong> {reportData.presenting_complaint_hpi.history_of_present_illness}</p>
+            )}
+            {shouldDisplay(reportData.presenting_complaint_hpi.pain_score) && (
+              <p><strong>Pain Score:</strong> {reportData.presenting_complaint_hpi.pain_score}/10</p>
+            )}
+            {shouldDisplay(reportData.presenting_complaint_hpi.pain_character) && (
+              <p><strong>Pain Character:</strong> {reportData.presenting_complaint_hpi.pain_character}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Bowel Habit & Stool Characteristics */}
+      {hasData(reportData.bowel_habit) && (
+        <div className="bg-white p-4 border-l-4 border-green-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-green-600 mb-2">Bowel Habit & Stool Characteristics</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.bowel_habit.frequency_of_bowel_movements) && (
+              <p><strong>Frequency of Bowel Movements:</strong> {reportData.bowel_habit.frequency_of_bowel_movements}</p>
+            )}
+            {shouldDisplay(reportData.bowel_habit.stool_consistency) && (
+              <p><strong>Stool Consistency:</strong> {reportData.bowel_habit.stool_consistency}</p>
+            )}
+            {shouldDisplay(reportData.bowel_habit.straining_during_defecation) && (
+              <p><strong>Straining During Defecation:</strong> {reportData.bowel_habit.straining_during_defecation}</p>
+            )}
+            {shouldDisplay(reportData.bowel_habit.feeling_of_incomplete_evacuation) && (
+              <p><strong>Feeling of Incomplete Evacuation:</strong> {reportData.bowel_habit.feeling_of_incomplete_evacuation}</p>
+            )}
+            {shouldDisplay(reportData.bowel_habit.fecal_incontinence) && (
+              <p><strong>Fecal Incontinence:</strong> {reportData.bowel_habit.fecal_incontinence}</p>
+            )}
+            {shouldDisplay(reportData.bowel_habit.fecal_incontinence_description) && (
+              <p><strong>Fecal Incontinence Description:</strong> {reportData.bowel_habit.fecal_incontinence_description}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Rectal Bleeding & Discharge */}
+      {hasData(reportData.rectal_bleeding_discharge) && (
+        <div className="bg-white p-4 border-l-4 border-red-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-red-600 mb-2">Rectal Bleeding & Discharge</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.rectal_bleeding_discharge.rectal_bleeding) && (
+              <p><strong>Rectal Bleeding:</strong> {reportData.rectal_bleeding_discharge.rectal_bleeding}</p>
+            )}
+            {shouldDisplay(reportData.rectal_bleeding_discharge.rectal_bleeding_amount) && (
+              <p><strong>Amount:</strong> {reportData.rectal_bleeding_discharge.rectal_bleeding_amount}</p>
+            )}
+            {shouldDisplay(reportData.rectal_bleeding_discharge.rectal_bleeding_color) && (
+              <p><strong>Color:</strong> {reportData.rectal_bleeding_discharge.rectal_bleeding_color}</p>
+            )}
+            {shouldDisplay(reportData.rectal_bleeding_discharge.mucus_pus_discharge) && (
+              <p><strong>Mucus / Pus Discharge:</strong> {reportData.rectal_bleeding_discharge.mucus_pus_discharge}</p>
+            )}
+            {shouldDisplay(reportData.rectal_bleeding_discharge.mucus_pus_discharge_description) && (
+              <p><strong>Description:</strong> {reportData.rectal_bleeding_discharge.mucus_pus_discharge_description}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Anal Symptoms */}
+      {hasData(reportData.anal_symptoms) && (
+        <div className="bg-white p-4 border-l-4 border-yellow-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-yellow-600 mb-2">Anal Pain, Itching & Prolapse</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.anal_symptoms.anal_pain) && (
+              <p><strong>Anal Pain:</strong> {reportData.anal_symptoms.anal_pain}</p>
+            )}
+            {shouldDisplay(reportData.anal_symptoms.anal_pain_description) && (
+              <p><strong>Anal Pain Description:</strong> {reportData.anal_symptoms.anal_pain_description}</p>
+            )}
+            {shouldDisplay(reportData.anal_symptoms.anal_itching) && (
+              <p><strong>Anal Itching:</strong> {reportData.anal_symptoms.anal_itching}</p>
+            )}
+            {shouldDisplay(reportData.anal_symptoms.anal_lump_swelling) && (
+              <p><strong>Anal Lump / Swelling:</strong> {reportData.anal_symptoms.anal_lump_swelling}</p>
+            )}
+            {shouldDisplay(reportData.anal_symptoms.prolapse_from_anus) && (
+              <p><strong>Prolapse from Anus:</strong> {reportData.anal_symptoms.prolapse_from_anus}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Physical Examination */}
+      {hasData(reportData.physical_examination) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Physical Examination</h3>
+          <div className="text-gray-800 space-y-4">
+            {hasData(reportData.physical_examination.general_abdominal) && (
+              <div>
+                <h4 className="font-semibold mb-2">General & Abdominal Examination</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.physical_examination.general_abdominal.general_appearance) && (
+                    <p><strong>General Appearance:</strong> {reportData.physical_examination.general_abdominal.general_appearance}</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.general_abdominal.signs_of_anemia_jaundice_edema) && (
+                    <p><strong>Signs of Anemia / Jaundice / Edema:</strong> {reportData.physical_examination.general_abdominal.signs_of_anemia_jaundice_edema}</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.general_abdominal.abdominal_examination) && (
+                    <p><strong>Abdominal Examination:</strong> {reportData.physical_examination.general_abdominal.abdominal_examination}</p>
+                  )}
+                </div>
+              </div>
+            )}
+            {hasData(reportData.physical_examination.perianal_rectal) && (
+              <div>
+                <h4 className="font-semibold mb-2">Perianal & Digital Rectal Examination</h4>
+                <div className="ml-4 space-y-1 text-sm">
+                  {shouldDisplay(reportData.physical_examination.perianal_rectal.perianal_inspection) && (
+                    <p><strong>Perianal Inspection:</strong> {reportData.physical_examination.perianal_rectal.perianal_inspection}</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.perianal_rectal.digital_rectal_examination) && (
+                    <p><strong>Digital Rectal Examination:</strong> {reportData.physical_examination.perianal_rectal.digital_rectal_examination}</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.perianal_rectal.anal_canal_findings) && (
+                    <p><strong>Anal Canal Findings:</strong> {reportData.physical_examination.perianal_rectal.anal_canal_findings}</p>
+                  )}
+                  {shouldDisplay(reportData.physical_examination.perianal_rectal.rectal_ampulla_findings) && (
+                    <p><strong>Rectal Ampulla Findings:</strong> {reportData.physical_examination.perianal_rectal.rectal_ampulla_findings}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Endoscopic Findings */}
+      {hasData(reportData.endoscopic_findings) && (
+        <div className="bg-white p-4 border-l-4 border-purple-500/60 shadow-sm">
+          <h3 className="text-md font-bold text-purple-600 mb-2">Proctoscopy / Anoscopy / Sigmoidoscopy</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.endoscopic_findings.procedure_performed) && (
+              <p><strong>Procedure Performed:</strong> {reportData.endoscopic_findings.procedure_performed}</p>
+            )}
+            {shouldDisplay(reportData.endoscopic_findings.findings) && (
+              <p><strong>Findings:</strong> {reportData.endoscopic_findings.findings}</p>
+            )}
+            {shouldDisplay(reportData.endoscopic_findings.hemorrhoids) && (
+              <p><strong>Hemorrhoids:</strong> {reportData.endoscopic_findings.hemorrhoids}</p>
+            )}
+            {shouldDisplay(reportData.endoscopic_findings.fissures) && (
+              <p><strong>Fissures:</strong> {reportData.endoscopic_findings.fissures}</p>
+            )}
+            {shouldDisplay(reportData.endoscopic_findings.polyps_masses) && (
+              <p><strong>Polyps / Masses:</strong> {reportData.endoscopic_findings.polyps_masses}</p>
+            )}
+            {shouldDisplay(reportData.endoscopic_findings.biopsies_taken) && (
+              <p><strong>Biopsies Taken:</strong> {reportData.endoscopic_findings.biopsies_taken}</p>
+            )}
+            {shouldDisplay(reportData.endoscopic_findings.biopsies_taken_site_purpose) && (
+              <p><strong>Biopsies Site & Purpose:</strong> {reportData.endoscopic_findings.biopsies_taken_site_purpose}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Investigations */}
+      {hasData(reportData.investigations) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Investigations</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.investigations.laboratory_tests) && (
+              <p><strong>Laboratory Tests:</strong> {reportData.investigations.laboratory_tests}</p>
+            )}
+            {shouldDisplay(reportData.investigations.imaging) && (
+              <p><strong>Imaging:</strong> {reportData.investigations.imaging}</p>
+            )}
+            {shouldDisplay(reportData.investigations.endoscopy) && (
+              <p><strong>Endoscopy:</strong> {reportData.investigations.endoscopy}</p>
+            )}
+            {shouldDisplay(reportData.investigations.other_specialized_tests) && (
+              <p><strong>Other Specialized Tests:</strong> {reportData.investigations.other_specialized_tests}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Diagnosis */}
+      <Section title="Diagnosis" content={formatDiagnosis()} />
+      
+      {/* Management Plan */}
+      {hasData(reportData.management_plan) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Management Plan</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.management_plan.problem_list) && (
+              <p><strong>Problem List / Clinical Impression:</strong> {reportData.management_plan.problem_list}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.conservative_management) && (
+              <p><strong>Conservative Management:</strong> {reportData.management_plan.conservative_management}</p>
+            )}
+            {reportData.management_plan.medications_prescribed && reportData.management_plan.medications_prescribed.length > 0 && (
+              <div>
+                <strong>Medications Prescribed:</strong>
+                <ul className="ml-4 mt-1 list-disc">
+                  {reportData.management_plan.medications_prescribed.map((med, idx) => (
+                    <li key={idx} className="text-sm">
+                      {typeof med === 'object' ? `${med.name || med.med || ''} ${med.dosage || ''} ${med.frequency || ''}`.trim() : med}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {shouldDisplay(reportData.management_plan.procedures_performed_today) && (
+              <p><strong>Procedures Performed Today:</strong> {reportData.management_plan.procedures_performed_today}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.surgical_plan_referrals) && (
+              <p><strong>Surgical Plan / Referrals:</strong> {reportData.management_plan.surgical_plan_referrals}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.pain_management_plan) && (
+              <p><strong>Pain Management Plan:</strong> {reportData.management_plan.pain_management_plan}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.bowel_regimen_plan) && (
+              <p><strong>Bowel Regimen Plan:</strong> {reportData.management_plan.bowel_regimen_plan}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.follow_up_plan) && (
+              <p><strong>Follow-up Plan:</strong> {reportData.management_plan.follow_up_plan}</p>
+            )}
+            {shouldDisplay(reportData.management_plan.follow_up_date) && (
+              <p><strong>Follow-up Date:</strong> {reportData.management_plan.follow_up_date}</p>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Patient Education & Counselling */}
+      {hasData(reportData.patient_education) && (
+        <div className="bg-white p-4 border-l-4 border-[#5ACCC3]/60 shadow-sm">
+          <h3 className="text-md font-bold text-[#5ACCC3] mb-2">Patient Education & Counselling</h3>
+          <div className="text-gray-800 space-y-2">
+            {shouldDisplay(reportData.patient_education.counselling_provided) && (
+              <p><strong>Counselling Provided:</strong> {reportData.patient_education.counselling_provided}</p>
+            )}
+            {shouldDisplay(reportData.patient_education.advice_on_hygiene_lifestyle) && (
+              <p><strong>Advice on Hygiene & Lifestyle:</strong> {reportData.patient_education.advice_on_hygiene_lifestyle}</p>
+            )}
+            {shouldDisplay(reportData.patient_education.warning_signs_explained) && (
+              <p><strong>Warning Signs Explained:</strong> {reportData.patient_education.warning_signs_explained}</p>
+            )}
+            {shouldDisplay(reportData.patient_education.patient_understanding_agreement) && (
+              <p><strong>Patient Understanding & Agreement:</strong> {reportData.patient_education.patient_understanding_agreement}</p>
+            )}
           </div>
         </div>
       )}

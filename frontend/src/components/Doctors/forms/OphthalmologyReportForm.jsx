@@ -1,43 +1,81 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { icdCodesAPI, doctorPatientsAPI, medicationsAPI } from '../../../services/apiService';
 
 // Shared UI primitives (reusing from GeneralVisitReport/CardiologyReportForm)
-const Card = React.memo(({ children, className = "", collapsible = false, isOpen = true, onToggle, title, counter }) => (
-  <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm ${className}`}>
-    {title && (
-      <div 
-        className="p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50"
-        onClick={collapsible ? onToggle : undefined}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-slate-800 font-semibold text-lg">
-            {title}
-            {counter !== undefined && <span className="text-slate-400 ml-2">({counter})</span>}
-          </h3>
-          {collapsible && (
-            <span className="text-slate-400 text-sm">
-              {isOpen ? '▼' : '▶'}
-            </span>
-          )}
+const Card = React.memo(({ children, className = "", collapsible = false, isOpen = true, onToggle, title, counter, subtitle, darkMode = false }) => {
+  const [internalIsOpen, setInternalIsOpen] = useState(isOpen);
+  
+  useEffect(() => {
+    setInternalIsOpen(isOpen);
+  }, [isOpen]);
+  
+  const handleToggle = () => {
+    const newState = !internalIsOpen;
+    setInternalIsOpen(newState);
+    if (onToggle) onToggle();
+  };
+  
+  const displayIsOpen = collapsible ? internalIsOpen : isOpen;
+  
+  return (
+    <div className={`rounded-2xl border shadow-sm ${
+      darkMode 
+        ? 'bg-slate-800 border-slate-700' 
+        : 'bg-white border-slate-100'
+    } ${className}`}>
+      {title && (
+        <div 
+          className={`p-4 border-b ${
+            darkMode ? 'border-slate-700' : 'border-slate-100'
+          } ${collapsible ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50' : ''}`}
+          onClick={collapsible ? handleToggle : undefined}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className={`font-semibold text-lg ${
+                darkMode ? 'text-slate-200' : 'text-slate-800'
+              }`}>
+                {title}
+                {counter !== undefined && <span className={`ml-2 ${
+                  darkMode ? 'text-slate-400' : 'text-slate-400'
+                }`}>({counter})</span>}
+              </h3>
+              {subtitle && (
+                <p className={`text-xs mt-1 ${
+                  darkMode ? 'text-slate-500' : 'text-slate-400'
+                }`}>{subtitle}</p>
+              )}
+            </div>
+            {collapsible && (
+              <span className={`text-sm ${
+                darkMode ? 'text-slate-400' : 'text-slate-400'
+              }`}>
+                {displayIsOpen ? '▼' : '▶'}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-    )}
-    {isOpen && (
-      <div className="p-4">
-        {children}
-      </div>
-    )}
-  </div>
-));
+      )}
+      {displayIsOpen && (
+        <div className="p-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+});
 
-const FieldLabel = React.memo(({ children, required = false }) => (
-  <label className="block text-sm font-medium text-slate-700 mb-2">
+const FieldLabel = React.memo(({ children, required = false, darkMode = false }) => (
+  <label className={`block text-sm font-medium mb-2 ${
+    darkMode ? 'text-slate-300' : 'text-slate-700'
+  }`}>
     {children}
     {required && <span className="text-red-500 ml-1">*</span>}
   </label>
 ));
 
-const Input = React.memo(({ name, placeholder, value, onChange, className = "", type = "text", required = false }) => (
+const Input = React.memo(({ name, placeholder, value, onChange, className = "", type = "text", required = false, darkMode = false }) => (
   <input
     type={type}
     name={name}
@@ -45,28 +83,39 @@ const Input = React.memo(({ name, placeholder, value, onChange, className = "", 
     value={value}
     onChange={onChange}
     required={required}
-    className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${className}`}
+    className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+      darkMode 
+        ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+        : 'text-slate-600 border-slate-200 bg-white'
+    } ${className}`}
   />
 ));
 
-const Select = React.memo(({ name, value, onChange, options, className = "", required = false }) => (
-  <select
-    name={name}
-    value={value}
-    onChange={onChange}
-    required={required}
-    className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${className}`}
-  >
-    <option value="">Select...</option>
-    {options.map(option => (
-      <option key={option.value} value={option.value}>
-        {option.label}
-      </option>
-    ))}
-  </select>
-));
+const Select = React.memo(({ name, value, onChange, options, className = "", required = false, darkMode = false }) => {
+  const { t } = useTranslation();
+  return (
+    <select
+      name={name}
+      value={value}
+      onChange={onChange}
+      required={required}
+      className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+        darkMode 
+          ? 'bg-slate-700 border-slate-600 text-slate-200' 
+          : 'text-slate-600 border-slate-200 bg-white'
+      } ${className}`}
+    >
+      <option value="" className={darkMode ? 'bg-slate-800' : ''}>{t('ophthalmologyReport.select')}</option>
+      {options.map(option => (
+        <option key={option.value} value={option.value} className={darkMode ? 'bg-slate-800' : ''}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
+});
 
-const TextArea = React.memo(({ name, placeholder, value, onChange, className = "", rows = 3, required = false }) => (
+const TextArea = React.memo(({ name, placeholder, value, onChange, className = "", rows = 3, required = false, darkMode = false }) => (
   <textarea
     name={name}
     placeholder={placeholder}
@@ -74,12 +123,16 @@ const TextArea = React.memo(({ name, placeholder, value, onChange, className = "
     onChange={onChange}
     rows={rows}
     required={required}
-    className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-vertical ${className}`}
+    className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-vertical ${
+      darkMode 
+        ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+        : 'text-slate-600 border-slate-200 bg-white'
+    } ${className}`}
   />
 ));
 
 // ICD Code Search Component
-const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search ICD code or description..." }) => {
+const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search ICD code or description...", darkMode = false }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -173,7 +226,11 @@ const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search I
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           onKeyDown={handleKeyDown}
-          className="w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+            darkMode 
+              ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+              : 'text-slate-600 border-slate-200 bg-white'
+          }`}
         />
         {isSearching && (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -181,19 +238,33 @@ const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search I
           </div>
         )}
         {showResults && searchResults.length > 0 && (
-          <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+          <div className={`absolute z-50 w-full mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto ${
+            darkMode 
+              ? 'bg-slate-800 border-slate-700' 
+              : 'bg-white border-slate-200'
+          }`}>
             {searchResults.map((result, idx) => (
               <div
                 key={idx}
                 onClick={() => handleSelect(result)}
-                className={`px-4 py-3 cursor-pointer hover:bg-slate-50 ${
-                  idx === selectedIndex ? 'bg-slate-100' : ''
+                className={`px-4 py-3 cursor-pointer ${
+                  darkMode
+                    ? idx === selectedIndex 
+                      ? 'bg-emerald-900/50' 
+                      : 'hover:bg-slate-700'
+                    : idx === selectedIndex 
+                      ? 'bg-slate-100' 
+                      : 'hover:bg-slate-50'
                 }`}
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="font-medium text-slate-800">{result.code}</div>
-                    <div className="text-sm text-slate-600 mt-1">
+                    <div className={`font-medium ${
+                      darkMode ? 'text-emerald-400' : 'text-slate-800'
+                    }`}>{result.code}</div>
+                    <div className={`text-sm mt-1 ${
+                      darkMode ? 'text-slate-300' : 'text-slate-600'
+                    }`}>
                       {result.description_en || result.description_ru || result.description_uz || result.description || result.name || ''}
                     </div>
                   </div>
@@ -208,7 +279,7 @@ const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search I
 };
 
 // Medication Search Component
-const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Search medication..." }) => {
+const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Search medication...", darkMode = false }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -316,7 +387,11 @@ const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Searc
           onFocus={() => searchQuery.trim().length >= 2 && setShowResults(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+            darkMode 
+              ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+              : 'text-slate-600 border-slate-200 bg-white'
+          }`}
         />
         {isSearching && (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -326,33 +401,51 @@ const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Searc
       </div>
       
       {showResults && searchResults.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className={`absolute z-50 w-full mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto ${
+          darkMode 
+            ? 'bg-slate-800 border-slate-700' 
+            : 'bg-white border-slate-200'
+        }`}>
           {searchResults.map((result, index) => (
             <button
               key={result.id || index}
               type="button"
               onClick={() => handleSelect(result)}
-              className={`w-full text-left px-4 py-2 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none ${
-                index === selectedIndex ? 'bg-emerald-50' : ''
+              className={`w-full text-left px-4 py-2 focus:outline-none ${
+                darkMode
+                  ? index === selectedIndex 
+                    ? 'bg-emerald-900/50' 
+                    : 'hover:bg-slate-700'
+                  : index === selectedIndex 
+                    ? 'bg-emerald-50' 
+                    : 'hover:bg-emerald-50'
               }`}
             >
               <div className="flex items-start gap-2">
-                <span className="font-medium text-sm text-emerald-700 flex-1">
+                <span className={`font-medium text-sm flex-1 ${
+                  darkMode ? 'text-emerald-400' : 'text-emerald-700'
+                }`}>
                   {result.brand_name || result.name || 'Unknown'}
                 </span>
                 {result.strength && (
-                  <span className="text-xs text-slate-500">
+                  <span className={`text-xs ${
+                    darkMode ? 'text-slate-400' : 'text-slate-500'
+                  }`}>
                     {result.strength} {result.strength_unit?.name || ''}
                   </span>
                 )}
               </div>
               {result.mnn?.name && (
-                <div className="text-xs text-slate-500 mt-1">
+                <div className={`text-xs mt-1 ${
+                  darkMode ? 'text-slate-400' : 'text-slate-500'
+                }`}>
                   MNN: {result.mnn.name}
                 </div>
               )}
               {result.dosage_form?.name && (
-                <div className="text-xs text-slate-500">
+                <div className={`text-xs ${
+                  darkMode ? 'text-slate-400' : 'text-slate-500'
+                }`}>
                   Form: {result.dosage_form.name}
                 </div>
               )}
@@ -364,14 +457,18 @@ const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Searc
   );
 };
 
-const Chip = React.memo(({ children, onRemove, onEdit, className = "" }) => (
-  <div className={`inline-flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm ${className}`}>
+const Chip = React.memo(({ children, onRemove, onEdit, className = "", darkMode = false }) => (
+  <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+    darkMode 
+      ? 'bg-slate-700 text-slate-300' 
+      : 'bg-slate-100 text-slate-700'
+  } ${className}`}>
     <span>{children}</span>
     {onEdit && (
       <button
         type="button"
         onClick={onEdit}
-        className="text-slate-500 hover:text-slate-700"
+        className={darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}
         aria-label="Edit"
       >
         ✎
@@ -381,7 +478,7 @@ const Chip = React.memo(({ children, onRemove, onEdit, className = "" }) => (
       <button
         type="button"
         onClick={onRemove}
-        className="text-slate-500 hover:text-red-600"
+        className={darkMode ? 'text-slate-400 hover:text-red-400' : 'text-slate-500 hover:text-red-600'}
         aria-label="Remove"
       >
         ×
@@ -413,33 +510,80 @@ const DIAGNOSIS_CODE_PRESETS = [
 const clone = (o) => (typeof structuredClone === 'function' ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 
 const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
+  const { t } = useTranslation();
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Sync theme on mount and when darkMode changes
+  useEffect(() => {
+    const syncTheme = () => {
+      const saved = localStorage.getItem('theme');
+      const root = document.documentElement;
+
+      if (saved === 'dark') {
+        root.classList.add('dark');
+        setDarkMode(true);
+      } else {
+        root.classList.remove('dark');
+        setDarkMode(false);
+      }
+    };
+
+    syncTheme(); // Sync on mount
+
+    const handleStorageChange = (e) => {
+      if (e.key === 'theme') {
+        syncTheme();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    const handleThemeChange = () => syncTheme();
+    window.addEventListener('themechange', handleThemeChange);
+
+    const interval = setInterval(syncTheme, 100); // Periodically check for same-tab changes
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('themechange', handleThemeChange);
+      clearInterval(interval);
+    };
+  }, []);
+
   // Mode state
   const [mode, setMode] = useState('initial');
   
   // Collapsible sections state
+  // Core sections (open by default): hpi, acuity, iop, anterior, posterior, diagnosis, plan
+  // Advanced sections (collapsed by default): external, refraction, pupils, motility, alignment, color, vf, dilation, gonio, tests, imagingStudies, procedures, outcome, attachments
   const [collapsedSections, setCollapsedSections] = useState({
     meta: false,
-    hpi: false,
-    external: false,
-    acuity: false,
-    refraction: false,
-    pupils: false,
-    motility: false,
-    alignment: false,
-    color: false,
-    vf: false,
-    iop: false,
-    dilation: false,
-    gonio: false,
-    anterior: false,
-    posterior: false,
-    tests: false,
-    imagingStudies: false,
-    diagnosis: false,
-    plan: false,
-    procedures: false,
-    outcome: false,
-    attachments: false
+    hpi: false, // Core - open
+    external: true, // Advanced - collapsed
+    acuity: false, // Core - open
+    refraction: true, // Advanced - collapsed
+    pupils: true, // Advanced - collapsed
+    motility: true, // Advanced - collapsed
+    alignment: true, // Advanced - collapsed
+    color: true, // Advanced - collapsed
+    vf: true, // Advanced - collapsed
+    iop: false, // Core - open
+    dilation: true, // Advanced - collapsed
+    gonio: true, // Advanced - collapsed
+    anterior: false, // Core - open
+    posterior: false, // Core - open
+    tests: true, // Advanced - collapsed
+    imagingStudies: true, // Advanced - collapsed
+    diagnosis: false, // Core - open
+    plan: false, // Core - open
+    procedures: true, // Advanced - collapsed
+    outcome: true, // Advanced - collapsed (discharge mode only)
+    attachments: true // Advanced - collapsed
   });
 
   // Form data state
@@ -1109,7 +1253,9 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className={`max-w-6xl mx-auto p-6 space-y-6 min-h-screen ${
+      darkMode ? 'bg-slate-900' : 'bg-slate-50'
+    }`}>
       {/* Autosave Toast */}
       {showSaveToast && (
         <div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
@@ -1118,59 +1264,34 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
       )}
 
       {/* Header */}
-      <Card title="Ophthalmology Report" className="mb-6">
+      <Card title={t('ophthalmologyReport.title') || 'Ophthalmology Report'} className="mb-6" darkMode={darkMode}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <FieldLabel>Mode</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.mode')}</FieldLabel>
             <Select
               name="mode"
               value={mode}
               onChange={(e) => handleModeChange(e.target.value)}
               options={[
-                { value: 'initial', label: 'Initial Assessment' },
-                { value: 'discharge', label: 'Discharge Summary' }
+                { value: 'initial', label: t('ophthalmologyReport.initialAssessment') },
+                { value: 'discharge', label: t('ophthalmologyReport.dischargeSummary') }
               ]}
+              darkMode={darkMode}
             />
-          </div>
-          <div>
-            <FieldLabel>Patient</FieldLabel>
-            <div className="text-slate-600">
-              {patient ? `${patient.first_name} ${patient.last_name}` : 'John Doe'} 
-              {patient && ` (${patient.age || 'N/A'} years, ${patient.gender || 'N/A'})`}
-            </div>
-          </div>
-          <div>
-            <FieldLabel>Clinic</FieldLabel>
-            <div className="text-slate-600">Ophthalmology Department</div>
-          </div>
-          <div>
-            <FieldLabel>Physician</FieldLabel>
-            <div className="text-slate-600">Dr. Smith</div>
-          </div>
-          <div>
-            <FieldLabel>Encounter</FieldLabel>
-            <div className="text-slate-600">
-              {formData.meta.encounter_id} - {new Date(formData.meta.datetime).toLocaleString()}
-            </div>
-          </div>
-          <div>
-            <FieldLabel>Last Saved</FieldLabel>
-            <div className="text-slate-600">
-              {lastSaved ? lastSaved.toLocaleTimeString() : 'Not saved yet'}
-            </div>
           </div>
         </div>
       </Card>
 
       {/* Chief Complaint */}
-      <Card title="Chief Complaint">
-        <FieldLabel required>Chief Complaint</FieldLabel>
+      <Card title={t('ophthalmologyReport.chiefComplaint')} darkMode={darkMode}>
+        <FieldLabel required darkMode={darkMode}>{t('ophthalmologyReport.chiefComplaint')}</FieldLabel>
         <Input
           name="chief_complaint"
-          placeholder="Primary reason for visit..."
+          placeholder={t('ophthalmologyReport.chiefComplaintPlaceholder')}
           value={formData.chief_complaint}
           onChange={(e) => updateFormData('chief_complaint', e.target.value)}
           required
+          darkMode={darkMode}
         />
         {errors.chief_complaint && (
           <p className="text-red-500 text-sm mt-1">{errors.chief_complaint}</p>
@@ -1179,61 +1300,77 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* History of Present Illness */}
       <Card 
-        title="History of Present Illness" 
+        title={t('ophthalmologyReport.historyOfPresentIllness')} 
         collapsible 
         isOpen={!collapsedSections.hpi}
         onToggle={() => toggleSection('hpi')}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel>HPI Description</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.hpiDescription')}</FieldLabel>
             <div className="flex gap-2">
               <TextArea
                 name="hpi_description"
-                placeholder="Detailed history of present illness..."
+                placeholder={t('ophthalmologyReport.hpiDescriptionPlaceholder')}
                 value={formData.hpi.description}
                 onChange={(e) => updateFormData('hpi.description', e.target.value)}
                 rows={4}
+                darkMode={darkMode}
               />
               <button
                 type="button"
                 disabled={!formData.chief_complaint.trim()}
-                className="px-3 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`px-3 py-2 rounded-lg text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode 
+                    ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
-                🧠 AI Suggest
+                {t('ophthalmologyReport.aiSuggest')}
               </button>
             </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Ocular History</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.ocularHistory')}</FieldLabel>
               <TextArea
                 name="ocular_history"
-                placeholder="Surgeries, trauma, glaucoma, AMD, DR, etc."
+                placeholder={t('ophthalmologyReport.ocularHistoryPlaceholder')}
                 value={formData.hpi.ocular_history}
                 onChange={(e) => updateFormData('hpi.ocular_history', e.target.value)}
                 rows={3}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Systemic History</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.systemicHistory')}</FieldLabel>
               <TextArea
                 name="systemic_history"
-                placeholder="DM, HTN, thyroid, etc."
+                placeholder={t('ophthalmologyReport.systemicHistoryPlaceholder')}
                 value={formData.hpi.systemic_history}
                 onChange={(e) => updateFormData('hpi.systemic_history', e.target.value)}
                 rows={3}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Medications</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.medications')}</FieldLabel>
               {patientMedications.length > 0 && (
-                <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-                  <div className="text-xs font-semibold text-blue-800 mb-1">From Patient Record:</div>
+                <div className={`mb-2 p-2 border rounded-lg ${
+                  darkMode 
+                    ? 'bg-blue-900/30 border-blue-700' 
+                    : 'bg-blue-50 border-blue-200'
+                }`}>
+                  <div className={`text-xs font-semibold mb-1 ${
+                    darkMode ? 'text-blue-300' : 'text-blue-800'
+                  }`}>{t('ophthalmologyReport.fromPatientRecord')}</div>
                   <div className="space-y-1">
                     {patientMedications.map((med, idx) => (
-                      <div key={idx} className="text-xs text-blue-700">
+                      <div key={idx} className={`text-xs ${
+                        darkMode ? 'text-blue-300' : 'text-blue-700'
+                      }`}>
                         • {med.medication_name} {med.dosage} {med.frequency} {med.route || ''}
                       </div>
                     ))}
@@ -1246,28 +1383,41 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                       ).join(', ');
                       updateFormData('hpi.meds', medsText);
                     }}
-                    className="mt-1 text-xs text-blue-600 hover:text-blue-800 underline"
+                    className={`mt-1 text-xs underline ${
+                      darkMode 
+                        ? 'text-blue-400 hover:text-blue-300' 
+                        : 'text-blue-600 hover:text-blue-800'
+                    }`}
                   >
-                    Copy to form
+                    {t('ophthalmologyReport.copyToForm')}
                   </button>
                 </div>
               )}
               <TextArea
                 name="meds"
-                placeholder="Including ocular medications..."
+                placeholder={t('ophthalmologyReport.medicationsPlaceholder')}
                 value={formData.hpi.meds}
                 onChange={(e) => updateFormData('hpi.meds', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Allergies</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.allergies')}</FieldLabel>
               {patientAllergies.length > 0 && (
-                <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded-lg">
-                  <div className="text-xs font-semibold text-amber-800 mb-1">From Patient Record:</div>
+                <div className={`mb-2 p-2 border rounded-lg ${
+                  darkMode 
+                    ? 'bg-amber-900/30 border-amber-700' 
+                    : 'bg-amber-50 border-amber-200'
+                }`}>
+                  <div className={`text-xs font-semibold mb-1 ${
+                    darkMode ? 'text-amber-300' : 'text-amber-800'
+                  }`}>{t('ophthalmologyReport.fromPatientRecord')}</div>
                   <div className="space-y-1">
                     {patientAllergies.map((allergy, idx) => (
-                      <div key={idx} className="text-xs text-amber-700">
+                      <div key={idx} className={`text-xs ${
+                        darkMode ? 'text-amber-300' : 'text-amber-700'
+                      }`}>
                         • {allergy.display_name}
                         {allergy.criticality && ` (${allergy.criticality})`}
                       </div>
@@ -1279,18 +1429,23 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                       const allergiesText = patientAllergies.map(a => a.display_name).join(', ');
                       updateFormData('hpi.allergies', allergiesText);
                     }}
-                    className="mt-1 text-xs text-amber-600 hover:text-amber-800 underline"
+                    className={`mt-1 text-xs underline ${
+                      darkMode 
+                        ? 'text-amber-400 hover:text-amber-300' 
+                        : 'text-amber-600 hover:text-amber-800'
+                    }`}
                   >
-                    Copy to form
+                    {t('ophthalmologyReport.copyToForm')}
                   </button>
                 </div>
               )}
               <TextArea
                 name="allergies"
-                placeholder="Drug + preservative intolerance..."
+                placeholder={t('ophthalmologyReport.allergiesPlaceholder')}
                 value={formData.hpi.allergies}
                 onChange={(e) => updateFormData('hpi.allergies', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
           </div>
@@ -1299,46 +1454,51 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* External / Adnexa */}
       <Card 
-        title="External / Adnexa" 
+        title={t('ophthalmologyReport.externalAdnexa')} 
         collapsible 
         isOpen={!collapsedSections.external}
         onToggle={() => toggleSection('external')}
+        darkMode={darkMode}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <FieldLabel>Eyebrows</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.eyebrows')}</FieldLabel>
             <Input
               name="eyebrows"
-              placeholder="Eyebrows examination..."
+              placeholder={t('ophthalmologyReport.eyebrowsPlaceholder')}
               value={formData.external.eyebrows}
               onChange={(e) => updateFormData('external.eyebrows', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Lids / Lashes</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.lidsLashes')}</FieldLabel>
             <Input
               name="lids_lashes"
-              placeholder="Lids and lashes..."
+              placeholder={t('ophthalmologyReport.lidsLashesPlaceholder')}
               value={formData.external.lids_lashes}
               onChange={(e) => updateFormData('external.lids_lashes', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Lacrimal</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.lacrimal')}</FieldLabel>
             <Input
               name="lacrimal"
-              placeholder="Lacrimal system..."
+              placeholder={t('ophthalmologyReport.lacrimalPlaceholder')}
               value={formData.external.lacrimal}
               onChange={(e) => updateFormData('external.lacrimal', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Orbit</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.orbit')}</FieldLabel>
             <Input
               name="orbit"
-              placeholder="Orbital examination..."
+              placeholder={t('ophthalmologyReport.orbitPlaceholder')}
               value={formData.external.orbit}
               onChange={(e) => updateFormData('external.orbit', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
         </div>
@@ -1346,87 +1506,93 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Visual Acuity */}
       <Card 
-        title="Visual Acuity" 
+        title={t('ophthalmologyReport.visualAcuity')} 
         collapsible 
         isOpen={!collapsedSections.acuity}
         onToggle={() => toggleSection('acuity')}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel>Distance Vision (SC)</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.distanceVisionSC')}</FieldLabel>
             <div className="grid grid-cols-3 gap-4">
               {['OD', 'OS', 'OU'].map(eye => (
                 <div key={eye}>
-                  <FieldLabel>{eye}</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t(`ophthalmologyReport.${eye.toLowerCase()}`)}</FieldLabel>
                   <Select
                     name={`acuity_distance_sc_${eye}`}
                     value={formData.acuity.distance.sc[eye]}
                     onChange={(e) => updateFormData(`acuity.distance.sc.${eye}`, e.target.value)}
                     options={VA_PRESETS.map(va => ({ value: va, label: va }))}
+                    darkMode={darkMode}
                   />
                 </div>
               ))}
             </div>
           </div>
           <div>
-            <FieldLabel>Distance Vision (CC)</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.distanceVisionCC')}</FieldLabel>
             <div className="grid grid-cols-3 gap-4">
               {['OD', 'OS', 'OU'].map(eye => (
                 <div key={eye}>
-                  <FieldLabel>{eye}</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t(`ophthalmologyReport.${eye.toLowerCase()}`)}</FieldLabel>
                   <Select
                     name={`acuity_distance_cc_${eye}`}
                     value={formData.acuity.distance.cc[eye]}
                     onChange={(e) => updateFormData(`acuity.distance.cc.${eye}`, e.target.value)}
                     options={VA_PRESETS.map(va => ({ value: va, label: va }))}
+                    darkMode={darkMode}
                   />
                 </div>
               ))}
             </div>
           </div>
           <div>
-            <FieldLabel>Near Vision (SC, Jaeger)</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.nearVisionSC')}</FieldLabel>
             <div className="grid grid-cols-3 gap-4">
               {['OD', 'OS', 'OU'].map(eye => (
                 <div key={eye}>
-                  <FieldLabel>{eye}</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t(`ophthalmologyReport.${eye.toLowerCase()}`)}</FieldLabel>
                   <Select
                     name={`acuity_near_sc_${eye}`}
                     value={formData.acuity.near.sc[eye]}
                     onChange={(e) => updateFormData(`acuity.near.sc.${eye}`, e.target.value)}
                     options={NEAR_PRESETS.map(n => ({ value: n, label: n }))}
+                    darkMode={darkMode}
                   />
                 </div>
               ))}
             </div>
           </div>
           <div>
-            <FieldLabel>Near Vision (CC, Jaeger)</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.nearVisionCC')}</FieldLabel>
             <div className="grid grid-cols-3 gap-4">
               {['OD', 'OS', 'OU'].map(eye => (
                 <div key={eye}>
-                  <FieldLabel>{eye}</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t(`ophthalmologyReport.${eye.toLowerCase()}`)}</FieldLabel>
                   <Select
                     name={`acuity_near_cc_${eye}`}
                     value={formData.acuity.near.cc[eye]}
                     onChange={(e) => updateFormData(`acuity.near.cc.${eye}`, e.target.value)}
                     options={NEAR_PRESETS.map(n => ({ value: n, label: n }))}
+                    darkMode={darkMode}
                   />
                 </div>
               ))}
             </div>
           </div>
           <div>
-            <FieldLabel>Pinhole</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.pinhole')}</FieldLabel>
             <div className="grid grid-cols-2 gap-4">
               {['OD', 'OS'].map(eye => (
                 <div key={eye}>
-                  <FieldLabel>{eye}</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t(`ophthalmologyReport.${eye.toLowerCase()}`)}</FieldLabel>
                   <Select
                     name={`acuity_pinhole_${eye}`}
                     value={formData.acuity.pinhole[eye]}
                     onChange={(e) => updateFormData(`acuity.pinhole.${eye}`, e.target.value)}
                     options={VA_PRESETS.map(va => ({ value: va, label: va }))}
+                    darkMode={darkMode}
                   />
                 </div>
               ))}
@@ -1437,10 +1603,11 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Refraction */}
       <Card 
-        title="Refraction" 
+        title={t('ophthalmologyReport.refraction')} 
         collapsible 
         isOpen={!collapsedSections.refraction}
         onToggle={() => toggleSection('refraction')}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -1450,50 +1617,56 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
               onChange={(e) => updateFormData('refraction.cycloplegic', e.target.checked)}
               className="w-4 h-4 rounded"
             />
-            <label className="text-sm text-slate-600">Cycloplegic</label>
+            <label className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('ophthalmologyReport.cycloplegic')}</label>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {['OD', 'OS'].map(eye => (
-              <div key={eye} className="border border-slate-200 rounded-lg p-4">
-                <FieldLabel>{eye}</FieldLabel>
+              <div key={eye} className={`border rounded-lg p-4 ${
+                darkMode ? 'border-slate-700' : 'border-slate-200'
+              }`}>
+                <FieldLabel darkMode={darkMode}>{t(`ophthalmologyReport.${eye.toLowerCase()}`)}</FieldLabel>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <FieldLabel>Sphere</FieldLabel>
+                    <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.sphere')}</FieldLabel>
                     <Input
                       name={`refraction_${eye.toLowerCase()}_sphere`}
                       placeholder="±XX.XX"
                       value={formData.refraction[eye.toLowerCase()].sphere}
                       onChange={(e) => updateFormData(`refraction.${eye.toLowerCase()}.sphere`, e.target.value)}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div>
-                    <FieldLabel>Cylinder</FieldLabel>
+                    <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.cylinder')}</FieldLabel>
                     <Input
                       name={`refraction_${eye.toLowerCase()}_cylinder`}
                       placeholder="±XX.XX"
                       value={formData.refraction[eye.toLowerCase()].cylinder}
                       onChange={(e) => updateFormData(`refraction.${eye.toLowerCase()}.cylinder`, e.target.value)}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div>
-                    <FieldLabel>Axis</FieldLabel>
+                    <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.axis')}</FieldLabel>
                     <Input
                       name={`refraction_${eye.toLowerCase()}_axis`}
                       placeholder="0-180"
                       value={formData.refraction[eye.toLowerCase()].axis}
                       onChange={(e) => updateFormData(`refraction.${eye.toLowerCase()}.axis`, e.target.value)}
+                      darkMode={darkMode}
                     />
                     {errors[`axis_${eye.toLowerCase()}`] && (
                       <p className="text-red-500 text-sm mt-1">{errors[`axis_${eye.toLowerCase()}`]}</p>
                     )}
                   </div>
                   <div>
-                    <FieldLabel>Add</FieldLabel>
+                    <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.add')}</FieldLabel>
                     <Input
                       name={`refraction_${eye.toLowerCase()}_add`}
                       placeholder="+X.XX"
                       value={formData.refraction[eye.toLowerCase()].add}
                       onChange={(e) => updateFormData(`refraction.${eye.toLowerCase()}.add`, e.target.value)}
+                      darkMode={darkMode}
                     />
                   </div>
                 </div>
@@ -1502,30 +1675,33 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>Final Rx OD</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.finalRxOD')}</FieldLabel>
               <Input
                 name="final_rx_od"
-                placeholder="Final prescription OD"
+                placeholder={t('ophthalmologyReport.finalPrescriptionOD')}
                 value={formData.refraction.final_rx.od}
                 onChange={(e) => updateFormData('refraction.final_rx.od', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Final Rx OS</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.finalRxOS')}</FieldLabel>
               <Input
                 name="final_rx_os"
-                placeholder="Final prescription OS"
+                placeholder={t('ophthalmologyReport.finalPrescriptionOS')}
                 value={formData.refraction.final_rx.os}
                 onChange={(e) => updateFormData('refraction.final_rx.os', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>PD</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.pd')}</FieldLabel>
               <Input
                 name="final_rx_pd"
-                placeholder="Pupillary distance"
+                placeholder={t('ophthalmologyReport.pupillaryDistance')}
                 value={formData.refraction.final_rx.pd}
                 onChange={(e) => updateFormData('refraction.final_rx.pd', e.target.value)}
+                darkMode={darkMode}
               />
               {errors.pd && (
                 <p className="text-red-500 text-sm mt-1">{errors.pd}</p>
@@ -1537,32 +1713,37 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Pupils */}
       <Card 
-        title="Pupils" 
+        title={t('ophthalmologyReport.pupils')} 
         collapsible 
         isOpen={!collapsedSections.pupils}
         onToggle={() => toggleSection('pupils')}
+        darkMode={darkMode}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {['OD', 'OS'].map(eye => (
-            <div key={eye} className="border border-slate-200 rounded-lg p-4">
-              <FieldLabel>{eye}</FieldLabel>
+            <div key={eye} className={`border rounded-lg p-4 ${
+              darkMode ? 'border-slate-700' : 'border-slate-200'
+            }`}>
+              <FieldLabel darkMode={darkMode}>{t(`ophthalmologyReport.${eye.toLowerCase()}`)}</FieldLabel>
               <div className="space-y-4">
                 <div>
-                  <FieldLabel>Size (mm)</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.sizeMM')}</FieldLabel>
                   <Input
                     name={`pupils_${eye.toLowerCase()}_size`}
                     placeholder="XX mm"
                     value={formData.pupils[eye.toLowerCase()].size_mm}
                     onChange={(e) => updateFormData(`pupils.${eye.toLowerCase()}.size_mm`, e.target.value)}
+                    darkMode={darkMode}
                   />
                 </div>
                 <div>
-                  <FieldLabel>Reaction</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.reaction')}</FieldLabel>
                   <Input
                     name={`pupils_${eye.toLowerCase()}_reaction`}
                     placeholder="PERRLA, sluggish, etc."
                     value={formData.pupils[eye.toLowerCase()].reaction}
                     onChange={(e) => updateFormData(`pupils.${eye.toLowerCase()}.reaction`, e.target.value)}
+                    darkMode={darkMode}
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -1572,7 +1753,7 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                     onChange={(e) => updateFormData(`pupils.${eye.toLowerCase()}.rapd`, e.target.checked)}
                     className="w-4 h-4 rounded"
                   />
-                  <label className="text-sm text-slate-600">RAPD</label>
+                  <label className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('ophthalmologyReport.rapd')}</label>
                 </div>
                 <div className="flex items-center gap-2">
                   <input
@@ -1581,7 +1762,7 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                     onChange={(e) => updateFormData(`pupils.${eye.toLowerCase()}.irregular`, e.target.checked)}
                     className="w-4 h-4 rounded"
                   />
-                  <label className="text-sm text-slate-600">Irregular</label>
+                  <label className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('ophthalmologyReport.irregular')}</label>
                 </div>
               </div>
             </div>
@@ -1591,40 +1772,44 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Motility */}
       <Card 
-        title="Motility" 
+        title={t('ophthalmologyReport.motility')} 
         collapsible 
         isOpen={!collapsedSections.motility}
         onToggle={() => toggleSection('motility')}
+        darkMode={darkMode}
       >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <FieldLabel>Versions</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.versions')}</FieldLabel>
             <TextArea
               name="motility_versions"
-              placeholder="Extraocular movements..."
+              placeholder={t('ophthalmologyReport.versionsPlaceholder')}
               value={formData.motility.versions}
               onChange={(e) => updateFormData('motility.versions', e.target.value)}
               rows={3}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Ductions</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.ductions')}</FieldLabel>
             <TextArea
               name="motility_ductions"
-              placeholder="Ductions..."
+              placeholder={t('ophthalmologyReport.ductionsPlaceholder')}
               value={formData.motility.ductions}
               onChange={(e) => updateFormData('motility.ductions', e.target.value)}
               rows={3}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Deviations</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.deviations')}</FieldLabel>
             <TextArea
               name="motility_deviations"
-              placeholder="Strabismus measurements..."
+              placeholder={t('ophthalmologyReport.deviationsPlaceholder')}
               value={formData.motility.deviations}
               onChange={(e) => updateFormData('motility.deviations', e.target.value)}
               rows={3}
+              darkMode={darkMode}
             />
           </div>
         </div>
@@ -1632,55 +1817,62 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Alignment */}
       <Card 
-        title="Alignment (Cover Test)" 
+        title={t('ophthalmologyReport.alignment')} 
         collapsible 
         isOpen={!collapsedSections.alignment}
         onToggle={() => toggleSection('alignment')}
+        darkMode={darkMode}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <FieldLabel>Distance</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.distance')}</FieldLabel>
             <div className="grid grid-cols-3 gap-2">
               <Input
                 name="alignment_distance_type"
-                placeholder="Type (XT/ET/HT)"
+                placeholder={t('ophthalmologyReport.typeXTETHT')}
                 value={formData.alignment.distance.type}
                 onChange={(e) => updateFormData('alignment.distance.type', e.target.value)}
+                darkMode={darkMode}
               />
               <Input
                 name="alignment_distance_prism"
-                placeholder="Prism (Δ)"
+                placeholder={t('ophthalmologyReport.prism')}
                 value={formData.alignment.distance.prism}
                 onChange={(e) => updateFormData('alignment.distance.prism', e.target.value)}
+                darkMode={darkMode}
               />
               <Input
                 name="alignment_distance_axis"
-                placeholder="Axis"
+                placeholder={t('ophthalmologyReport.axis')}
                 value={formData.alignment.distance.axis}
                 onChange={(e) => updateFormData('alignment.distance.axis', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
           <div>
-            <FieldLabel>Near</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.near')}</FieldLabel>
             <div className="grid grid-cols-3 gap-2">
               <Input
                 name="alignment_near_type"
-                placeholder="Type (XT/ET/HT)"
+                placeholder={t('ophthalmologyReport.typeXTETHT')}
                 value={formData.alignment.near.type}
                 onChange={(e) => updateFormData('alignment.near.type', e.target.value)}
+                darkMode={darkMode}
               />
               <Input
                 name="alignment_near_prism"
-                placeholder="Prism (Δ)"
+                placeholder={t('ophthalmologyReport.prism')}
                 value={formData.alignment.near.prism}
                 onChange={(e) => updateFormData('alignment.near.prism', e.target.value)}
+                darkMode={darkMode}
               />
               <Input
                 name="alignment_near_axis"
-                placeholder="Axis"
+                placeholder={t('ophthalmologyReport.axis')}
                 value={formData.alignment.near.axis}
                 onChange={(e) => updateFormData('alignment.near.axis', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
@@ -1689,10 +1881,11 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Color Vision */}
       <Card 
-        title="Color Vision" 
+        title={t('ophthalmologyReport.colorVision')} 
         collapsible 
         isOpen={!collapsedSections.color}
         onToggle={() => toggleSection('color')}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -1702,26 +1895,32 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
               onChange={(e) => updateFormData('color_vision.not_tested', e.target.checked)}
               className="w-4 h-4 rounded"
             />
-            <label className="text-sm text-slate-600">Not Tested</label>
+            <label className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('ophthalmologyReport.notTested')}</label>
           </div>
           {!formData.color_vision.not_tested && (
             <>
               <div>
-                <FieldLabel>Method</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.method')}</FieldLabel>
                 <Select
                   name="color_vision_method"
                   value={formData.color_vision.method}
                   onChange={(e) => updateFormData('color_vision.method', e.target.value)}
-                  options={COLOR_VISION_METHODS.map(m => ({ value: m, label: m }))}
+                  options={[
+                    { value: 'Ishihara', label: t('ophthalmologyReport.ishihara') },
+                    { value: 'D-15', label: t('ophthalmologyReport.d15') },
+                    { value: 'Other', label: t('ophthalmologyReport.other') }
+                  ]}
+                  darkMode={darkMode}
                 />
               </div>
               <div>
-                <FieldLabel>Result</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.result')}</FieldLabel>
                 <Input
                   name="color_vision_result"
-                  placeholder="Test results..."
+                  placeholder={t('ophthalmologyReport.testResults')}
                   value={formData.color_vision.result}
                   onChange={(e) => updateFormData('color_vision.result', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
             </>
@@ -1731,71 +1930,84 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Confrontation Fields */}
       <Card 
-        title="Confrontation Fields" 
+        title={t('ophthalmologyReport.confrontationFields')} 
         collapsible 
         isOpen={!collapsedSections.vf}
         onToggle={() => toggleSection('vf')}
+        darkMode={darkMode}
       >
-        <FieldLabel>Summary</FieldLabel>
+        <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.summary')}</FieldLabel>
         <TextArea
           name="confrontation_fields"
-          placeholder="Full / defect description..."
+          placeholder={t('ophthalmologyReport.fullDefectDescription')}
           value={formData.confrontation_fields.summary}
           onChange={(e) => updateFormData('confrontation_fields.summary', e.target.value)}
           rows={3}
+          darkMode={darkMode}
         />
       </Card>
 
       {/* IOP */}
       <Card 
-        title="Intraocular Pressure (IOP)" 
+        title={t('ophthalmologyReport.intraocularPressure')} 
         collapsible 
         isOpen={!collapsedSections.iop}
         onToggle={() => toggleSection('iop')}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>Method</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.iopMethod')}</FieldLabel>
               <Select
                 name="iop_method"
                 value={formData.iop.method}
                 onChange={(e) => updateFormData('iop.method', e.target.value)}
-                options={IOP_METHODS.map(m => ({ value: m, label: m }))}
+                options={[
+                  { value: 'NCT', label: t('ophthalmologyReport.nct') },
+                  { value: 'Applanation', label: t('ophthalmologyReport.applanation') },
+                  { value: 'Tono-Pen', label: t('ophthalmologyReport.tonoPen') },
+                  { value: 'iCare', label: t('ophthalmologyReport.iCare') },
+                  { value: 'Other', label: t('ophthalmologyReport.other') }
+                ]}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Time</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.time')}</FieldLabel>
               <Input
                 name="iop_time"
                 type="time"
                 value={formData.iop.time}
                 onChange={(e) => updateFormData('iop.time', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <FieldLabel>OD (mmHg)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.odMMHG')}</FieldLabel>
               <Input
                 name="iop_od"
                 type="number"
                 placeholder="XX"
                 value={formData.iop.od}
                 onChange={(e) => updateFormData('iop.od', e.target.value)}
+                darkMode={darkMode}
               />
               {errors.iop_od && (
                 <p className="text-red-500 text-sm mt-1">{errors.iop_od}</p>
               )}
             </div>
             <div>
-              <FieldLabel>OS (mmHg)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.osMMHG')}</FieldLabel>
               <Input
                 name="iop_os"
                 type="number"
                 placeholder="XX"
                 value={formData.iop.os}
                 onChange={(e) => updateFormData('iop.os', e.target.value)}
+                darkMode={darkMode}
               />
               {errors.iop_os && (
                 <p className="text-red-500 text-sm mt-1">{errors.iop_os}</p>
@@ -1803,38 +2015,47 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
           </div>
           {shouldSuggestGonio() && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-sm text-amber-800">
-                ⚠️ IOP &gt; 21 mmHg detected. Consider performing gonioscopy.
+            <div className={`border rounded-lg p-3 ${
+              darkMode 
+                ? 'bg-amber-900/30 border-amber-700' 
+                : 'bg-amber-50 border-amber-200'
+            }`}>
+              <p className={`text-sm ${
+                darkMode ? 'text-amber-300' : 'text-amber-800'
+              }`}>
+                {t('ophthalmologyReport.iopWarning')}
               </p>
             </div>
           )}
           {formData.dilation.performed && (
             <div className="grid grid-cols-3 gap-4 mt-2">
               <div>
-                <FieldLabel>Post-dilation Time</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.postDilationTime')}</FieldLabel>
                 <Input
                   type="time"
                   value={formData.iop.post_dilation.time}
                   onChange={(e) => updateFormData('iop.post_dilation.time', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
               <div>
-                <FieldLabel>Post-dilation OD</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.postDilationOD')}</FieldLabel>
                 <Input
                   type="number"
                   placeholder="mmHg"
                   value={formData.iop.post_dilation.od}
                   onChange={(e) => updateFormData('iop.post_dilation.od', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
               <div>
-                <FieldLabel>Post-dilation OS</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.postDilationOS')}</FieldLabel>
                 <Input
                   type="number"
                   placeholder="mmHg"
                   value={formData.iop.post_dilation.os}
                   onChange={(e) => updateFormData('iop.post_dilation.os', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
@@ -1844,10 +2065,11 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Dilation */}
       <Card 
-        title="Dilation" 
+        title={t('ophthalmologyReport.dilation')} 
         collapsible 
         isOpen={!collapsedSections.dilation}
         onToggle={() => toggleSection('dilation')}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -1857,27 +2079,29 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
               onChange={(e) => updateFormData('dilation.performed', e.target.checked)}
               className="w-4 h-4 rounded"
             />
-            <label className="text-sm text-slate-600">Dilation Performed</label>
+            <label className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('ophthalmologyReport.dilationPerformed')}</label>
           </div>
           {formData.dilation.performed && (
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <FieldLabel>Agent</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.agent')}</FieldLabel>
                   <Input
                     name="dilation_agent"
-                    placeholder="e.g., Tropicamide 1%"
+                    placeholder={t('ophthalmologyReport.agentPlaceholder')}
                     value={formData.dilation.agent}
                     onChange={(e) => updateFormData('dilation.agent', e.target.value)}
+                    darkMode={darkMode}
                   />
                 </div>
                 <div>
-                  <FieldLabel>Time</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.time')}</FieldLabel>
                   <Input
                     name="dilation_time"
                     type="time"
                     value={formData.dilation.time}
                     onChange={(e) => updateFormData('dilation.time', e.target.value)}
+                    darkMode={darkMode}
                   />
                 </div>
               </div>
@@ -1888,10 +2112,11 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Gonioscopy */}
       <Card 
-        title="Gonioscopy" 
+        title={t('ophthalmologyReport.gonioscopy')} 
         collapsible 
         isOpen={!collapsedSections.gonio}
         onToggle={() => toggleSection('gonio')}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div className="flex items-center gap-2">
@@ -1901,34 +2126,38 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
               onChange={(e) => updateFormData('gonioscopy.performed', e.target.checked)}
               className="w-4 h-4 rounded"
             />
-            <label className="text-sm text-slate-600">Gonioscopy Performed</label>
+            <label className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('ophthalmologyReport.gonioscopyPerformed')}</label>
           </div>
           {formData.gonioscopy.performed && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {['OD', 'OS'].map(eye => (
-                <div key={eye} className="border border-slate-200 rounded-lg p-4">
-                  <FieldLabel>{eye}</FieldLabel>
+                <div key={eye} className={`border rounded-lg p-4 ${
+                  darkMode ? 'border-slate-700' : 'border-slate-200'
+                }`}>
+                  <FieldLabel darkMode={darkMode}>{t(`ophthalmologyReport.${eye.toLowerCase()}`)}</FieldLabel>
                   <div className="space-y-4">
                     <div>
-                      <FieldLabel required>Shaffer Grade</FieldLabel>
+                      <FieldLabel required darkMode={darkMode}>{t('ophthalmologyReport.shafferGrade')}</FieldLabel>
                       <Select
                         name={`gonio_${eye.toLowerCase()}_shaffer`}
                         value={formData.gonioscopy[eye.toLowerCase()].shaffer}
                         onChange={(e) => updateFormData(`gonioscopy.${eye.toLowerCase()}.shaffer`, e.target.value)}
-                        options={GONIO_SHAFFER.map(g => ({ value: g, label: `Grade ${g}` }))}
+                        options={GONIO_SHAFFER.map(g => ({ value: g, label: `${t('ophthalmologyReport.grade')} ${g}` }))}
                         required
+                        darkMode={darkMode}
                       />
                       {errors[`gonio_${eye.toLowerCase()}_shaffer`] && (
                         <p className="text-red-500 text-sm mt-1">{errors[`gonio_${eye.toLowerCase()}_shaffer`]}</p>
                       )}
                     </div>
                     <div>
-                      <FieldLabel>Pigmentation</FieldLabel>
+                      <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.pigmentation')}</FieldLabel>
                       <Input
                         name={`gonio_${eye.toLowerCase()}_pigmentation`}
-                        placeholder="Pigmentation grade..."
+                        placeholder={t('ophthalmologyReport.pigmentationGrade')}
                         value={formData.gonioscopy[eye.toLowerCase()].pigmentation}
                         onChange={(e) => updateFormData(`gonioscopy.${eye.toLowerCase()}.pigmentation`, e.target.value)}
+                        darkMode={darkMode}
                       />
                     </div>
                     <div className="flex items-center gap-2">
@@ -1938,16 +2167,17 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                         onChange={(e) => updateFormData(`gonioscopy.${eye.toLowerCase()}.pas`, e.target.checked)}
                         className="w-4 h-4 rounded"
                       />
-                      <label className="text-sm text-slate-600">PAS</label>
+                      <label className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('ophthalmologyReport.pas')}</label>
                     </div>
                     <div>
-                      <FieldLabel>Notes</FieldLabel>
+                      <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.notes')}</FieldLabel>
                       <TextArea
                         name={`gonio_${eye.toLowerCase()}_notes`}
-                        placeholder="Additional notes..."
+                        placeholder={t('ophthalmologyReport.additionalNotes')}
                         value={formData.gonioscopy[eye.toLowerCase()].notes}
                         onChange={(e) => updateFormData(`gonioscopy.${eye.toLowerCase()}.notes`, e.target.value)}
                         rows={2}
+                        darkMode={darkMode}
                       />
                     </div>
                   </div>
@@ -1960,70 +2190,77 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Anterior Segment */}
       <Card 
-        title="Anterior Segment (Slit Lamp)" 
+        title={t('ophthalmologyReport.anteriorSegment')} 
         collapsible 
         isOpen={!collapsedSections.anterior}
         onToggle={() => toggleSection('anterior')}
+        darkMode={darkMode}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <FieldLabel>Lids</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.lids')}</FieldLabel>
             <TextArea
               name="anterior_lids"
-              placeholder="Lids examination..."
+              placeholder={t('ophthalmologyReport.lidsExamination')}
               value={formData.anterior.lids}
               onChange={(e) => updateFormData('anterior.lids', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Conjunctiva</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.conjunctiva')}</FieldLabel>
             <TextArea
               name="anterior_conjunctiva"
-              placeholder="Conjunctiva..."
+              placeholder={t('ophthalmologyReport.conjunctiva')}
               value={formData.anterior.conjunctiva}
               onChange={(e) => updateFormData('anterior.conjunctiva', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Cornea</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.cornea')}</FieldLabel>
             <TextArea
               name="anterior_cornea"
-              placeholder="Cornea examination..."
+              placeholder={t('ophthalmologyReport.corneaExamination')}
               value={formData.anterior.cornea}
               onChange={(e) => updateFormData('anterior.cornea', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Anterior Chamber</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.anteriorChamber')}</FieldLabel>
             <TextArea
               name="anterior_chamber"
-              placeholder="AC depth, cells, flare..."
+              placeholder={t('ophthalmologyReport.acDepthCellsFlare')}
               value={formData.anterior.anterior_chamber}
               onChange={(e) => updateFormData('anterior.anterior_chamber', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Iris</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.iris')}</FieldLabel>
             <TextArea
               name="anterior_iris"
-              placeholder="Iris examination..."
+              placeholder={t('ophthalmologyReport.irisExamination')}
               value={formData.anterior.iris}
               onChange={(e) => updateFormData('anterior.iris', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Lens</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.lens')}</FieldLabel>
             <TextArea
               name="anterior_lens"
-              placeholder="Lens clarity, opacities..."
+              placeholder={t('ophthalmologyReport.lensClarityOpacities')}
               value={formData.anterior.lens}
               onChange={(e) => updateFormData('anterior.lens', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
         </div>
@@ -2031,129 +2268,158 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Posterior Segment */}
       <Card 
-        title="Posterior Segment (Fundus)" 
+        title={t('ophthalmologyReport.posteriorSegment')} 
         collapsible 
         isOpen={!collapsedSections.posterior}
         onToggle={() => toggleSection('posterior')}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           {!formData.dilation.performed && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-sm text-amber-800">
-                ⚠️ Note: Examination performed without dilation. Consider dilated fundus examination.
+            <div className={`border rounded-lg p-3 ${
+              darkMode 
+                ? 'bg-amber-900/30 border-amber-700' 
+                : 'bg-amber-50 border-amber-200'
+            }`}>
+              <p className={`text-sm ${
+                darkMode ? 'text-amber-300' : 'text-amber-800'
+              }`}>
+                {t('ophthalmologyReport.dilationNote')}
               </p>
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Vitreous</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.vitreous')}</FieldLabel>
               <TextArea
                 name="posterior_vitreous"
-                placeholder="Vitreous examination..."
+                placeholder={t('ophthalmologyReport.vitreousExamination')}
                 value={formData.posterior.vitreous}
                 onChange={(e) => updateFormData('posterior.vitreous', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Disc</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.disc')}</FieldLabel>
               <TextArea
                 name="posterior_disc"
-                placeholder="Optic disc appearance..."
+                placeholder={t('ophthalmologyReport.opticDiscAppearance')}
                 value={formData.posterior.disc}
                 onChange={(e) => updateFormData('posterior.disc', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>C/D Ratio</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.cdRatio')}</FieldLabel>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <FieldLabel>OD</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.od')}</FieldLabel>
                   <Input
                     name="posterior_cd_ratio_od"
                     placeholder="e.g., 0.3"
                     value={formData.posterior.cd_ratio.OD}
                     onChange={(e) => updateFormData('posterior.cd_ratio.OD', e.target.value)}
+                    darkMode={darkMode}
                   />
                 </div>
                 <div>
-                  <FieldLabel>OS</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.os')}</FieldLabel>
                   <Input
                     name="posterior_cd_ratio_os"
                     placeholder="e.g., 0.3"
                     value={formData.posterior.cd_ratio.OS}
                     onChange={(e) => updateFormData('posterior.cd_ratio.OS', e.target.value)}
+                    darkMode={darkMode}
                   />
                 </div>
               </div>
             </div>
             <div>
-              <FieldLabel>Macula</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.macula')}</FieldLabel>
               <TextArea
                 name="posterior_macula"
-                placeholder="Macula examination..."
+                placeholder={t('ophthalmologyReport.maculaExamination')}
                 value={formData.posterior.macula}
                 onChange={(e) => updateFormData('posterior.macula', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Vessels</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.vessels')}</FieldLabel>
               <TextArea
                 name="posterior_vessels"
-                placeholder="Retinal vessels..."
+                placeholder={t('ophthalmologyReport.retinalVessels')}
                 value={formData.posterior.vessels}
                 onChange={(e) => updateFormData('posterior.vessels', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Periphery</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.periphery')}</FieldLabel>
               <TextArea
                 name="posterior_periphery"
-                placeholder="Peripheral retina..."
+                placeholder={t('ophthalmologyReport.peripheralRetina')}
                 value={formData.posterior.periphery}
                 onChange={(e) => updateFormData('posterior.periphery', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Diabetic Retinopathy Grade</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.diabeticRetinopathyGrade')}</FieldLabel>
               <div className="flex flex-wrap gap-2">
-                {DR_GRADES.map(grade => (
+                {[
+                  { value: 'No DR', label: t('ophthalmologyReport.noDR') },
+                  { value: 'Mild NPDR', label: t('ophthalmologyReport.mildNPDR') },
+                  { value: 'Mod NPDR', label: t('ophthalmologyReport.modNPDR') },
+                  { value: 'Severe NPDR', label: t('ophthalmologyReport.severeNPDR') },
+                  { value: 'PDR', label: t('ophthalmologyReport.pdr') }
+                ].map(grade => (
                   <button
-                    key={grade}
+                    key={grade.value}
                     type="button"
                     className={`px-3 py-1 rounded text-sm ${
-                      formData.posterior.dr_grade === grade
+                      formData.posterior.dr_grade === grade.value
                         ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        : darkMode
+                          ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
-                    onClick={() => updateFormData('posterior.dr_grade', grade)}
+                    onClick={() => updateFormData('posterior.dr_grade', grade.value)}
                   >
-                    {grade}
+                    {grade.label}
                   </button>
                 ))}
               </div>
             </div>
             <div>
-              <FieldLabel>AMD Grade</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.amdGrade')}</FieldLabel>
               <div className="flex flex-wrap gap-2">
-                {AMD_GRADES.map(grade => (
+                {[
+                  { value: 'No AMD', label: t('ophthalmologyReport.noAMD') },
+                  { value: 'Early', label: t('ophthalmologyReport.early') },
+                  { value: 'Intermediate', label: t('ophthalmologyReport.intermediate') },
+                  { value: 'Advanced', label: t('ophthalmologyReport.advanced') }
+                ].map(grade => (
                   <button
-                    key={grade}
+                    key={grade.value}
                     type="button"
                     className={`px-3 py-1 rounded text-sm ${
-                      formData.posterior.amd_grade === grade
+                      formData.posterior.amd_grade === grade.value
                         ? 'bg-emerald-600 text-white'
-                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        : darkMode
+                          ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                     }`}
-                    onClick={() => updateFormData('posterior.amd_grade', grade)}
+                    onClick={() => updateFormData('posterior.amd_grade', grade.value)}
                   >
-                    {grade}
+                    {grade.label}
                   </button>
                 ))}
               </div>
@@ -2164,57 +2430,63 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Imaging & Tests */}
       <Card 
-        title="Imaging & Tests" 
+        title={t('ophthalmologyReport.imagingTests')} 
         collapsible 
         isOpen={!collapsedSections.tests}
         onToggle={() => toggleSection('tests')}
         counter={formData.tests.imaging.length + formData.tests.referenced_docs.length}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel>Test Notes</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.testNotes')}</FieldLabel>
             <TextArea
               name="tests_notes"
-              placeholder="Additional test notes..."
+              placeholder={t('ophthalmologyReport.additionalTestNotes')}
               value={formData.tests.notes}
               onChange={(e) => updateFormData('tests.notes', e.target.value)}
               rows={3}
+              darkMode={darkMode}
             />
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Keratometry</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.keratometry')}</FieldLabel>
               <div className="grid grid-cols-3 gap-2">
                 <Input
                   name="keratometry_k1"
                   placeholder="K1"
                   value={formData.tests.keratometry.k1}
                   onChange={(e) => updateFormData('tests.keratometry.k1', e.target.value)}
+                  darkMode={darkMode}
                 />
                 <Input
                   name="keratometry_k2"
                   placeholder="K2"
                   value={formData.tests.keratometry.k2}
                   onChange={(e) => updateFormData('tests.keratometry.k2', e.target.value)}
+                  darkMode={darkMode}
                 />
                 <Input
                   name="keratometry_axis"
                   placeholder="Axis"
                   value={formData.tests.keratometry.axis}
                   onChange={(e) => updateFormData('tests.keratometry.axis', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
             <div>
-              <FieldLabel>Pachymetry</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.pachymetry')}</FieldLabel>
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Input
                     name="pachymetry_od"
-                    placeholder="CCT OD (μm)"
+                    placeholder={t('ophthalmologyReport.cctOD')}
                     value={formData.tests.pachymetry.cct_od}
                     onChange={(e) => updateFormData('tests.pachymetry.cct_od', e.target.value)}
+                    darkMode={darkMode}
                   />
                   {errors.cct_od && (
                     <p className="text-red-500 text-sm mt-1">{errors.cct_od}</p>
@@ -2223,9 +2495,10 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                 <div>
                   <Input
                     name="pachymetry_os"
-                    placeholder="CCT OS (μm)"
+                    placeholder={t('ophthalmologyReport.cctOS')}
                     value={formData.tests.pachymetry.cct_os}
                     onChange={(e) => updateFormData('tests.pachymetry.cct_os', e.target.value)}
+                    darkMode={darkMode}
                   />
                   {errors.cct_os && (
                     <p className="text-red-500 text-sm mt-1">{errors.cct_os}</p>
@@ -2236,68 +2509,86 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
 
           <div>
-            <FieldLabel>OCT Measurements</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.octMeasurements')}</FieldLabel>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
               <Input
                 name="oct_rnfl_od"
-                placeholder="RNFL OD (μm)"
+                placeholder={t('ophthalmologyReport.rnflOD')}
                 value={formData.tests.oct.rnfl_od}
                 onChange={(e) => updateFormData('tests.oct.rnfl_od', e.target.value)}
+                darkMode={darkMode}
               />
               <Input
                 name="oct_rnfl_os"
-                placeholder="RNFL OS (μm)"
+                placeholder={t('ophthalmologyReport.rnflOS')}
                 value={formData.tests.oct.rnfl_os}
                 onChange={(e) => updateFormData('tests.oct.rnfl_os', e.target.value)}
+                darkMode={darkMode}
               />
               <Input
                 name="oct_gcipl_od"
-                placeholder="GCIPL OD (μm)"
+                placeholder={t('ophthalmologyReport.gciplOD')}
                 value={formData.tests.oct.gcipl_od}
                 onChange={(e) => updateFormData('tests.oct.gcipl_od', e.target.value)}
+                darkMode={darkMode}
               />
               <Input
                 name="oct_gcipl_os"
-                placeholder="GCIPL OS (μm)"
+                placeholder={t('ophthalmologyReport.gciplOS')}
                 value={formData.tests.oct.gcipl_os}
                 onChange={(e) => updateFormData('tests.oct.gcipl_os', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
 
           <div>
-            <FieldLabel>Imaging Tests</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.imagingTestsLabel')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.tests.imaging.map((test, i) => (
-                <Chip key={i} onRemove={() => removeFromArray('tests.imaging', i)}>{test}</Chip>
+                <Chip key={i} onRemove={() => removeFromArray('tests.imaging', i)} darkMode={darkMode}>{test}</Chip>
               ))}
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-              {TEST_PRESETS.map(test => (
+              {[
+                { value: 'OCT RNFL/Macula', label: t('ophthalmologyReport.octRnflMacula') },
+                { value: 'HVF 24-2', label: t('ophthalmologyReport.hvf242') },
+                { value: 'Fundus Photo', label: t('ophthalmologyReport.fundusPhoto') },
+                { value: 'FFA', label: t('ophthalmologyReport.ffa') },
+                { value: 'B-scan', label: t('ophthalmologyReport.bScan') },
+                { value: 'Topography', label: t('ophthalmologyReport.topography') },
+                { value: 'Biometry', label: t('ophthalmologyReport.biometry') }
+              ].map(test => (
                 <button
-                  key={test}
+                  key={test.value}
                   type="button"
-                  className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
+                  className={`px-3 py-1 rounded text-sm ${
+                    darkMode 
+                      ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
                   onClick={() => {
-                    if (!formData.tests.imaging.includes(test)) {
-                      addToArray('tests.imaging', test);
+                    if (!formData.tests.imaging.includes(test.value)) {
+                      addToArray('tests.imaging', test.value);
                     }
                   }}
                 >
-                  {test}
+                  {test.label}
                 </button>
               ))}
             </div>
           </div>
 
           <div>
-            <FieldLabel>Referenced Documents</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.referencedDocuments')}</FieldLabel>
             <div className="space-y-2">
               {formData.tests.referenced_docs.map((doc, index) => (
-                <div key={index} className="flex items-center gap-2 p-2 bg-slate-50 rounded">
-                  <span className="text-sm text-slate-600">{doc.type}</span>
-                  <span className="text-sm font-medium">{doc.title}</span>
-                  <span className="text-sm text-slate-500">{doc.date}</span>
+                <div key={index} className={`flex items-center gap-2 p-2 rounded ${
+                  darkMode ? 'bg-slate-700' : 'bg-slate-50'
+                }`}>
+                  <span className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{doc.type}</span>
+                  <span className={`text-sm font-medium ${darkMode ? 'text-slate-200' : ''}`}>{doc.title}</span>
+                  <span className={`text-sm ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{doc.date}</span>
                   <button
                     type="button"
                     onClick={() => removeFromArray('tests.referenced_docs', index)}
@@ -2309,14 +2600,18 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
               ))}
               <button
                 type="button"
-                className="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50"
+                className={`px-3 py-2 border rounded-lg text-sm ${
+                  darkMode 
+                    ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                    : 'border-slate-300 hover:bg-slate-50'
+                }`}
                 onClick={() => addToArray('tests.referenced_docs', {
                   type: 'OCT',
                   title: 'OCT Report',
                   date: new Date().toISOString().split('T')[0]
                 })}
               >
-                + Add Reference
+                {t('ophthalmologyReport.addReference')}
               </button>
             </div>
           </div>
@@ -2325,11 +2620,12 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Imaging Studies */}
       <Card 
-        title="Imaging Studies" 
+        title={t('ophthalmologyReport.imagingStudies')} 
         collapsible 
         isOpen={!collapsedSections.imagingStudies}
         onToggle={() => toggleSection('imagingStudies')}
         counter={formData.imaging_links.length}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div className="flex gap-2">
@@ -2340,26 +2636,32 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                 console.log('Auto-loading imaging studies...');
               }}
             >
-              Load Imaging (Auto)
+              {t('ophthalmologyReport.loadImagingAuto')}
             </button>
             <input
               type="text"
-              placeholder="Search studies..."
-              className="flex-1 px-3 py-2 border border-slate-200 rounded-lg"
+              placeholder={t('ophthalmologyReport.searchStudies')}
+              className={`flex-1 px-3 py-2 border rounded-lg ${
+                darkMode 
+                  ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+                  : 'border-slate-200 bg-white text-slate-600'
+              }`}
             />
           </div>
 
           <div>
-            <FieldLabel>Available Studies</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.availableStudies')}</FieldLabel>
             <div className="space-y-2">
               {availableImaging.map((study, index) => (
-                <div key={index} className="flex items-center justify-between p-3 border border-slate-200 rounded-lg">
+                <div key={index} className={`flex items-center justify-between p-3 border rounded-lg ${
+                  darkMode ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
+                }`}>
                   <div className="flex-1">
                     <div className="flex items-center gap-4">
-                      <span className="font-medium">{study.modality}</span>
-                      <span className="text-slate-600">{study.date}</span>
-                      <span className="text-slate-600">{study.description}</span>
-                      <span className="font-mono text-xs text-slate-500">{study.study_uid}</span>
+                      <span className={`font-medium ${darkMode ? 'text-slate-200' : ''}`}>{study.modality}</span>
+                      <span className={darkMode ? 'text-slate-400' : 'text-slate-600'}>{study.date}</span>
+                      <span className={darkMode ? 'text-slate-400' : 'text-slate-600'}>{study.description}</span>
+                      <span className={`font-mono text-xs ${darkMode ? 'text-slate-500' : 'text-slate-500'}`}>{study.study_uid}</span>
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -2368,14 +2670,14 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                       className="px-3 py-1 bg-blue-600 text-white rounded text-sm hover:bg-blue-700"
                       onClick={() => openImagingViewer(study)}
                     >
-                      Open Viewer
+                      {t('ophthalmologyReport.openViewer')}
                     </button>
                     <button
                       type="button"
                       className="px-3 py-1 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700"
                       onClick={() => addImagingToReport(study)}
                     >
-                      Add to Report
+                      {t('ophthalmologyReport.addToReport')}
                     </button>
                   </div>
                 </div>
@@ -2384,14 +2686,20 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
 
           <div>
-            <FieldLabel>Selected Studies</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.selectedStudies')}</FieldLabel>
             <div className="space-y-2">
               {formData.imaging_links.map((imaging, index) => (
-                <div key={index} className="flex items-center gap-2 p-2 bg-slate-50 rounded">
-                  <span className="text-sm font-medium">{imaging.modality}</span>
-                  <span className="text-sm text-slate-600">{imaging.description}</span>
+                <div key={index} className={`flex items-center gap-2 p-2 rounded ${
+                  darkMode ? 'bg-slate-700' : 'bg-slate-50'
+                }`}>
+                  <span className={`text-sm font-medium ${darkMode ? 'text-slate-200' : ''}`}>{imaging.modality}</span>
+                  <span className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{imaging.description}</span>
                   <select 
-                    className="text-xs border rounded px-1 py-0.5"
+                    className={`text-xs border rounded px-1 py-0.5 ${
+                      darkMode 
+                        ? 'bg-slate-800 border-slate-600 text-slate-200' 
+                        : 'bg-white border-slate-300 text-slate-600'
+                    }`}
                     value={imaging.attach || 'reference_only'}
                     onChange={(e) => {
                       const next = clone(formData.imaging_links);
@@ -2399,12 +2707,16 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                       updateFormData('imaging_links', next);
                     }}
                   >
-                    <option value="reference_only">Reference only</option>
-                    <option value="embed_in_pdf">Embed in PDF</option>
+                    <option value="reference_only" className={darkMode ? 'bg-slate-800' : ''}>{t('ophthalmologyReport.referenceOnly')}</option>
+                    <option value="embed_in_pdf" className={darkMode ? 'bg-slate-800' : ''}>{t('ophthalmologyReport.embedInPDF')}</option>
                   </select>
                   <input
-                    className="text-xs border rounded px-2 py-1"
-                    placeholder="Note..."
+                    className={`text-xs border rounded px-2 py-1 ${
+                      darkMode 
+                        ? 'bg-slate-800 border-slate-600 text-slate-200 placeholder-slate-400' 
+                        : 'bg-white border-slate-300 text-slate-600'
+                    }`}
+                    placeholder={t('ophthalmologyReport.note')}
                     value={imaging.note || ''}
                     onChange={(e) => {
                       const next = clone(formData.imaging_links);
@@ -2415,7 +2727,7 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                   <button
                     type="button"
                     onClick={() => openImagingViewer(imaging)}
-                    className="text-blue-600 hover:text-blue-800"
+                    className={darkMode ? 'text-blue-400 hover:text-blue-300' : 'text-blue-600 hover:text-blue-800'}
                     aria-label="Open viewer"
                   >
                     🔗
@@ -2436,51 +2748,59 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Diagnosis */}
       <Card 
-        title="Diagnosis" 
+        title={t('ophthalmologyReport.diagnosis')} 
         collapsible 
         isOpen={!collapsedSections.diagnosis}
         onToggle={() => toggleSection('diagnosis')}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <div>
-            <FieldLabel required>Main Diagnosis</FieldLabel>
+            <FieldLabel required darkMode={darkMode}>{t('ophthalmologyReport.mainDiagnosis')}</FieldLabel>
             <div className="space-y-2">
               {formData.diagnosis.main?.code || formData.diagnosis.main?.term ? (
                 <div className="flex gap-2 items-start">
                   <div className="flex gap-2 items-start flex-1">
                     <Input
-                      placeholder="ICD-11 code"
+                      placeholder={t('ophthalmologyReport.icd11Code')}
                       value={typeof formData.diagnosis.main === 'object' ? (formData.diagnosis.main.code || '') : ''}
                       onChange={(e) => {
                         const current = typeof formData.diagnosis.main === 'object' ? formData.diagnosis.main : { code: '', term: '' };
                         updateFormData('diagnosis.main', { ...current, code: e.target.value });
                       }}
                       className="w-40"
+                      darkMode={darkMode}
                     />
                     <Input
-                      placeholder="Diagnosis term"
+                      placeholder={t('ophthalmologyReport.diagnosisTerm')}
                       value={typeof formData.diagnosis.main === 'object' ? (formData.diagnosis.main.term || '') : (typeof formData.diagnosis.main === 'string' ? formData.diagnosis.main : '')}
                       onChange={(e) => {
                         const current = typeof formData.diagnosis.main === 'object' ? formData.diagnosis.main : { code: '', term: '' };
                         updateFormData('diagnosis.main', { ...current, term: e.target.value });
                       }}
                       className="flex-1"
+                      darkMode={darkMode}
                     />
                   </div>
                   <button
                     type="button"
                     onClick={() => updateFormData('diagnosis.main', { code: '', term: '' })}
-                    className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                    className={`px-3 py-2 rounded transition-colors ${
+                      darkMode 
+                        ? 'bg-red-900/50 text-red-300 hover:bg-red-900/70' 
+                        : 'bg-red-100 text-red-700 hover:bg-red-200'
+                    }`}
                   >
-                    Clear
+                    {t('ophthalmologyReport.clear')}
                   </button>
                 </div>
               ) : null}
               <IcdCodeSearchInput
-                placeholder="Search ICD-11 code or diagnosis..."
+                placeholder={t('ophthalmologyReport.searchIcd11Code')}
                 onSelect={(selected) => {
                   updateFormData('diagnosis.main', selected);
                 }}
+                darkMode={darkMode}
               />
             </div>
             {errors.diagnosis_main && (
@@ -2489,40 +2809,47 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
           
           <div>
-            <FieldLabel>Secondary Diagnoses</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.secondaryDiagnoses')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.diagnosis.secondary.map((diag, index) => (
                 <Chip
                   key={index}
                   onRemove={() => removeFromArray('diagnosis.secondary', index)}
+                  darkMode={darkMode}
                 >
                   {typeof diag === 'object' ? `${diag.code || ''} ${diag.term || ''}`.trim() : diag}
                 </Chip>
               ))}
             </div>
             <IcdCodeSearchInput
-              placeholder="Search ICD-11 code or diagnosis..."
+              placeholder={t('ophthalmologyReport.searchIcd11Code')}
               onSelect={(selected) => {
                 const currentSecondary = Array.isArray(formData.diagnosis.secondary) ? formData.diagnosis.secondary : [];
                 addToArray('diagnosis.secondary', selected);
               }}
+              darkMode={darkMode}
             />
           </div>
 
           <div>
-            <FieldLabel>Diagnosis Codes</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.diagnosisCodes')}</FieldLabel>
             <div className="flex flex-wrap gap-2">
               {formData.diagnosis.codes.map((code, index) => (
                 <Chip
                   key={index}
                   onRemove={() => removeFromArray('diagnosis.codes', index)}
+                  darkMode={darkMode}
                 >
                   {code.system}: {code.code} - {code.term}
                 </Chip>
               ))}
               <div className="flex gap-2">
                 <select
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm"
+                  className={`px-3 py-2 border rounded-lg text-sm ${
+                    darkMode 
+                      ? 'bg-slate-700 border-slate-600 text-slate-200' 
+                      : 'border-slate-300 bg-white text-slate-600'
+                  }`}
                   onChange={(e) => {
                     const selected = DIAGNOSIS_CODE_PRESETS[parseInt(e.target.value)];
                     if (selected) {
@@ -2531,16 +2858,20 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                     e.target.value = '';
                   }}
                 >
-                  <option value="">Quick-add code...</option>
+                  <option value="" className={darkMode ? 'bg-slate-800' : ''}>Quick-add code...</option>
                   {DIAGNOSIS_CODE_PRESETS.map((preset, idx) => (
-                    <option key={idx} value={idx}>
+                    <option key={idx} value={idx} className={darkMode ? 'bg-slate-800' : ''}>
                       {preset.system}: {preset.code} - {preset.term}
                     </option>
                   ))}
                 </select>
                 <button
                   type="button"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50"
+                  className={`px-3 py-2 border rounded-lg text-sm ${
+                    darkMode 
+                      ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                      : 'border-slate-300 hover:bg-slate-50'
+                  }`}
                   onClick={() => addToArray('diagnosis.codes', {
                     system: 'ICD10',
                     code: '',
@@ -2558,21 +2889,26 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
       {/* Plan & Treatment (Initial mode only) */}
       {mode === 'initial' && (
         <Card 
-          title="Plan & Treatment" 
+          title={t('ophthalmologyReport.planTreatment')} 
           collapsible 
           isOpen={!collapsedSections.plan}
           onToggle={() => toggleSection('plan')}
+          darkMode={darkMode}
         >
           <div className="space-y-4">
             {/* Medications */}
             <div>
-              <FieldLabel>Medications <span className="text-slate-400">({formData.plan.meds.length})</span></FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.medicationsCount')} <span className={darkMode ? 'text-slate-500' : 'text-slate-400'}>({formData.plan.meds.length})</span></FieldLabel>
               <button 
                 type="button" 
                 onClick={() => openMedEditor()} 
-                className="px-4 py-2 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 mb-3"
+                className={`px-4 py-2 rounded mb-3 ${
+                  darkMode 
+                    ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
-                Add Medication
+                {t('ophthalmologyReport.addMedication')}
               </button>
 
               {formData.plan.meds.length > 0 && (
@@ -2581,7 +2917,7 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                     const obj = convertStringToMed(m);
                     const label = typeof m === 'string' ? m : `${obj.med} ${obj.conc_strength} ${obj.route}`;
                     return (
-                      <Chip key={idx} onEdit={() => openMedEditor(obj, idx)} onRemove={() => removeMed(idx)}>
+                      <Chip key={idx} onEdit={() => openMedEditor(obj, idx)} onRemove={() => removeMed(idx)} darkMode={darkMode}>
                         {label}
                       </Chip>
                     );
@@ -2590,7 +2926,11 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
               )}
 
               {editingMed && (
-                <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
+                <div className={`mt-3 grid grid-cols-12 gap-4 p-4 rounded-lg border ${
+                  darkMode 
+                    ? 'bg-slate-800 border-slate-700' 
+                    : 'bg-white border-slate-200'
+                }`}>
                   <div className="col-span-12">
                     <MedicationSearchInput
                       placeholder="Search medication..."
@@ -2603,13 +2943,15 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                           conc_strength: selected.strength || s.conc_strength
                         }));
                       }}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input 
-                      placeholder="Concentration/Strength" 
+                      placeholder={t('ophthalmologyReport.concentrationStrength')} 
                       value={editingMed.conc_strength} 
                       onChange={(e) => setEditingMed(s => ({...s, conc_strength: e.target.value}))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
@@ -2618,32 +2960,36 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                       value={editingMed.route} 
                       onChange={(e) => setEditingMed(s => ({...s, route: e.target.value}))}
                       options={[
-                        {value:'topical',label:'Topical'},
-                        {value:'oral',label:'Oral'},
-                        {value:'injection',label:'Injection'},
-                        {value:'other',label:'Other'}
-                      ]} 
+                        {value:'topical',label:t('ophthalmologyReport.topical')},
+                        {value:'oral',label:t('ophthalmologyReport.oral')},
+                        {value:'injection',label:t('ophthalmologyReport.injection')},
+                        {value:'other',label:t('ophthalmologyReport.other')}
+                      ]}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input 
-                      placeholder="Frequency" 
+                      placeholder={t('ophthalmologyReport.frequency')} 
                       value={editingMed.freq} 
                       onChange={(e) => setEditingMed(s => ({...s, freq: e.target.value}))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input 
-                      placeholder="Duration" 
+                      placeholder={t('ophthalmologyReport.duration')} 
                       value={editingMed.duration} 
                       onChange={(e) => setEditingMed(s => ({...s, duration: e.target.value}))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input 
-                      placeholder="Instructions (optional)" 
+                      placeholder={t('ophthalmologyReport.instructions')} 
                       value={editingMed.instructions || ''} 
                       onChange={(e) => setEditingMed(s => ({...s, instructions: e.target.value}))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12 flex items-center gap-2">
@@ -2653,118 +2999,146 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                       onChange={(e) => setEditingMed(s => ({...s, sendToPharmacy: e.target.checked}))} 
                       className="w-4 h-4 rounded"
                     />
-                    <span className="text-sm text-slate-600">Send to Pharmacy</span>
+                    <span className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('ophthalmologyReport.sendToPharmacy')}</span>
                   </div>
                   {editingMed.sendToPharmacy && (
                     <div className="col-span-12">
                       <Input 
-                        placeholder="Pharmacy ID" 
+                        placeholder={t('ophthalmologyReport.pharmacyID')} 
                         value={editingMed.pharmacyId || ''} 
                         onChange={(e) => setEditingMed(s => ({...s, pharmacyId: e.target.value}))}
+                        darkMode={darkMode}
                       />
                     </div>
                   )}
                   <div className="col-span-12 flex justify-end gap-3">
                     <button 
                       type="button" 
-                      className="px-4 py-2 border rounded-lg hover:bg-slate-50" 
+                      className={`px-4 py-2 border rounded-lg ${
+                        darkMode 
+                          ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                          : 'hover:bg-slate-50'
+                      }`}
                       onClick={() => {setEditingMed(null); setEditingMedIdx(null);}}
                     >
-                      Cancel
+                      {t('ophthalmologyReport.cancel')}
                     </button>
                     <button 
                       type="button" 
                       className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700" 
                       onClick={saveMed}
                     >
-                      Save
+                      {t('ophthalmologyReport.save')}
                     </button>
                   </div>
                 </div>
               )}
             </div>
 
-            <hr className="my-4" />
+            <hr className={`my-4 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`} />
 
             {/* Procedures Planned */}
             <div>
-              <FieldLabel>Procedures Planned</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.proceduresPlanned')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
                 {formData.plan.procedures_planned.map((proc, i) => (
-                  <Chip key={i} onRemove={() => removeFromArray('plan.procedures_planned', i)}>{proc}</Chip>
+                  <Chip key={i} onRemove={() => removeFromArray('plan.procedures_planned', i)} darkMode={darkMode}>{proc}</Chip>
                 ))}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {PROCEDURE_PRESETS.map(proc => (
+                {[
+                  { value: 'YAG Capsulotomy', label: t('ophthalmologyReport.yagCapsulotomy') },
+                  { value: 'PRP', label: t('ophthalmologyReport.prp') },
+                  { value: 'IVT', label: t('ophthalmologyReport.ivt') },
+                  { value: 'CXL', label: t('ophthalmologyReport.cxl') },
+                  { value: 'Cataract Surgery', label: t('ophthalmologyReport.cataractSurgery') },
+                  { value: 'Trabeculectomy', label: t('ophthalmologyReport.trabeculectomy') },
+                  { value: 'Other', label: t('ophthalmologyReport.other') }
+                ].map(proc => (
                   <button
-                    key={proc}
+                    key={proc.value}
                     type="button"
-                    className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
+                    className={`px-3 py-1 rounded text-sm ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                     onClick={() => {
-                      if (!formData.plan.procedures_planned.includes(proc)) {
-                        addToArray('plan.procedures_planned', proc);
+                      if (!formData.plan.procedures_planned.includes(proc.value)) {
+                        addToArray('plan.procedures_planned', proc.value);
                       }
                     }}
                   >
-                    {proc}
+                    {proc.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <hr className="my-4" />
+            <hr className={`my-4 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`} />
 
             {/* Counseling */}
             <div>
-              <FieldLabel>Counseling</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.counseling')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
                 {formData.plan.counseling.map((item, i) => (
-                  <Chip key={i} onRemove={() => removeFromArray('plan.counseling', i)}>{item}</Chip>
+                  <Chip key={i} onRemove={() => removeFromArray('plan.counseling', i)} darkMode={darkMode}>{item}</Chip>
                 ))}
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {COUNSELING_PRESETS.map(item => (
+                {[
+                  { value: 'Medication compliance', label: t('ophthalmologyReport.medicationCompliance') },
+                  { value: 'Side-effects explained', label: t('ophthalmologyReport.sideEffectsExplained') },
+                  { value: 'Driving precautions', label: t('ophthalmologyReport.drivingPrecautions') },
+                  { value: 'Urgent return precautions', label: t('ophthalmologyReport.urgentReturnPrecautions') }
+                ].map(item => (
                   <button
-                    key={item}
+                    key={item.value}
                     type="button"
-                    className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
+                    className={`px-3 py-1 rounded text-sm ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                     onClick={() => {
-                      if (!formData.plan.counseling.includes(item)) {
-                        addToArray('plan.counseling', item);
+                      if (!formData.plan.counseling.includes(item.value)) {
+                        addToArray('plan.counseling', item.value);
                       }
                     }}
                   >
-                    {item}
+                    {item.label}
                   </button>
                 ))}
               </div>
             </div>
 
-            <hr className="my-4" />
+            <hr className={`my-4 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`} />
 
             {/* Follow-up */}
             <div>
-              <FieldLabel>Follow-up</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.followUp')}</FieldLabel>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <Select
                   name="plan_follow_up"
                   value={formData.plan.follow_up}
                   onChange={(e) => updateFormData('plan.follow_up', e.target.value)}
                   options={[
-                    { value: '24h', label: '24 hours' },
-                    { value: '1w', label: '1 week' },
-                    { value: '1m', label: '1 month' },
-                    { value: 'PRN', label: 'PRN' },
-                    { value: 'date', label: 'Specific date' }
+                    { value: '24h', label: t('ophthalmologyReport.hours24') },
+                    { value: '1w', label: t('ophthalmologyReport.week1') },
+                    { value: '1m', label: t('ophthalmologyReport.month1') },
+                    { value: 'PRN', label: t('ophthalmologyReport.prn') },
+                    { value: 'date', label: t('ophthalmologyReport.specificDate') }
                   ]}
+                  darkMode={darkMode}
                 />
                 {formData.plan.follow_up === 'date' && (
                   <Input
                     name="follow_up_date"
                     type="date"
-                    placeholder="Specific date"
+                    placeholder={t('ophthalmologyReport.specificDate')}
                     value={formData.plan.follow_up_date}
                     onChange={(e) => updateFormData('plan.follow_up_date', e.target.value)}
+                    darkMode={darkMode}
                   />
                 )}
               </div>
@@ -2775,11 +3149,12 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Procedures Done */}
       <Card 
-        title="Procedures Done" 
+        title={t('ophthalmologyReport.proceduresDone')} 
         collapsible 
         isOpen={!collapsedSections.procedures}
         onToggle={() => toggleSection('procedures')}
         counter={formData.procedures_done.length}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
           <button
@@ -2787,18 +3162,20 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
             className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 mb-4"
             onClick={() => openProcedureEditor()}
           >
-            Add Procedure
+            {t('ophthalmologyReport.addProcedure')}
           </button>
 
           {formData.procedures_done.map((proc, idx) => (
-            <div key={idx} className="border border-slate-200 rounded-lg p-4">
+            <div key={idx} className={`border rounded-lg p-4 ${
+              darkMode ? 'border-slate-700 bg-slate-800' : 'border-slate-200 bg-white'
+            }`}>
               <div className="flex justify-between items-start mb-2">
-                <h4 className="font-semibold text-slate-800">{proc.name}</h4>
+                <h4 className={`font-semibold ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>{proc.name}</h4>
                 <div className="flex gap-2">
                   <button
                     type="button"
                     onClick={() => openProcedureEditor(proc, idx)}
-                    className="text-slate-500 hover:text-slate-700"
+                    className={darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}
                   >
                     ✎
                   </button>
@@ -2811,7 +3188,7 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                   </button>
                 </div>
               </div>
-              <div className="text-sm text-slate-600">
+              <div className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
                 <div>Date: {proc.date}</div>
                 {proc.eye && <div>Eye: {proc.eye}</div>}
                 <div>Result: {proc.result}</div>
@@ -2820,109 +3197,133 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
           ))}
 
           {editingProcedure && (
-            <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
+            <div className={`mt-3 grid grid-cols-12 gap-4 p-4 rounded-lg border ${
+              darkMode 
+                ? 'bg-slate-800 border-slate-700' 
+                : 'bg-white border-slate-200'
+            }`}>
               <div className="col-span-12">
-                <FieldLabel required>Procedure Name</FieldLabel>
+                <FieldLabel required darkMode={darkMode}>{t('ophthalmologyReport.procedureName')}</FieldLabel>
                 <Select
                   name="procedure_name"
                   value={editingProcedure.name}
                   onChange={(e) => setEditingProcedure(s => ({...s, name: e.target.value}))}
-                  options={PROCEDURE_PRESETS.map(p => ({ value: p, label: p }))}
+                  options={[
+                    { value: 'YAG Capsulotomy', label: t('ophthalmologyReport.yagCapsulotomy') },
+                    { value: 'PRP', label: t('ophthalmologyReport.prp') },
+                    { value: 'IVT', label: t('ophthalmologyReport.ivt') },
+                    { value: 'CXL', label: t('ophthalmologyReport.cxl') },
+                    { value: 'Cataract Surgery', label: t('ophthalmologyReport.cataractSurgery') },
+                    { value: 'Trabeculectomy', label: t('ophthalmologyReport.trabeculectomy') },
+                    { value: 'Other', label: t('ophthalmologyReport.other') }
+                  ]}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
-                <FieldLabel required>Date</FieldLabel>
+                <FieldLabel required darkMode={darkMode}>{t('ophthalmologyReport.procedureDate')}</FieldLabel>
                 <Input
                   name="procedure_date"
                   type="datetime-local"
                   value={editingProcedure.date}
                   onChange={(e) => setEditingProcedure(s => ({...s, date: e.target.value}))}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12 md:col-span-6">
-                <FieldLabel>Eye</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.procedureEye')}</FieldLabel>
                 <Select
                   name="procedure_eye"
                   value={editingProcedure.eye}
                   onChange={(e) => setEditingProcedure(s => ({...s, eye: e.target.value}))}
                   options={[
-                    { value: 'OD', label: 'OD' },
-                    { value: 'OS', label: 'OS' },
-                    { value: 'OU', label: 'OU' }
+                    { value: 'OD', label: t('ophthalmologyReport.od') },
+                    { value: 'OS', label: t('ophthalmologyReport.os') },
+                    { value: 'OU', label: t('ophthalmologyReport.ou') }
                   ]}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12 md:col-span-6">
-                <FieldLabel>Anesthesia</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.procedureAnesthesia')}</FieldLabel>
                 <Select
                   name="procedure_anesthesia"
                   value={editingProcedure.anesthesia}
                   onChange={(e) => setEditingProcedure(s => ({...s, anesthesia: e.target.value}))}
                   options={[
-                    { value: 'none', label: 'None' },
-                    { value: 'topical', label: 'Topical' },
-                    { value: 'local', label: 'Local' },
-                    { value: 'general', label: 'General' }
+                    { value: 'none', label: t('ophthalmologyReport.none') },
+                    { value: 'topical', label: t('ophthalmologyReport.topical') },
+                    { value: 'local', label: t('ophthalmologyReport.local') },
+                    { value: 'general', label: t('ophthalmologyReport.general') }
                   ]}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
-                <FieldLabel>Technique</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.procedureTechnique')}</FieldLabel>
                 <TextArea
                   name="procedure_technique"
-                  placeholder="Procedure technique..."
+                  placeholder={t('ophthalmologyReport.procedureTechnique')}
                   value={editingProcedure.technique || ''}
                   onChange={(e) => setEditingProcedure(s => ({...s, technique: e.target.value}))}
                   rows={3}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
-                <FieldLabel>Findings</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.procedureFindings')}</FieldLabel>
                 <TextArea
                   name="procedure_findings"
-                  placeholder="Procedure findings..."
+                  placeholder={t('ophthalmologyReport.procedureFindings')}
                   value={editingProcedure.findings || ''}
                   onChange={(e) => setEditingProcedure(s => ({...s, findings: e.target.value}))}
                   rows={3}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
-                <FieldLabel>Result</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.procedureResult')}</FieldLabel>
                 <Select
                   name="procedure_result"
                   value={editingProcedure.result}
                   onChange={(e) => setEditingProcedure(s => ({...s, result: e.target.value}))}
                   options={[
-                    { value: 'successful', label: 'Successful' },
-                    { value: 'partial', label: 'Partial' },
-                    { value: 'failed', label: 'Failed' }
+                    { value: 'successful', label: t('ophthalmologyReport.successful') },
+                    { value: 'partial', label: t('ophthalmologyReport.partial') },
+                    { value: 'failed', label: t('ophthalmologyReport.failed') }
                   ]}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
-                <FieldLabel>Complications</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.procedureComplications')}</FieldLabel>
                 <TextArea
                   name="procedure_complications"
-                  placeholder="Any complications..."
+                  placeholder={t('ophthalmologyReport.anyComplications')}
                   value={editingProcedure.complications || ''}
                   onChange={(e) => setEditingProcedure(s => ({...s, complications: e.target.value}))}
                   rows={2}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12 flex justify-end gap-3">
                 <button
                   type="button"
-                  className="px-4 py-2 border rounded-lg hover:bg-slate-50"
+                  className={`px-4 py-2 border rounded-lg ${
+                    darkMode 
+                      ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                      : 'hover:bg-slate-50'
+                  }`}
                   onClick={() => {setEditingProcedure(null); setEditingProcedureIdx(null);}}
                 >
-                  Cancel
+                  {t('ophthalmologyReport.cancel')}
                 </button>
                 <button
                   type="button"
                   className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
                   onClick={saveProcedure}
                 >
-                  Save
+                  {t('ophthalmologyReport.save')}
                 </button>
               </div>
             </div>
@@ -2933,49 +3334,53 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
       {/* Outcome & Recommendations (Discharge mode only) */}
       {mode === 'discharge' && (
         <Card 
-          title="Outcome & Recommendations" 
+          title={t('ophthalmologyReport.outcomeRecommendations')} 
           collapsible 
           isOpen={!collapsedSections.outcome}
           onToggle={() => toggleSection('outcome')}
+          darkMode={darkMode}
         >
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <FieldLabel>Current Condition</FieldLabel>
-                <TextArea
-                  name="outcome_condition"
-                  placeholder="Patient's current condition..."
-                  value={formData.outcome.condition || ''}
-                  onChange={(e) => updateFormData('outcome.condition', e.target.value)}
-                  rows={3}
-                />
-              </div>
-              <div>
-                <FieldLabel>Hospital Course</FieldLabel>
-                <TextArea
-                  name="outcome_course"
-                  placeholder="Summary of hospital course..."
-                  value={formData.outcome.course || ''}
-                  onChange={(e) => updateFormData('outcome.course', e.target.value)}
-                  rows={3}
-                />
-              </div>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.currentCondition')}</FieldLabel>
+              <TextArea
+                name="outcome_condition"
+                placeholder={t('ophthalmologyReport.patientsCurrentCondition')}
+                value={formData.outcome.condition || ''}
+                onChange={(e) => updateFormData('outcome.condition', e.target.value)}
+                rows={3}
+                darkMode={darkMode}
+              />
             </div>
+            <div>
+              <FieldLabel darkMode={darkMode}>{t('ophthalmologyReport.hospitalCourse')}</FieldLabel>
+              <TextArea
+                name="outcome_course"
+                placeholder={t('ophthalmologyReport.summaryOfHospitalCourse')}
+                value={formData.outcome.course || ''}
+                onChange={(e) => updateFormData('outcome.course', e.target.value)}
+                rows={3}
+                darkMode={darkMode}
+              />
+            </div>
+          </div>
             
             <div>
-              <FieldLabel required>Recommendations</FieldLabel>
+              <FieldLabel required darkMode={darkMode}>{t('ophthalmologyReport.recommendations')}</FieldLabel>
               <div className="space-y-2">
                 {formData.recommendations.map((rec, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <Input
                       name={`recommendation_${index}`}
-                      placeholder="Recommendation..."
+                      placeholder={t('ophthalmologyReport.recommendation')}
                       value={rec}
                       onChange={(e) => {
                         const newRecs = [...formData.recommendations];
                         newRecs[index] = e.target.value;
                         updateFormData('recommendations', newRecs);
                       }}
+                      darkMode={darkMode}
                     />
                     <button
                       type="button"
@@ -2988,10 +3393,14 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
                 ))}
                 <button
                   type="button"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50"
+                  className={`px-3 py-2 border rounded-lg text-sm ${
+                    darkMode 
+                      ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                      : 'border-slate-300 hover:bg-slate-50'
+                  }`}
                   onClick={() => addToArray('recommendations', '')}
                 >
-                  + Add Recommendation
+                  {t('ophthalmologyReport.addRecommendation')}
                 </button>
               </div>
               {errors.recommendations && (
@@ -3004,29 +3413,40 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Attachments */}
       <Card 
-        title="Attachments" 
+        title={t('ophthalmologyReport.attachments')} 
         collapsible 
         isOpen={!collapsedSections.attachments}
         onToggle={() => toggleSection('attachments')}
         counter={formData.attachments.length}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
-          <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
-            <p className="text-slate-500 mb-2">Drop files here or click to upload</p>
-            <p className="text-xs text-slate-400 mb-2">Include fundus photos/drawings</p>
+          <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
+            darkMode 
+              ? 'border-slate-600' 
+              : 'border-slate-300'
+          }`}>
+            <p className={`mb-2 ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{t('ophthalmologyReport.dropFilesHere')}</p>
+            <p className={`text-xs mb-2 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{t('ophthalmologyReport.includeFundusPhotos')}</p>
             <button
               type="button"
-              className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
+              className={`px-4 py-2 rounded-lg ${
+                darkMode 
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
             >
-              Choose Files
+              {t('ophthalmologyReport.chooseFiles')}
             </button>
           </div>
           
           <div className="space-y-2">
             {formData.attachments.map((attachment, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-slate-50 rounded">
-                <span className="text-sm">{attachment.label || attachment.id}</span>
-                <span className="text-xs text-slate-500">{attachment.type}</span>
+              <div key={index} className={`flex items-center justify-between p-2 rounded ${
+                darkMode ? 'bg-slate-700' : 'bg-slate-50'
+              }`}>
+                <span className={`text-sm ${darkMode ? 'text-slate-300' : ''}`}>{attachment.label || attachment.id}</span>
+                <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-500'}`}>{attachment.type}</span>
                 <button
                   type="button"
                   onClick={() => removeFromArray('attachments', index)}
@@ -3041,25 +3461,39 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Sticky Footer */}
-      <div className="sticky bottom-0 bg-white border-t border-slate-200 p-4 shadow-lg">
+      <div className={`sticky bottom-0 border-t p-4 shadow-lg ${
+        darkMode 
+          ? 'bg-slate-800 border-slate-700' 
+          : 'bg-white border-slate-200'
+      }`}>
         <div className="flex justify-between items-center">
-          <div className="text-sm text-slate-500">
+          <div className={`text-sm ${
+            darkMode ? 'text-slate-400' : 'text-slate-500'
+          }`}>
             {lastSaved && `Last saved: ${lastSaved.toLocaleTimeString()}`}
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={handleSaveDraft}
-              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+              className={`px-4 py-2 border rounded-lg ${
+                darkMode 
+                  ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                  : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
             >
-              Save Draft
+              {t('ophthalmologyReport.saveDraft')}
             </button>
             <button
               type="button"
               onClick={handlePreview}
-              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+              className={`px-4 py-2 border rounded-lg ${
+                darkMode 
+                  ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                  : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
             >
-              Preview
+              {t('ophthalmologyReport.preview')}
             </button>
             <button
               type="button"
@@ -3071,7 +3505,7 @@ const OphthalmologyReportForm = ({ patient, encounter, onSave }) => {
               }}
               className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
             >
-              Finalize & Save
+              {t('ophthalmologyReport.finalizeSave')}
             </button>
           </div>
         </div>

@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+
+    {
+      "name": "FastAPI (proxy.py via uvicorn)",
+      "type": "python",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["proxy:app", "--host", "0.0.0.0", "--port", "8001"],
+      "jinja": true,
+      "env": {
+        "PROJECT_ID": "fiattib-main",
+        "REGION": "europe-west4",
+        "ENDPOINT_ID": "<VISION_ENDPOINT_ID>",
+        "PROXY_API_KEY": "97f836b0e0f9428bb1e2248b4a011a8e",
+        "USE_DEDICATED_DNS": "0",
+        "PROJECT_NUMBER": "767688392291",
+        "GOOGLE_APPLICATION_CREDENTIALS": "D:\\fiattib\\fiattib-main-b061797c5694.json"
+      },
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}\\.venv\\Scripts\\python.exe"
+    }
+  ]
+}
