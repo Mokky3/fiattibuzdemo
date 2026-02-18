@@ -1,7 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
+import i18n from '../../i18n';
 import { Header } from './Header';
 import MidwiferyForm from './forms/MidwiferyForm';
+import GynecologyForm from './forms/GynecologyForm';
+import ProctologyForm from './forms/ProctologyForm';
+import ENTForm from './forms/ENTForm';
+import EndocrinologyForm from './forms/EndocrinologyForm';
 import GeneralVisitReport from './forms/GeneralVisitReport';
 import CardiologyReportForm from './forms/CardiologyReportForm';
 import TraumaOrthoReportForm from './forms/TraumaOrthoReportForm';
@@ -10,19 +16,136 @@ import OncologyReportForm from './forms/OncologyReportForm';
 import NeurologyReportForm from './forms/NeurologyReportForm';
 import UrologyReportForm from './forms/UrologyReportForm';
 import AllergyImmunologyReportForm from './forms/AllergyImmunologyReportForm';
-import { doctorPatientsAPI, doctorReportsAPI } from '../../services/apiService';
+import { doctorPatientsAPI, doctorReportsAPI, getCurrentUser } from '../../services/apiService';
 
 const Report = () => {
+  const { t, i18n, ready } = useTranslation(); // Get i18n instance to listen to language changes
   const { patientId, reportId } = useParams(); // Get reportId if editing existing report
   const navigate = useNavigate();
 
-  const [selectedSpecialty, setSelectedSpecialty] = useState('midwifery & gynecology');
-  const [selectedCode, setSelectedCode] = useState('#025');
+  const [selectedSpecialty, setSelectedSpecialty] = useState('general');
+  const [selectedCode, setSelectedCode] = useState('#001');
   const [patient, setPatient] = useState(null);
   const [formData, setFormData] = useState({});
   const [patientAllergies, setPatientAllergies] = useState([]);
   const [patientVitals, setPatientVitals] = useState([]);
   const [patientImmunizations, setPatientImmunizations] = useState([]);
+
+  // Track current language state to force re-render
+  const [currentLanguage, setCurrentLanguage] = useState(() => {
+    const lang = i18n.language || localStorage.getItem('i18nextLng') || 'en';
+    return lang.split('-')[0].toLowerCase();
+  });
+
+
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount and when darkMode changes
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
+  // Listen for storage events and periodically check for theme changes
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'theme') {
+        const saved = localStorage.getItem('theme');
+        const newDarkMode = saved === 'dark';
+        setDarkMode(prev => {
+          if (prev !== newDarkMode) {
+            return newDarkMode;
+          }
+          return prev;
+        });
+      }
+    };
+
+    // Listen for custom theme change events (for same-tab changes)
+    const handleThemeChange = () => {
+      const saved = localStorage.getItem('theme');
+      const newDarkMode = saved === 'dark';
+      setDarkMode(prev => {
+        if (prev !== newDarkMode) {
+          return newDarkMode;
+        }
+        return prev;
+      });
+    };
+
+    // Periodic check to ensure sync (catches changes from same tab)
+    const checkTheme = () => {
+      const saved = localStorage.getItem('theme');
+      const newDarkMode = saved === 'dark';
+      const hasDarkClass = document.documentElement.classList.contains('dark');
+      
+      // Sync if there's a mismatch
+      if (newDarkMode !== hasDarkClass) {
+        setDarkMode(newDarkMode);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('themechange', handleThemeChange);
+    
+    // Check immediately and then periodically
+    checkTheme();
+    const interval = setInterval(checkTheme, 500);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('themechange', handleThemeChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Listen for language changes and force re-render
+  const [languageKey, setLanguageKey] = useState(0);
+  
+  useEffect(() => {
+    const handleLanguageChange = (lng) => {
+      const normalized = (lng || '').split('-')[0].toLowerCase();
+      console.log('Report: Language changed to', normalized);
+      setCurrentLanguage(normalized);
+      // Force component re-render when language changes
+      setLanguageKey(prev => prev + 1);
+    };
+
+    // Set initial language
+    const initialLang = (i18n.language || localStorage.getItem('i18nextLng') || 'en').split('-')[0].toLowerCase();
+    setCurrentLanguage(initialLang);
+
+    i18n.on('languageChanged', handleLanguageChange);
+    
+    // Also listen for custom language change events from Header
+    const handleCustomLanguageChange = (event) => {
+      const { language } = event.detail;
+      if (language) {
+        const normalized = language.split('-')[0].toLowerCase();
+        console.log('Report: Custom language change event received:', normalized);
+        setCurrentLanguage(normalized);
+        setLanguageKey(prev => prev + 1);
+      }
+    };
+
+    window.addEventListener('languageChanged', handleCustomLanguageChange);
+
+    return () => {
+      i18n.off('languageChanged', handleLanguageChange);
+      window.removeEventListener('languageChanged', handleCustomLanguageChange);
+    };
+  }, [i18n]);
 
   // Initialize formData structure when switching to General Visit Report (#001)
   useEffect(() => {
@@ -100,6 +223,65 @@ const Report = () => {
       }
     }
   }, [selectedSpecialty, selectedCode]);
+
+  // Fetch and set the last department report for this patient
+  useEffect(() => {
+    const loadLastReport = async () => {
+      if (!patientId) return;
+      
+      try {
+        // Get current doctor ID from user
+        const currentUser = getCurrentUser();
+        if (!currentUser || !currentUser.id) {
+          console.log('No current user found, defaulting to general report');
+          return;
+        }
+
+        // Fetch patient reports
+        const reportsResponse = await doctorPatientsAPI.getReports(patientId);
+        const reports = reportsResponse?.data || reportsResponse || [];
+        
+        if (!Array.isArray(reports) || reports.length === 0) {
+          console.log('No reports found for patient, defaulting to general report');
+          return;
+        }
+
+        // Filter reports by current doctor and find the most recent one
+        const doctorReports = reports
+          .filter(report => report.doctor_id === currentUser.id)
+          .sort((a, b) => {
+            // Sort by date (most recent first)
+            const dateA = new Date(`${a.date}T${a.time || '00:00:00'}`);
+            const dateB = new Date(`${b.date}T${b.time || '00:00:00'}`);
+            return dateB - dateA;
+          });
+
+        if (doctorReports.length > 0) {
+          const lastReport = doctorReports[0];
+          console.log('Found last report:', lastReport);
+          
+          // Try to get specialty and doc_type from the report
+          // Reports might have these fields directly or in nested data
+          const backendSpecialty = lastReport.specialty || lastReport.reportData?.specialty || 'general_medicine';
+          const docType = lastReport.doc_type || lastReport.reportData?.doc_type || lastReport.problem;
+          
+          // Map to frontend specialty and code
+          const { specialty, code } = mapBackendToFrontend(backendSpecialty, docType);
+          
+          console.log(`Setting report to: ${specialty} / ${code} based on last report`);
+          setSelectedSpecialty(specialty);
+          setSelectedCode(code);
+        } else {
+          console.log('No reports found for current doctor, defaulting to general report');
+        }
+      } catch (error) {
+        console.error('Error loading last report:', error);
+        // Default to general on error
+      }
+    };
+
+    loadLastReport();
+  }, [patientId]);
 
   useEffect(() => {
     const fetchPatient = async () => {
@@ -197,8 +379,69 @@ const Report = () => {
       'traumatology': 'surgery',
       'midwifery & gynecology': 'surgery', // Note: backend may not have this, mapping to closest
       'allergology': 'dermatology', // Note: backend may not have allergology, mapping to closest
+      'proctology': 'surgery', // Note: backend may not have proctology, mapping to closest
+      'ent': 'surgery', // Note: backend may not have ent, mapping to closest
+      'endocrinology': 'general_medicine', // Note: backend may not have endocrinology, mapping to closest
     };
     return specialtyMap[frontendSpecialty] || 'general_medicine';
+  };
+
+  // Map backend specialty/doc_type to frontend specialty and code
+  const mapBackendToFrontend = (backendSpecialty, docType) => {
+    // Map backend specialties to frontend specialties
+    const specialtyMap = {
+      'general_medicine': 'general',
+      'cardiology': 'cardiology',
+      'neurology': 'neurology',
+      'urology': 'urology',
+      'oncology': 'general oncology',
+      'ophthalmology': 'ophthalmology',
+      'surgery': 'traumatology', // Default surgery to traumatology
+      'dermatology': 'allergology', // Default dermatology to allergology
+    };
+
+    let frontendSpecialty = specialtyMap[backendSpecialty] || 'general';
+    let code = '#001'; // Default to general report code
+
+    // Map doc_type to specific codes if available
+    if (docType) {
+      const docTypeMap = {
+        'general_visit': { specialty: 'general', code: '#001' },
+        'midwifery': { specialty: 'midwifery & gynecology', code: '#025' },
+        'cardiology': { specialty: 'cardiology', code: '#601' },
+        'ophthalmology': { specialty: 'ophthalmology', code: '#101' },
+        'neurology': { specialty: 'neurology', code: '#201' },
+        'trauma': { specialty: 'traumatology', code: '#301' },
+        'urology': { specialty: 'urology', code: '#401' },
+        'oncology': { specialty: 'general oncology', code: '#501' },
+        'allergy': { specialty: 'allergology', code: '#701' },
+      };
+
+      const mapped = docTypeMap[docType.toLowerCase()];
+      if (mapped) {
+        frontendSpecialty = mapped.specialty;
+        code = mapped.code;
+      }
+    } else {
+      // If no doc_type, use specialty-based default codes
+      const specialtyCodeMap = {
+        'general': '#001',
+        'cardiology': '#601',
+        'neurology': '#201',
+        'urology': '#401',
+        'general oncology': '#501',
+        'ophthalmology': '#101',
+        'traumatology': '#301',
+        'midwifery & gynecology': '#025',
+        'allergology': '#701',
+        'proctology': '#801',
+        'ent': '#901',
+        'endocrinology': '#1001',
+      };
+      code = specialtyCodeMap[frontendSpecialty] || '#001';
+    }
+
+    return { specialty: frontendSpecialty, code };
   };
 
   const handleSaveReport = async (payloadFromForm = null) => {
@@ -434,7 +677,7 @@ const Report = () => {
   const specialties = [
     'general', 'ophthalmology', 'neurology', 'traumatology',
     'midwifery & gynecology', 'urology', 'general oncology',
-    'cardiology', 'allergology'
+    'cardiology', 'allergology', 'proctology', 'ent', 'endocrinology'
   ];
 
   // Department-specific document codes
@@ -443,11 +686,14 @@ const Report = () => {
     'ophthalmology': ['#101', '#102', '#103', '#104'],
     'neurology': ['#201', '#202', '#203', '#204'],
     'traumatology': ['#301', '#302', '#303', '#304'],
-    'midwifery & gynecology': ['#025', '#003-1', '#025-1', '#096'],
+    'midwifery & gynecology': ['#025', 'gynecology', '#003-1', '#025-1', '#096'],
     'urology': ['#401', '#402', '#403', '#404'],
     'general oncology': ['#501', '#502', '#503', '#504'],
     'cardiology': ['#601', '#602', '#603', '#604'],
-    'allergology': ['#701', '#702', '#703', '#704']
+    'proctology': ['#801'],
+    'allergology': ['#701', '#702', '#703', '#704'],
+    'ent': ['#901'],
+    'endocrinology': ['#1001']
   };
 
   // Get current codes based on selected specialty
@@ -466,57 +712,68 @@ const Report = () => {
     // Midwifery & Gynecology forms
     if (selectedSpecialty === 'midwifery & gynecology') {
       if (selectedCode === '#025') {
-      return <MidwiferyForm {...props} />;
-    }
+        return <MidwiferyForm {...props} onSave={handleSaveReport} />;
+      }
+      if (selectedCode === 'gynecology') {
+        return <GynecologyForm {...props} onSave={handleSaveReport} />;
+      }
       return (
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Midwifery & Gynecology Report - {selectedCode}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              {t('doctorReport.midwiferyGynecologyReport')} - {selectedCode}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
                 <textarea
                   name="chiefComplaint"
                   value={formData.chiefComplaint || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter the patient's main complaint..."
+                  placeholder={t('doctorReport.enterChiefComplaint')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Examination Findings</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.examinationFindings')}</label>
                 <textarea
                   name="examinationFindings"
                   value={formData.examinationFindings || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, examinationFindings: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Record examination findings..."
+                  placeholder={t('doctorReport.recordExaminationFindings')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.diagnosis')}</label>
                 <textarea
                   name="diagnosis"
                   value={formData.diagnosis || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter diagnosis..."
+                  placeholder={t('doctorReport.enterDiagnosis')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
                 <textarea
                   name="treatmentPlan"
                   value={formData.treatmentPlan || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the treatment plan..."
+                  placeholder={t('doctorReport.describeTreatmentPlan')}
                 />
               </div>
             </div>
@@ -532,64 +789,74 @@ const Report = () => {
       }
       return (
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              General Medical Report - {selectedCode}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              {t('doctorReport.generalMedicalReport')} - {selectedCode}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
                 <textarea
                   name="chiefComplaint"
                   value={formData.chiefComplaint || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter the patient's main complaint..."
+                  placeholder={t('doctorReport.enterChiefComplaint')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">History of Present Illness</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.historyOfPresentIllness')}</label>
                 <textarea
                   name="historyOfPresentIllness"
                   value={formData.historyOfPresentIllness || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, historyOfPresentIllness: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the history of the present illness..."
+                  placeholder={t('doctorReport.describeHistoryOfPresentIllness')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Physical Examination</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.physicalExamination')}</label>
                 <textarea
                   name="physicalExamination"
                   value={formData.physicalExamination || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, physicalExamination: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Record physical examination findings..."
+                  placeholder={t('doctorReport.recordPhysicalExamination')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.diagnosis')}</label>
                 <textarea
                   name="diagnosis"
                   value={formData.diagnosis || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter diagnosis..."
+                  placeholder={t('doctorReport.enterDiagnosis')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
                 <textarea
                   name="treatmentPlan"
                   value={formData.treatmentPlan || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the treatment plan..."
+                  placeholder={t('doctorReport.describeTreatmentPlan')}
                 />
               </div>
             </div>
@@ -605,64 +872,74 @@ const Report = () => {
       }
       return (
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Cardiology Report - {selectedCode}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              {t('doctorReport.cardiologyReport')} - {selectedCode}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
                 <textarea
                   name="chiefComplaint"
                   value={formData.chiefComplaint || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter the patient's main complaint..."
+                  placeholder={t('doctorReport.enterChiefComplaint')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Cardiac History</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.cardiacHistory')}</label>
                 <textarea
                   name="cardiacHistory"
                   value={formData.cardiacHistory || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, cardiacHistory: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe cardiac history..."
+                  placeholder={t('doctorReport.cardiacHistoryPlaceholder')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Physical Examination</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.physicalExamination')}</label>
                 <textarea
                   name="physicalExamination"
                   value={formData.physicalExamination || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, physicalExamination: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Record cardiac examination findings..."
+                  placeholder={t('doctorReport.recordPhysicalExamination')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.diagnosis')}</label>
                 <textarea
                   name="diagnosis"
                   value={formData.diagnosis || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter cardiac diagnosis..."
+                  placeholder={t('doctorReport.enterDiagnosis')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
                 <textarea
                   name="treatmentPlan"
                   value={formData.treatmentPlan || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the cardiac treatment plan..."
+                  placeholder={t('doctorReport.describeTreatmentPlan')}
                 />
               </div>
             </div>
@@ -678,64 +955,74 @@ const Report = () => {
       }
       return (
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Ophthalmology Report - {selectedCode}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              {t('doctorReport.ophthalmologyReport')} - {selectedCode}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
                 <textarea
                   name="chiefComplaint"
                   value={formData.chiefComplaint || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter the patient's main complaint..."
+                  placeholder={t('doctorReport.enterChiefComplaint')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Ocular History</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.ocularHistory')}</label>
                 <textarea
                   name="ocularHistory"
                   value={formData.ocularHistory || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, ocularHistory: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe ocular history..."
+                  placeholder={t('doctorReport.ocularHistoryPlaceholder')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Visual Acuity</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.visualAcuity')}</label>
                 <textarea
                   name="visualAcuity"
                   value={formData.visualAcuity || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, visualAcuity: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="2"
-                  placeholder="Record visual acuity..."
+                  placeholder={t('doctorReport.visualAcuityPlaceholder')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.diagnosis')}</label>
                 <textarea
                   name="diagnosis"
                   value={formData.diagnosis || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter diagnosis..."
+                  placeholder={t('doctorReport.enterDiagnosis')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
                 <textarea
                   name="treatmentPlan"
                   value={formData.treatmentPlan || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the treatment plan..."
+                  placeholder={t('doctorReport.describeTreatmentPlan')}
                 />
               </div>
             </div>
@@ -751,64 +1038,74 @@ const Report = () => {
       }
       return (
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Neurology Report - {selectedCode}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              {t('doctorReport.neurologyReport')} - {selectedCode}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
                 <textarea
                   name="chiefComplaint"
                   value={formData.chiefComplaint || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter the patient's main complaint..."
+                  placeholder={t('doctorReport.enterChiefComplaint')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Neurological History</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.neurologicalHistory')}</label>
                 <textarea
                   name="neurologicalHistory"
                   value={formData.neurologicalHistory || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, neurologicalHistory: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe neurological history..."
+                  placeholder={t('doctorReport.neurologicalHistoryPlaceholder')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Physical Examination</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.physicalExamination')}</label>
                 <textarea
                   name="physicalExamination"
                   value={formData.physicalExamination || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, physicalExamination: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Record examination findings..."
+                  placeholder={t('doctorReport.recordPhysicalExamination')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.diagnosis')}</label>
                 <textarea
                   name="diagnosis"
                   value={formData.diagnosis || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter diagnosis..."
+                  placeholder={t('doctorReport.enterDiagnosis')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
                 <textarea
                   name="treatmentPlan"
                   value={formData.treatmentPlan || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the treatment plan..."
+                  placeholder={t('doctorReport.describeTreatmentPlan')}
                 />
               </div>
             </div>
@@ -824,64 +1121,74 @@ const Report = () => {
     }
     return (
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Traumatology Report - {selectedCode}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              {t('doctorReport.traumatologyReport')} - {selectedCode}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
                 <textarea
                   name="chiefComplaint"
                   value={formData.chiefComplaint || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter the patient's main complaint..."
+                  placeholder={t('doctorReport.enterChiefComplaint')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Injury Details</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.injuryDetails')}</label>
                 <textarea
                   name="injuryDetails"
                   value={formData.injuryDetails || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, injuryDetails: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe injury details..."
+                  placeholder={t('doctorReport.injuryDetailsPlaceholder')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Physical Examination</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.physicalExamination')}</label>
                 <textarea
                   name="physicalExamination"
                   value={formData.physicalExamination || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, physicalExamination: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Record examination findings..."
+                  placeholder={t('doctorReport.recordPhysicalExamination')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.diagnosis')}</label>
                 <textarea
                   name="diagnosis"
                   value={formData.diagnosis || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter diagnosis..."
+                  placeholder={t('doctorReport.enterDiagnosis')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
                 <textarea
                   name="treatmentPlan"
                   value={formData.treatmentPlan || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the treatment plan..."
+                  placeholder={t('doctorReport.describeTreatmentPlan')}
                 />
               </div>
             </div>
@@ -897,42 +1204,48 @@ const Report = () => {
     }
     return (
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Oncology Report - {selectedCode}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              {t('doctorReport.oncologyReport')} - {selectedCode}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
                 <textarea
                   name="chiefComplaint"
                   value={formData.chiefComplaint || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter the patient's main complaint..."
+                  placeholder={t('doctorReport.enterChiefComplaint')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Cancer History</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.cancerHistory')}</label>
                 <textarea
                   name="cancerHistory"
                   value={formData.cancerHistory || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, cancerHistory: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe cancer history..."
+                  placeholder={t('doctorReport.cancerHistoryPlaceholder')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
                 <textarea
                   name="treatmentPlan"
                   value={formData.treatmentPlan || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the treatment plan..."
+                  placeholder={t('doctorReport.describeTreatmentPlan')}
                 />
               </div>
             </div>
@@ -948,64 +1261,74 @@ const Report = () => {
       }
       return (
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Urology Report - {selectedCode}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              {t('doctorReport.urologyReport')} - {selectedCode}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
                 <textarea
                   name="chiefComplaint"
                   value={formData.chiefComplaint || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter the patient's main complaint..."
+                  placeholder={t('doctorReport.enterChiefComplaint')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Urological History</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.urologicalHistory')}</label>
                 <textarea
                   name="urologicalHistory"
                   value={formData.urologicalHistory || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, urologicalHistory: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe urological history..."
+                  placeholder={t('doctorReport.urologicalHistoryPlaceholder')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Examination Findings</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.examinationFindings')}</label>
                 <textarea
                   name="examinationFindings"
                   value={formData.examinationFindings || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, examinationFindings: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Record examination findings..."
+                  placeholder={t('doctorReport.enterExaminationFindings')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.diagnosis')}</label>
                 <textarea
                   name="diagnosis"
                   value={formData.diagnosis || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter diagnosis..."
+                  placeholder={t('doctorReport.enterDiagnosis')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
                 <textarea
                   name="treatmentPlan"
                   value={formData.treatmentPlan || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the treatment plan..."
+                  placeholder={t('doctorReport.describeTreatmentPlan')}
                 />
               </div>
             </div>
@@ -1021,64 +1344,206 @@ const Report = () => {
       }
       return (
         <div className="p-6">
-          <div className="bg-gray-50 rounded-lg p-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">
-              Allergy/Immunology Report - {selectedCode}
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              {t('doctorReport.allergyReport')} - {selectedCode}
             </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
                 <textarea
                   name="chiefComplaint"
                   value={formData.chiefComplaint || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter the patient's main complaint..."
+                  placeholder={t('doctorReport.enterChiefComplaint')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Allergy History</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.allergyHistory')}</label>
                 <textarea
                   name="allergyHistory"
                   value={formData.allergyHistory || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, allergyHistory: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe allergy history..."
+                  placeholder={t('doctorReport.allergyHistoryPlaceholder')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Examination Findings</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.examinationFindings')}</label>
                 <textarea
                   name="examinationFindings"
                   value={formData.examinationFindings || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, examinationFindings: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Record examination findings..."
+                  placeholder={t('doctorReport.enterExaminationFindings')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.diagnosis')}</label>
                 <textarea
                   name="diagnosis"
                   value={formData.diagnosis || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="3"
-                  placeholder="Enter diagnosis..."
+                  placeholder={t('doctorReport.enterDiagnosis')}
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
                 <textarea
                   name="treatmentPlan"
                   value={formData.treatmentPlan || ''}
                   onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
                   rows="4"
-                  placeholder="Describe the treatment plan..."
+                  placeholder={t('doctorReport.describeTreatmentPlan')}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Proctology forms
+    if (selectedSpecialty === 'proctology') {
+      if (selectedCode === '#801') {
+        return <ProctologyForm {...props} onSave={handleSaveReport} />;
+      }
+      return (
+        <div className="p-6">
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              Proctology Report - {selectedCode}
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
+                <textarea
+                  name="chiefComplaint"
+                  value={formData.chiefComplaint || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
+                  rows="3"
+                  placeholder={t('doctorReport.enterChiefComplaint')}
+                />
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.examinationFindings')}</label>
+                <textarea
+                  name="examinationFindings"
+                  value={formData.examinationFindings || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, examinationFindings: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
+                  rows="4"
+                  placeholder={t('doctorReport.enterExaminationFindings')}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ENT forms
+    if (selectedSpecialty === 'ent') {
+      if (selectedCode === '#901') {
+        return <ENTForm {...props} onSave={handleSaveReport} />;
+      }
+      return (
+        <div className="p-6">
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              ENT Report - {selectedCode}
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
+                <textarea
+                  name="chiefComplaint"
+                  value={formData.chiefComplaint || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
+                  rows="3"
+                  placeholder={t('doctorReport.enterChiefComplaint')}
+                />
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.examinationFindings')}</label>
+                <textarea
+                  name="examinationFindings"
+                  value={formData.examinationFindings || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, examinationFindings: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
+                  rows="4"
+                  placeholder={t('doctorReport.enterExaminationFindings')}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Endocrinology forms
+    if (selectedSpecialty === 'endocrinology') {
+      if (selectedCode === '#1001') {
+        return <EndocrinologyForm {...props} onSave={handleSaveReport} />;
+      }
+      return (
+        <div className="p-6">
+          <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+            <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+              Endocrinology Report - {selectedCode}
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
+                <textarea
+                  name="chiefComplaint"
+                  value={formData.chiefComplaint || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
+                  rows="3"
+                  placeholder={t('doctorReport.enterChiefComplaint')}
+                />
+              </div>
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.examinationFindings')}</label>
+                <textarea
+                  name="examinationFindings"
+                  value={formData.examinationFindings || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, examinationFindings: e.target.value }))}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                    darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                  }`}
+                  rows="4"
+                  placeholder={t('doctorReport.enterExaminationFindings')}
                 />
               </div>
             </div>
@@ -1090,53 +1555,61 @@ const Report = () => {
     // Other specialties - generic form
     return (
       <div className="p-6">
-        <div className="bg-gray-50 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">
-            {selectedSpecialty.charAt(0).toUpperCase() + selectedSpecialty.slice(1)} Report - {selectedCode}
+        <div className={`${darkMode ? 'bg-slate-800' : 'bg-gray-50'} rounded-lg p-6`}>
+          <h3 className={`text-lg font-semibold mb-4 ${darkMode ? 'text-slate-200' : 'text-gray-800'}`}>
+            {selectedSpecialty.charAt(0).toUpperCase() + selectedSpecialty.slice(1)} {t('doctorReport.report')} - {selectedCode}
           </h3>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Chief Complaint</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.chiefComplaint')}</label>
               <textarea
                 name="chiefComplaint"
                 value={formData.chiefComplaint || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, chiefComplaint: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                  darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                }`}
                 rows="3"
-                placeholder="Enter the patient's main complaint..."
+                placeholder={t('doctorReport.enterChiefComplaint')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Examination Findings</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.examinationFindings')}</label>
               <textarea
                 name="examinationFindings"
                 value={formData.examinationFindings || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, examinationFindings: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                  darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                }`}
                 rows="4"
-                placeholder="Record examination findings..."
+                placeholder={t('doctorReport.recordExaminationFindings')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Diagnosis</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.diagnosis')}</label>
               <textarea
                 name="diagnosis"
                 value={formData.diagnosis || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, diagnosis: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                  darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                }`}
                 rows="3"
-                placeholder="Enter diagnosis..."
+                placeholder={t('doctorReport.enterDiagnosis')}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Treatment Plan</label>
+              <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-gray-700'}`}>{t('doctorReport.treatmentPlan')}</label>
               <textarea
                 name="treatmentPlan"
                 value={formData.treatmentPlan || ''}
                 onChange={(e) => setFormData(prev => ({ ...prev, treatmentPlan: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3]"
+                className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-1 focus:ring-[#5ACCC3] focus:border-[#5ACCC3] ${
+                  darkMode ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' : 'border-gray-300 bg-white'
+                }`}
                 rows="4"
-                placeholder="Describe the treatment plan..."
+                placeholder={t('doctorReport.describeTreatmentPlan')}
               />
             </div>
           </div>
@@ -1146,11 +1619,12 @@ const Report = () => {
   };
 
   if (!patient) {
-    return <div className="p-8 text-center text-gray-500">Loading patient info...</div>;
+    return <div className={`p-8 text-center ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{t('doctorReport.loadingPatientInfo')}</div>;
   }
 
+
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className={`flex flex-col h-screen ${darkMode ? 'bg-slate-900' : 'bg-white'}`} key={`report-${currentLanguage}-${languageKey}`}>
       <Header />
 
       <div className="flex flex-1 overflow-hidden">
@@ -1159,10 +1633,10 @@ const Report = () => {
         </div>
 
         {/* Patient Sidebar - Sticky */}
-        <div className="md:w-1/5 lg:w-1/6 bg-white border-r border-gray-200 overflow-y-auto">
+        <div className={`md:w-1/5 lg:w-1/6 ${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} border-r overflow-y-auto`}>
           <div className="p-4">
             <div className="flex items-center justify-between mb-2">
-              <h2 className="text-[#5ACCC3] font-medium text-sm">Patient portal</h2>
+              <h2 className="text-[#5ACCC3] font-medium text-sm">{t('doctorReport.patientPortal')}</h2>
               <button className="text-[#5ACCC3]">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M3 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 5a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm1 5a1 1 0 100 2h12a1 1 0 100-2H4z" clipRule="evenodd" />
@@ -1170,63 +1644,63 @@ const Report = () => {
               </button>
             </div>
 
-            <button onClick={() => navigate('/doctor/patient')} className="text-gray-600 text-sm mb-4 hover:text-[#5ACCC3]">
-              &larr; back
+            <button onClick={() => navigate('/doctor/patient')} className={`${darkMode ? 'text-slate-300 hover:text-[#5ACCC3]' : 'text-gray-600 hover:text-[#5ACCC3]'} text-sm mb-4`}>
+              &larr; {t('doctorReport.back')}
             </button>
 
-            <div className="border border-gray-200 rounded-md p-4 mb-4">
+            <div className={`${darkMode ? 'border-slate-700' : 'border-gray-200'} border rounded-md p-4 mb-4`}>
               <div className="flex justify-center mb-4">
                 <div className="w-20 h-20 bg-gray-200 rounded-md"></div>
               </div>
 
               <div className="text-center mb-4">
                 <h3 className="text-[#5ACCC3] font-medium">{patient.name} {patient.gender === 'male' ? '♂' : '♀'}</h3>
-                <p className="text-sm text-gray-600">{patient.dob}</p>
-                <p className="text-xs text-gray-500">Age: {patient.age}</p>
+                <p className={`text-sm ${darkMode ? 'text-slate-300' : 'text-gray-600'}`}>{patient.dob}</p>
+                <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-500'}`}>{t('doctorReport.age')}: {patient.age}</p>
               </div>
 
               <div className="grid grid-cols-3 gap-2 mb-4">
-                <Info label="Height" value={patient.height} />
-                <Info label="Weight" value={patient.weight} />
-                <Info label="BMI" value={patient.bmi} />
+                <Info label={t('doctorReport.height')} value={patient.height} darkMode={darkMode} />
+                <Info label={t('doctorReport.weight')} value={patient.weight} darkMode={darkMode} />
+                <Info label={t('doctorReport.bmi')} value={patient.bmi} darkMode={darkMode} />
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-4">
-                <Info label="Temperature" value={patient.temperature} />
-                <Info label="Blood Pressure" value={patient.bloodPressure} />
+                <Info label={t('doctorReport.temperature')} value={patient.temperature} darkMode={darkMode} />
+                <Info label={t('doctorReport.bloodPressure')} value={patient.bloodPressure} darkMode={darkMode} />
               </div>
 
-              <p className="text-xs text-gray-400 text-center mb-4">
+              <p className={`text-xs ${darkMode ? 'text-slate-500' : 'text-gray-400'} text-center mb-4`}>
                 {patient?.last_measured || patient?.lastVitalsDate 
-                  ? `Last measured: ${new Date(patient.last_measured || patient.lastVitalsDate).toLocaleString()}` 
-                  : 'Last measured: —'}
+                  ? `${t('doctorReport.lastMeasured')}: ${new Date(patient.last_measured || patient.lastVitalsDate).toLocaleString()}` 
+                  : `${t('doctorReport.lastMeasured')}: —`}
               </p>
 
               <div className="grid grid-cols-2 gap-2 mb-4">
-                <Info label="Blood Group" value={patient.bloodGroup} />
-                <Info label="Blood rh factor" value={patient.rhFactor} />
+                <Info label={t('doctorReport.bloodGroup')} value={patient.bloodGroup} darkMode={darkMode} />
+                <Info label={t('doctorReport.bloodRhFactor')} value={patient.rhFactor} darkMode={darkMode} />
               </div>
 
               {/* Allergies Section */}
               <div className="mb-4">
-                <div className="bg-red-50 border border-red-200 rounded-md p-3">
+                <div className={`${darkMode ? 'bg-red-900/30 border-red-800' : 'bg-red-50 border-red-200'} border rounded-md p-3`}>
                   <div className="flex items-center mb-2">
                     <svg className="h-4 w-4 text-red-500 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
                     </svg>
-                    <p className="text-red-700 text-xs font-medium">Allergies</p>
+                    <p className={`${darkMode ? 'text-red-300' : 'text-red-700'} text-xs font-medium`}>{t('doctorReport.allergies')}</p>
                   </div>
                   {patientAllergies && patientAllergies.length > 0 ? (
                     <div className="space-y-1">
                       {patientAllergies.map((allergy) => (
-                        <p key={allergy.id} className="text-sm text-red-800">
-                          {allergy.display_name || allergy.name || 'Unknown'} 
+                        <p key={allergy.id} className={`text-sm ${darkMode ? 'text-red-200' : 'text-red-800'}`}>
+                          {allergy.display_name || allergy.name || t('doctorReport.unknown')} 
                           {allergy.criticality && ` (${allergy.criticality})`}
                         </p>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-red-800">No known allergies</p>
+                    <p className={`text-sm ${darkMode ? 'text-red-200' : 'text-red-800'}`}>{t('doctorReport.noKnownAllergies')}</p>
                   )}
                 </div>
               </div>
@@ -1234,17 +1708,17 @@ const Report = () => {
               {/* Immunizations Section */}
               {patientImmunizations && patientImmunizations.length > 0 && (
                 <div className="mb-4">
-                  <div className="bg-green-50 border border-green-200 rounded-md p-3">
-                    <p className="text-green-700 text-xs font-medium mb-2">Immunizations</p>
-                    <div className="space-y-1 text-sm text-green-800">
+                  <div className={`${darkMode ? 'bg-green-900/30 border-green-800' : 'bg-green-50 border-green-200'} border rounded-md p-3`}>
+                    <p className={`${darkMode ? 'text-green-300' : 'text-green-700'} text-xs font-medium mb-2`}>{t('doctorReport.immunizations')}</p>
+                    <div className={`space-y-1 text-sm ${darkMode ? 'text-green-200' : 'text-green-800'}`}>
                       {patientImmunizations.slice(0, 5).map((imm) => (
                         <div key={imm.id} className="flex justify-between">
                           <span>
                             {imm.vaccine}
-                            {imm.lotNumber && ` (Lot: ${imm.lotNumber})`}
+                            {imm.lotNumber && ` (${t('doctorReport.lot')}: ${imm.lotNumber})`}
                           </span>
                           {imm.date && (
-                            <span className="text-xs text-green-600">
+                            <span className={`text-xs ${darkMode ? 'text-green-400' : 'text-green-600'}`}>
                               {new Date(imm.date).toLocaleDateString()}
                             </span>
                           )}
@@ -1255,10 +1729,10 @@ const Report = () => {
                 </div>
               )}
 
-              <Info label="Phone Number" value={patient.phoneNumber} />
-              <Info label="Email Address" value={patient.emailAddress} />
-              <Info label="Address" value={patient.address} />
-              <Info label="Temporary Address" value={patient.temporaryAddress} />
+              <Info label={t('doctorReport.phoneNumber')} value={patient.phoneNumber} darkMode={darkMode} />
+              <Info label={t('doctorReport.emailAddress')} value={patient.emailAddress} darkMode={darkMode} />
+              <Info label={t('doctorReport.address')} value={patient.address} darkMode={darkMode} />
+              <Info label={t('doctorReport.temporaryAddress')} value={patient.temporaryAddress} darkMode={darkMode} />
             </div>
           </div>
         </div>
@@ -1267,24 +1741,51 @@ const Report = () => {
         <div className="flex-1 overflow-y-auto">
           <div className="p-6">
             <div className="flex flex-wrap gap-2 mb-4">
-              {specialties.map(specialty => (
-                <button
-                  key={specialty}
-                  onClick={() => setSelectedSpecialty(specialty)}
-                  className={`px-3 py-1 text-sm rounded-md ${selectedSpecialty === specialty ? 'bg-[#5ACCC3] text-white' : 'text-gray-600 hover:bg-gray-100'}`}
-                >
-                  {specialty}
-                </button>
-              ))}
+              {specialties.map(specialty => {
+                const specialtyKey = specialty.replace(/\s+/g, '_').replace('&', '_').toLowerCase();
+                const specialtyMap = {
+                  'general': 'general',
+                  'ophthalmology': 'ophthalmology',
+                  'neurology': 'neurology',
+                  'traumatology': 'traumatology',
+                  'midwifery___gynecology': 'midwifery_&_gynecology', // Handle three underscores from replace logic
+                  'midwifery_&_gynecology': 'midwifery_&_gynecology', // Also handle original format
+                  'urology': 'urology',
+                  'general_oncology': 'general_oncology',
+                  'cardiology': 'cardiology',
+                  'proctology': 'proctology',
+                  'allergology': 'allergology',
+                  'ent': 'ent',
+                  'endocrinology': 'endocrinology'
+                };
+                const translationKey = specialtyMap[specialtyKey] || specialtyKey;
+                return (
+                  <button
+                    key={specialty}
+                    onClick={() => setSelectedSpecialty(specialty)}
+                    className={`px-3 py-1 text-sm rounded-md ${selectedSpecialty === specialty 
+                      ? 'bg-[#5ACCC3] text-white' 
+                      : darkMode 
+                        ? 'text-slate-300 hover:bg-slate-700' 
+                        : 'text-gray-600 hover:bg-gray-100'}`}
+                  >
+                    {t(`doctorReport.specialty.${translationKey}`, specialty)}
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="bg-[#5ACCC3]/10 rounded-md p-4 mb-6">
+            <div className={`${darkMode ? 'bg-[#5ACCC3]/20' : 'bg-[#5ACCC3]/10'} rounded-md p-4 mb-6`}>
               <div className="flex flex-wrap gap-2">
                 {currentCodes.map(code => (
                   <button
                     key={code}
                     onClick={() => setSelectedCode(code)}
-                    className={`px-3 py-1 text-sm rounded-md ${selectedCode === code ? 'bg-[#5ACCC3] text-white' : 'text-[#5ACCC3] bg-white'}`}
+                    className={`px-3 py-1 text-sm rounded-md ${selectedCode === code 
+                      ? 'bg-[#5ACCC3] text-white' 
+                      : darkMode 
+                        ? 'text-[#5ACCC3] bg-slate-700' 
+                        : 'text-[#5ACCC3] bg-white'}`}
                   >
                     {code}
                   </button>
@@ -1292,7 +1793,7 @@ const Report = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-md border border-gray-200">
+            <div className={`${darkMode ? 'bg-slate-800 border-slate-700' : 'bg-white border-gray-200'} rounded-md border`}>
               {renderSpecialtyForm()}
 
               {/* Only show default save button for forms that don't have their own save buttons */}
@@ -1304,12 +1805,16 @@ const Report = () => {
                 (selectedSpecialty === 'urology' && selectedCode === '#401') ||
                 (selectedSpecialty === 'general oncology' && selectedCode === '#501')
               ) && (
-                <div className="flex justify-end p-4 border-t">
+                <div className={`flex justify-end p-4 ${darkMode ? 'border-t border-slate-700' : 'border-t border-gray-200'}`}>
                   <button
                     onClick={() => window.history.back()}
-                    className="px-4 py-2 border border-gray-300 text-gray-600 rounded-md text-sm mr-2"
+                    className={`px-4 py-2 border rounded-md text-sm mr-2 ${
+                      darkMode 
+                        ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                        : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                    }`}
                   >
-                    Cancel
+                    {t('doctorReport.cancel')}
                   </button>
                   <button
                     onClick={(e) => {
@@ -1318,9 +1823,9 @@ const Report = () => {
                       // Call handleSaveReport without passing the event
                       handleSaveReport();
                     }}
-                    className="px-4 py-2 bg-[#5ACCC3] text-white rounded-md text-sm"
+                    className="px-4 py-2 bg-[#5ACCC3] text-white rounded-md text-sm hover:bg-[#4ab8b0]"
                   >
-                    Save Report
+                    {t('doctorReport.saveReport')}
                   </button>
                 </div>
               )}
@@ -1332,10 +1837,10 @@ const Report = () => {
   );
 };
 
-const Info = ({ label, value }) => (
+const Info = ({ label, value, darkMode = false }) => (
   <div className="mb-3">
-    <p className="text-gray-600 text-xs">{label}:</p>
-    <p className="text-sm">{value || '-'}</p>
+    <p className={`text-xs ${darkMode ? 'text-slate-400' : 'text-gray-600'}`}>{label}:</p>
+    <p className={`text-sm ${darkMode ? 'text-slate-200' : 'text-gray-900'}`}>{value || '-'}</p>
   </div>
 );
 

@@ -1,9 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { FiSend, FiPaperclip, FiX } from 'react-icons/fi'
 import { messagesAPI } from '../../services/nurseService'
+import { API_BASE_URL } from '../../config/api'
 import NurseHeader from './header'
 
 const NurseMessages = () => {
+  const { t } = useTranslation()
+  const location = useLocation()
   const [patients, setPatients] = useState([])
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [messages, setMessages] = useState([])
@@ -18,6 +23,23 @@ const NurseMessages = () => {
   const [availableDocuments, setAvailableDocuments] = useState([])
   const [selectedDocuments, setSelectedDocuments] = useState([])
   const [documentsLoading, setDocumentsLoading] = useState(false)
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     const fetchPatients = async (showLoading = false) => {
@@ -29,7 +51,8 @@ const NurseMessages = () => {
         // Check backend health
         let isConnected = false
         try {
-          const response = await fetch('http://localhost:8000/api/v1/health', { method: 'GET' })
+          const healthUrl = `${API_BASE_URL}/health`;
+          const response = await fetch(healthUrl, { method: 'GET' })
           isConnected = response.ok
           setBackendConnected(isConnected)
         } catch {
@@ -62,7 +85,21 @@ const NurseMessages = () => {
             // Preserve selected patient if it still exists in the new list
             setPatients(prevPatients => {
               const newPatients = patientList || []
-              if (selectedPatient) {
+              
+              // Check if we have a contactId from navigation state
+              const contactIdFromState = location.state?.contactId
+              if (contactIdFromState) {
+                const contactFromState = newPatients.find(p => 
+                  p.id === contactIdFromState || 
+                  p.contact_id === contactIdFromState || 
+                  p.patient_id === contactIdFromState
+                )
+                if (contactFromState) {
+                  setSelectedPatient(contactFromState)
+                  // Clear the state to avoid re-selecting on re-renders
+                  window.history.replaceState({}, document.title)
+                }
+              } else if (selectedPatient) {
                 const stillExists = newPatients.find(p => p.id === selectedPatient.id)
                 if (!stillExists && newPatients.length > 0) {
                   setSelectedPatient(newPatients[0])
@@ -107,7 +144,7 @@ const NurseMessages = () => {
     return () => {
       clearInterval(pollInterval)
     }
-  }, [backendConnected, clinicId, selectedPatient])
+  }, [backendConnected, clinicId, selectedPatient, location.state])
 
   const lastMarkedRecipientIdRef = useRef(null)
   const isMarkingAsReadRef = useRef(false)
@@ -321,7 +358,7 @@ const NurseMessages = () => {
 
   const handleOpenDocumentModal = async () => {
     if (!selectedPatient || selectedPatient.type !== 'patient') {
-      alert('Documents can only be attached when chatting with a patient')
+      alert(t('documentsCanOnlyBeAttachedWhenChattingWithPatient'))
       return
     }
     setShowDocumentModal(true)
@@ -624,27 +661,39 @@ const NurseMessages = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50'
+    }`}>
       <NurseHeader />
       
       {/* Backend status and error indicators */}
       {!backendConnected && (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 mx-2 sm:mx-4 mt-4 rounded">
+        <div className={`border px-4 py-3 mx-2 sm:mx-4 mt-4 rounded transition-colors ${
+          darkMode
+            ? 'bg-yellow-900 bg-opacity-30 border-yellow-500 text-yellow-300'
+            : 'bg-yellow-100 border-yellow-400 text-yellow-700'
+        }`}>
           <div className="flex items-center">
             <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
-            Backend not connected - Please ensure the server is running
+            {t('backendNotConnectedEnsureServerRunning')}
           </div>
         </div>
       )}
       
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 mx-2 sm:mx-4 mt-4 rounded">
+        <div className={`border px-4 py-3 mx-2 sm:mx-4 mt-4 rounded transition-colors ${
+          darkMode
+            ? 'bg-red-900 bg-opacity-30 border-red-500 text-red-300'
+            : 'bg-red-100 border-red-400 text-red-700'
+        }`}>
           {error}
           <button 
             onClick={() => setError(null)}
-            className="float-right text-red-700 hover:text-red-900"
+            className={`float-right transition-colors ${
+              darkMode ? 'text-red-300 hover:text-red-100' : 'text-red-700 hover:text-red-900'
+            }`}
           >
             ×
           </button>
@@ -652,20 +701,34 @@ const NurseMessages = () => {
       )}
       
       <div className="max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        <div className="flex bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden h-[80vh]">
+        <div className={`flex rounded-xl shadow-lg border overflow-hidden h-[80vh] transition-colors ${
+          darkMode
+            ? 'bg-[#0D2026] border-[#133037]'
+            : 'bg-white border-gray-200'
+        }`}>
           {/* Left Sidebar - Patient List */}
-          <div className="w-1/3 border-r bg-gray-50 p-4">
+          <div className={`w-1/3 border-r p-4 transition-colors ${
+            darkMode ? 'bg-[#07181D] border-[#133037]' : 'bg-gray-50 border-gray-200'
+          }`}>
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-semibold text-gray-700">Patients List</h2>
+              <h2 className={`text-lg font-semibold ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-700'
+              }`}>{t('patientsList')}</h2>
               {backendConnected && (
-                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" title="Backend connected"></div>
+                <div className={`w-2 h-2 rounded-full animate-pulse ${
+                  darkMode ? 'bg-green-400' : 'bg-green-500'
+                }`} title={t('backendConnected')}></div>
               )}
             </div>
             <div className="space-y-3 overflow-y-auto h-full pr-2">
               {loading ? (
-                <p className="text-gray-400 text-sm">Loading contacts...</p>
+                <p className={`text-sm ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                }`}>{t('loadingContacts')}</p>
               ) : patients.length === 0 ? (
-                <p className="text-gray-400 text-sm">No contacts found.</p>
+                <p className={`text-sm ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                }`}>{t('noContactsFound')}</p>
               ) : (
                 patients.map((p) => {
                   const hasUnread = p.unread_count && p.unread_count > 0
@@ -673,11 +736,17 @@ const NurseMessages = () => {
                   <div
                     key={p.id}
                     onClick={() => setSelectedPatient(p)}
-                    className={`rounded-lg border px-4 py-2 cursor-pointer shadow-sm relative ${
+                    className={`rounded-lg border px-4 py-2 cursor-pointer shadow-sm relative transition-colors ${
                       selectedPatient?.id === p.id
-                        ? 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white font-semibold'
+                        ? darkMode
+                          ? 'bg-gradient-to-r from-[#79CAC2] to-[#58B4AA] text-[#050C0F] font-semibold'
+                          : 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white font-semibold'
                         : hasUnread
-                        ? 'bg-blue-50 border-blue-300 hover:bg-blue-100 text-gray-800 font-medium'
+                        ? darkMode
+                          ? 'bg-blue-900 bg-opacity-30 border-blue-500 hover:bg-blue-900 bg-opacity-50 text-[#F5FEFF] font-medium'
+                          : 'bg-blue-50 border-blue-300 hover:bg-blue-100 text-gray-800 font-medium'
+                        : darkMode
+                        ? 'bg-[#0D2026] border-[#133037] hover:bg-[#133037] text-[#F5FEFF]'
                         : 'bg-white hover:bg-gray-100 text-gray-800'
                     }`}
                   >
@@ -695,14 +764,22 @@ const NurseMessages = () => {
                             {p.type && p.type !== 'patient' && (
                               <span className={`text-xs px-2 py-0.5 rounded ${
                                 selectedPatient?.id === p.id
-                                  ? 'bg-white/20 text-white'
+                                  ? darkMode
+                                    ? 'bg-[#050C0F]/30 text-[#050C0F]'
+                                    : 'bg-white/20 text-white'
+                                  : darkMode
+                                  ? 'bg-blue-900 bg-opacity-30 text-blue-300'
                                   : 'bg-blue-100 text-blue-800'
                               }`}>
-                                {p.type === 'doctor' ? 'Doctor' : p.type === 'nurse' ? 'Nurse' : 'Staff'}
+                                {p.type === 'doctor' ? t('doctor') : p.type === 'nurse' ? t('nurse') : t('staff')}
                               </span>
                             )}
                           </div>
-                          <div className={`text-xs ${selectedPatient?.id === p.id ? 'text-white/80' : 'text-gray-500'}`}>
+                          <div className={`text-xs ${
+                            selectedPatient?.id === p.id
+                              ? darkMode ? 'text-[#050C0F]/70' : 'text-white/80'
+                              : darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>
                             {p.patient_code || p.email || '—'}
                           </div>
                         </div>
@@ -711,7 +788,11 @@ const NurseMessages = () => {
                         <div className="ml-2 flex-shrink-0">
                           <span className={`inline-flex items-center justify-center min-w-[24px] h-6 px-2 rounded-full text-xs font-bold shadow-md ${
                             selectedPatient?.id === p.id
-                              ? 'bg-white text-[#4DB6B0]'
+                              ? darkMode
+                                ? 'bg-[#050C0F] text-[#79CAC2]'
+                                : 'bg-white text-[#4DB6B0]'
+                              : darkMode
+                              ? 'bg-red-500 text-white'
                               : 'bg-red-500 text-white'
                           }`}>
                             {p.unread_count > 99 ? '99+' : p.unread_count}
@@ -728,20 +809,28 @@ const NurseMessages = () => {
 
           {/* Main Chat Area */}
           <div className="w-2/3 flex flex-col relative">
-            <div className="border-b px-6 py-4 text-lg font-semibold text-center text-[#4DB6B0] bg-gray-50">
-              {selectedPatient ? `${selectedPatient.title ? selectedPatient.title + ' ' : ''}${selectedPatient.first_name} ${selectedPatient.last_name}` : 'Select a contact'}
+            <div className={`border-b px-6 py-4 text-lg font-semibold text-center transition-colors ${
+              darkMode
+                ? 'bg-[#07181D] border-[#133037] text-[#79CAC2]'
+                : 'bg-gray-50 border-gray-200 text-[#4DB6B0]'
+            }`}>
+              {selectedPatient ? `${selectedPatient.title ? selectedPatient.title + ' ' : ''}${selectedPatient.first_name} ${selectedPatient.last_name}` : t('selectAContact')}
             </div>
 
-            <div ref={messagesContainerRef} className="flex-1 p-6 bg-gray-100 overflow-y-auto">
+            <div ref={messagesContainerRef} className={`flex-1 p-6 overflow-y-auto transition-colors ${
+              darkMode ? 'bg-[#050C0F]' : 'bg-gray-100'
+            }`}>
               {messagesLoading ? (
                 <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-gray-400">Loading messages...</div>
+                  <div className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'}>{t('loadingMessages')}</div>
                 </div>
               ) : messages.length === 0 ? (
                 <div className="w-full h-full flex items-center justify-center">
-                  <div className="text-gray-400 text-center">
-                    <p className="text-lg mb-2">No messages yet</p>
-                    <p className="text-sm">Start a conversation by sending a message</p>
+                  <div className={`text-center ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                  }`}>
+                    <p className="text-lg mb-2">{t('noMessagesYet')}</p>
+                    <p className="text-sm">{t('startConversationBySendingMessage')}</p>
                   </div>
                 </div>
               ) : (
@@ -755,11 +844,17 @@ const NurseMessages = () => {
                       className={`flex ${isCurrentUser ? 'justify-end' : 'justify-start'}`}
                     >
                       <div
-                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg relative ${
+                        className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg relative transition-colors ${
                           isCurrentUser
-                            ? 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white'
+                            ? darkMode
+                              ? 'bg-gradient-to-r from-[#79CAC2] to-[#58B4AA] text-[#050C0F]'
+                              : 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white'
                             : isUnread
-                            ? 'bg-blue-100 border-2 border-blue-400 text-gray-800 shadow-md'
+                            ? darkMode
+                              ? 'bg-blue-900 bg-opacity-50 border-2 border-blue-400 text-[#F5FEFF] shadow-md'
+                              : 'bg-blue-100 border-2 border-blue-400 text-gray-800 shadow-md'
+                            : darkMode
+                            ? 'bg-[#0D2026] border border-[#133037] text-[#F5FEFF]'
                             : 'bg-white text-gray-800'
                         }`}
                       >
@@ -767,9 +862,13 @@ const NurseMessages = () => {
                           <div className="absolute -left-2 top-2 w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
                         )}
                         <div className="text-sm font-semibold mb-1 flex items-center gap-2">
-                          {msg.sender_name || 'Unknown'}
+                          {msg.sender_name || t('unknown')}
                           {isUnread && (
-                            <span className="text-xs bg-red-500 text-white px-1.5 py-0.5 rounded-full">NEW</span>
+                            <span className={`text-xs px-1.5 py-0.5 rounded-full ${
+                              darkMode
+                                ? 'bg-red-500 text-white'
+                                : 'bg-red-500 text-white'
+                            }`}>{t('new')}</span>
                           )}
                         </div>
                         <div className="text-sm">{msg.content}</div>
@@ -781,17 +880,25 @@ const NurseMessages = () => {
                                 href={att.file_url || '#'}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="block px-2 py-1 bg-white/20 rounded text-xs hover:bg-white/30 transition"
+                                className={`block px-2 py-1 rounded text-xs transition ${
+                                  darkMode
+                                    ? 'bg-[#133037] hover:bg-[#1a3d44] text-[#C1D9DD]'
+                                    : 'bg-white/20 hover:bg-white/30'
+                                }`}
                               >
-                                📎 {att.file_name || att.document_title || 'Document'}
+                                📎 {att.file_name || att.document_title || t('document')}
                               </a>
                             ))}
                           </div>
                         )}
-                        <div className={`text-xs mt-1 flex items-center gap-2 ${isCurrentUser ? 'text-white/70' : 'text-gray-500'}`}>
+                        <div className={`text-xs mt-1 flex items-center gap-2 ${
+                          isCurrentUser
+                            ? darkMode ? 'text-[#050C0F]/70' : 'text-white/70'
+                            : darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                        }`}>
                           {msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString() : ''}
                           {isUnread && !isCurrentUser && (
-                            <span className="text-red-500 font-bold">●</span>
+                            <span className={darkMode ? 'text-red-400' : 'text-red-500'} style={{ fontWeight: 'bold' }}>●</span>
                           )}
                         </div>
                       </div>
@@ -802,12 +909,18 @@ const NurseMessages = () => {
               )}
             </div>
 
-            <div className="flex items-center border-t px-4 py-3 bg-white">
+            <div className={`flex items-center border-t px-4 py-3 transition-colors ${
+              darkMode ? 'bg-[#0D2026] border-[#133037]' : 'bg-white border-gray-200'
+            }`}>
               {selectedPatient && selectedPatient.type === 'patient' && (
                 <button
                   onClick={handleOpenDocumentModal}
-                  className="mr-2 p-2 text-gray-600 hover:text-[#4DB6B0] transition"
-                  title="Attach document"
+                  className={`mr-2 p-2 transition-colors ${
+                    darkMode
+                      ? 'text-[#8AA2A7] hover:text-[#79CAC2]'
+                      : 'text-gray-600 hover:text-[#4DB6B0]'
+                  }`}
+                  title={t('attachDocument')}
                 >
                   <FiPaperclip size={20} />
                 </button>
@@ -817,12 +930,16 @@ const NurseMessages = () => {
                   {selectedDocuments.map(doc => (
                     <span
                       key={doc.id}
-                      className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded flex items-center gap-1"
+                      className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
+                        darkMode
+                          ? 'bg-blue-900 bg-opacity-30 text-blue-300'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}
                     >
                       {doc.title.substring(0, 20)}...
                       <button
                         onClick={() => handleDocumentSelect(doc)}
-                        className="hover:text-red-600"
+                        className={darkMode ? 'hover:text-red-400' : 'hover:text-red-600'}
                       >
                         <FiX size={12} />
                       </button>
@@ -832,15 +949,23 @@ const NurseMessages = () => {
               )}
               <input
                 type="text"
-                placeholder="Message TABIB"
+                placeholder={t('typeMessage')}
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && handleSend()}
-                className="flex-1 px-4 py-2 rounded-full border border-gray-200 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
+                className={`flex-1 px-4 py-2 rounded-full border focus:outline-none focus:ring-2 transition-colors ${
+                  darkMode
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                    : 'bg-white border-gray-200 text-gray-900 placeholder-gray-400 focus:ring-[#4DB6B0]'
+                }`}
               />
               <button
                 onClick={handleSend}
-                className="ml-3 p-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] rounded-full text-white hover:scale-110 transition"
+                className={`ml-3 p-2 rounded-full text-white hover:scale-110 transition ${
+                  darkMode
+                    ? 'bg-gradient-to-r from-[#79CAC2] to-[#58B4AA]'
+                    : 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0]'
+                }`}
               >
                 <FiSend />
               </button>
@@ -851,25 +976,39 @@ const NurseMessages = () => {
 
       {/* Document Selector Modal */}
       {showDocumentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-xl font-semibold text-[#4DB6B0]">Select Documents to Attach</h2>
+        <div className={`fixed inset-0 flex items-center justify-center z-50 transition-colors ${
+          darkMode ? 'bg-[#050C0F]/80 backdrop-blur-sm' : 'bg-black bg-opacity-50'
+        }`}>
+          <div className={`rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col transition-colors ${
+            darkMode ? 'bg-[#0D2026] border border-[#133037]' : 'bg-white'
+          }`}>
+            <div className={`flex items-center justify-between p-4 border-b transition-colors ${
+              darkMode ? 'border-[#133037]' : 'border-gray-200'
+            }`}>
+              <h2 className={`text-xl font-semibold ${
+                darkMode ? 'text-[#79CAC2]' : 'text-[#4DB6B0]'
+              }`}>{t('selectDocumentsToAttach')}</h2>
               <button
                 onClick={() => {
                   setShowDocumentModal(false)
                   setSelectedDocuments([])
                 }}
-                className="text-gray-500 hover:text-gray-700"
+                className={`transition-colors ${
+                  darkMode ? 'text-[#8AA2A7] hover:text-[#C1D9DD]' : 'text-gray-500 hover:text-gray-700'
+                }`}
               >
                 <FiX size={24} />
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
               {documentsLoading ? (
-                <div className="text-center py-8 text-gray-500">Loading documents...</div>
+                <div className={`text-center py-8 ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                }`}>{t('loadingDocuments')}</div>
               ) : availableDocuments.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">No documents available for this patient</div>
+                <div className={`text-center py-8 ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                }`}>{t('noDocumentsAvailableForThisPatient')}</div>
               ) : (
                 <div className="space-y-2">
                   {availableDocuments.map((doc) => {
@@ -880,7 +1019,11 @@ const NurseMessages = () => {
                         onClick={() => handleDocumentSelect(doc)}
                         className={`p-3 border rounded-lg cursor-pointer transition ${
                           isSelected
-                            ? 'border-[#4DB6B0] bg-blue-50'
+                            ? darkMode
+                              ? 'border-[#79CAC2] bg-blue-900 bg-opacity-30'
+                              : 'border-[#4DB6B0] bg-blue-50'
+                            : darkMode
+                            ? 'border-[#133037] hover:border-[#1a3d44]'
                             : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
@@ -891,18 +1034,30 @@ const NurseMessages = () => {
                                 type="checkbox"
                                 checked={isSelected}
                                 onChange={() => handleDocumentSelect(doc)}
-                                className="w-4 h-4 text-[#4DB6B0] rounded"
+                                className={`w-4 h-4 rounded ${
+                                  darkMode ? 'text-[#79CAC2]' : 'text-[#4DB6B0]'
+                                }`}
                               />
-                              <h3 className="font-semibold text-gray-800">{doc.title}</h3>
-                              <span className="px-2 py-0.5 text-xs bg-gray-200 rounded text-gray-600">
+                              <h3 className={`font-semibold ${
+                                darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                              }`}>{doc.title}</h3>
+                              <span className={`px-2 py-0.5 text-xs rounded ${
+                                darkMode
+                                  ? 'bg-[#133037] text-[#8AA2A7]'
+                                  : 'bg-gray-200 text-gray-600'
+                              }`}>
                                 {doc.type}
                               </span>
                             </div>
                             {doc.description && (
-                              <p className="text-sm text-gray-600 mt-1 ml-6">{doc.description}</p>
+                              <p className={`text-sm mt-1 ml-6 ${
+                                darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                              }`}>{doc.description}</p>
                             )}
                             {doc.date && (
-                              <p className="text-xs text-gray-500 mt-1 ml-6">
+                              <p className={`text-xs mt-1 ml-6 ${
+                                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                              }`}>
                                 {new Date(doc.date).toLocaleDateString()}
                               </p>
                             )}
@@ -914,23 +1069,33 @@ const NurseMessages = () => {
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-end gap-2 p-4 border-t">
+            <div className={`flex items-center justify-end gap-2 p-4 border-t transition-colors ${
+              darkMode ? 'border-[#133037]' : 'border-gray-200'
+            }`}>
               <button
                 onClick={() => {
                   setShowDocumentModal(false)
                   setSelectedDocuments([])
                 }}
-                className="px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+                className={`px-4 py-2 border rounded-lg transition-colors ${
+                  darkMode
+                    ? 'bg-[#0D2026] border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                    : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
               >
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 onClick={() => {
                   setShowDocumentModal(false)
                 }}
-                className="px-4 py-2 bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white rounded-lg hover:opacity-90"
+                className={`px-4 py-2 text-white rounded-lg hover:opacity-90 transition-colors ${
+                  darkMode
+                    ? 'bg-gradient-to-r from-[#79CAC2] to-[#58B4AA]'
+                    : 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0]'
+                }`}
               >
-                Select ({selectedDocuments.length})
+                {t('select')} ({selectedDocuments.length})
               </button>
             </div>
           </div>

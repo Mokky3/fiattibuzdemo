@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, Filter, Settings, Bell, Shield, Database, Users, Monitor, Printer, Wifi, Server, Clock, Mail, Phone, Globe, Save, X, Check, AlertTriangle, Info, Plus, Trash2, Edit } from 'lucide-react';
 // Import the header component
 import LabHeader from './header';
@@ -15,6 +16,25 @@ import {
 
 
 const LabSettingsModule = () => {
+  const { t } = useTranslation();
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
+  
   const [activeTab, setActiveTab] = useState('general');
   const [hasChanges, setHasChanges] = useState(false);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
@@ -231,7 +251,7 @@ const LabSettingsModule = () => {
         if (equipment) setEquipmentSettings(equipment);
       } catch (err) {
         console.error('Error loading settings:', err);
-        setError('Failed to load settings');
+        setError(t('failedToLoadSettings'));
       } finally {
         setLoading(false);
       }
@@ -301,7 +321,7 @@ const LabSettingsModule = () => {
       await refreshSettingsSection(section);
       
       setHasChanges(false);
-      setSuccessMessage(`${section} settings saved successfully!`);
+      setSuccessMessage(t('settingsSavedSuccessfully', { section: t(section.toLowerCase()) }));
       setShowSuccessMessage(true);
       
       // Hide success message after 3 seconds
@@ -311,7 +331,7 @@ const LabSettingsModule = () => {
       
     } catch (err) {
       console.error(`Error saving ${section} settings:`, err);
-      setSuccessMessage(`Failed to save ${section} settings. Please try again.`);
+      setSuccessMessage(t('failedToSaveSettingsPleaseTryAgain', { section: t(section.toLowerCase()) }));
       setShowSuccessMessage(true);
       
       // Hide error message after 5 seconds
@@ -324,24 +344,43 @@ const LabSettingsModule = () => {
   };
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'active': return 'text-green-600 bg-green-50 border-green-200';
-      case 'maintenance': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
-      case 'inactive': return 'text-red-600 bg-red-50 border-red-200';
-      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+    if (darkMode) {
+      switch (status) {
+        case 'active': return 'text-green-300 bg-green-900 bg-opacity-30 border-green-700';
+        case 'maintenance': return 'text-yellow-300 bg-yellow-900 bg-opacity-30 border-yellow-700';
+        case 'inactive': return 'text-red-300 bg-red-900 bg-opacity-30 border-red-700';
+        default: return 'text-gray-300 bg-gray-700 bg-opacity-30 border-gray-600';
+      }
+    } else {
+      switch (status) {
+        case 'active': return 'text-green-600 bg-green-50 border-green-200';
+        case 'maintenance': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+        case 'inactive': return 'text-red-600 bg-red-50 border-red-200';
+        default: return 'text-gray-600 bg-gray-50 border-gray-200';
+      }
     }
   };
 
   const GeneralSection = () => (
     <div className="space-y-6">
       {/* Lab Information */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Laboratory Information
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('laboratoryInformation')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Lab Name</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('labName')}</label>
             <input
               type="text"
               value={generalSettings.labName}
@@ -349,11 +388,17 @@ const LabSettingsModule = () => {
                 setGeneralSettings({...generalSettings, labName: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Lab Code</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('labCode')}</label>
             <input
               type="text"
               value={generalSettings.labCode}
@@ -361,11 +406,17 @@ const LabSettingsModule = () => {
                 setGeneralSettings({...generalSettings, labCode: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('address')}</label>
             <input
               type="text"
               value={generalSettings.address}
@@ -373,11 +424,17 @@ const LabSettingsModule = () => {
                 setGeneralSettings({...generalSettings, address: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('phone')}</label>
             <input
               type="tel"
               value={generalSettings.phone}
@@ -385,11 +442,17 @@ const LabSettingsModule = () => {
                 setGeneralSettings({...generalSettings, phone: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('email')}</label>
             <input
               type="email"
               value={generalSettings.email}
@@ -397,59 +460,89 @@ const LabSettingsModule = () => {
                 setGeneralSettings({...generalSettings, email: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
         </div>
       </div>
 
       {/* Regional Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Regional Settings
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('regionalSettings')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('timezone')}</label>
             <select
               value={generalSettings.timezone}
               onChange={(e) => {
                 setGeneralSettings({...generalSettings, timezone: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
-              <option value="America/New_York">Eastern Time (ET)</option>
-              <option value="America/Chicago">Central Time (CT)</option>
-              <option value="America/Denver">Mountain Time (MT)</option>
-              <option value="America/Los_Angeles">Pacific Time (PT)</option>
+              <option value="America/New_York">{t('easternTimeET')}</option>
+              <option value="America/Chicago">{t('centralTimeCT')}</option>
+              <option value="America/Denver">{t('mountainTimeMT')}</option>
+              <option value="America/Los_Angeles">{t('pacificTimePT')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('language')}</label>
             <select
               value={generalSettings.language}
               onChange={(e) => {
                 setGeneralSettings({...generalSettings, language: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
-              <option value="en">English</option>
-              <option value="es">Spanish</option>
-              <option value="fr">French</option>
-              <option value="de">German</option>
+              <option value="en">{t('english')}</option>
+              <option value="es">{t('spanish')}</option>
+              <option value="fr">{t('french')}</option>
+              <option value="de">{t('german')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('dateFormat')}</label>
             <select
               value={generalSettings.dateFormat}
               onChange={(e) => {
                 setGeneralSettings({...generalSettings, dateFormat: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
               <option value="MM/DD/YYYY">MM/DD/YYYY</option>
               <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -457,32 +550,48 @@ const LabSettingsModule = () => {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('currency')}</label>
             <select
               value={generalSettings.currency}
               onChange={(e) => {
                 setGeneralSettings({...generalSettings, currency: e.target.value});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
-              <option value="USD">USD - US Dollar</option>
-              <option value="EUR">EUR - Euro</option>
-              <option value="GBP">GBP - British Pound</option>
-              <option value="CAD">CAD - Canadian Dollar</option>
+              <option value="USD">USD - {t('usDollar')}</option>
+              <option value="EUR">EUR - {t('euro')}</option>
+              <option value="GBP">GBP - {t('britishPound')}</option>
+              <option value="CAD">CAD - {t('canadianDollar')}</option>
             </select>
           </div>
         </div>
       </div>
 
       {/* Working Hours */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Working Hours
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('workingHours')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Start Time</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('startTime')}</label>
             <input
               type="time"
               value={generalSettings.workingHours.start}
@@ -493,11 +602,17 @@ const LabSettingsModule = () => {
                 });
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">End Time</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('endTime')}</label>
             <input
               type="time"
               value={generalSettings.workingHours.end}
@@ -508,12 +623,18 @@ const LabSettingsModule = () => {
                 });
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
         </div>
         <div className="mt-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">Working Days</label>
+          <label className={`block text-sm font-medium mb-2 ${
+            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+          }`}>{t('workingDays')}</label>
           <div className="flex flex-wrap gap-2">
             {['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'].map(day => (
               <label key={day} className="flex items-center space-x-2">
@@ -530,9 +651,15 @@ const LabSettingsModule = () => {
                     });
                     setHasChanges(true);
                   }}
-                  className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                  className={`rounded focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'border-[#133037] text-[#79CAC2] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 text-teal-600 focus:ring-teal-500'
+                  }`}
                 />
-                <span className="text-sm text-gray-700 capitalize">{day}</span>
+                <span className={`text-sm capitalize ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                }`}>{t(day)}</span>
               </label>
             ))}
           </div>
@@ -543,10 +670,18 @@ const LabSettingsModule = () => {
         <button
           onClick={() => handleSaveSettings('General')}
           disabled={!hasChanges}
-          className="bg-teal-500 hover:bg-teal-600 disabled:bg-gray-300 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+          className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+            darkMode
+              ? hasChanges
+                ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                : 'bg-gray-700 text-gray-500'
+              : hasChanges
+                ? 'bg-teal-500 hover:bg-teal-600 text-white'
+                : 'bg-gray-300 text-gray-500'
+          }`}
         >
           <Save className="w-4 h-4" />
-          Save Changes
+          {t('saveChanges')}
         </button>
       </div>
     </div>
@@ -555,15 +690,27 @@ const LabSettingsModule = () => {
   const SystemSection = () => (
     <div className="space-y-6">
       {/* Backup Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Backup & Maintenance
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('backupMaintenance')}
         </h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900">Automatic Backup</div>
-              <div className="text-sm text-gray-500">Automatically backup system data</div>
+              <div className={`font-medium ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('automaticBackup')}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{t('automaticallyBackupSystemData')}</div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -575,29 +722,41 @@ const LabSettingsModule = () => {
                 }}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+              <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                darkMode
+                  ? 'bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#79CAC2] peer-checked:bg-[#79CAC2] after:border-gray-600'
+                  : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 peer-checked:bg-teal-500 after:border-gray-300'
+              }`}></div>
             </label>
           </div>
 
           {systemSettings.autoBackup && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Backup Frequency</label>
+                <label className={`block text-sm font-medium mb-2 ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                }`}>{t('backupFrequency')}</label>
                 <select
                   value={systemSettings.backupFrequency}
                   onChange={(e) => {
                     setSystemSettings({...systemSettings, backupFrequency: e.target.value});
                     setHasChanges(true);
                   }}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 focus:ring-teal-500'
+                  }`}
                 >
-                  <option value="hourly">Hourly</option>
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
+                  <option value="hourly">{t('hourly')}</option>
+                  <option value="daily">{t('daily')}</option>
+                  <option value="weekly">{t('weekly')}</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Retention (Days)</label>
+                <label className={`block text-sm font-medium mb-2 ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                }`}>{t('retentionDays')}</label>
                 <input
                   type="number"
                   value={systemSettings.backupRetention}
@@ -605,7 +764,11 @@ const LabSettingsModule = () => {
                     setSystemSettings({...systemSettings, backupRetention: parseInt(e.target.value)});
                     setHasChanges(true);
                   }}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                  className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 focus:ring-teal-500'
+                  }`}
                 />
               </div>
             </div>
@@ -614,13 +777,23 @@ const LabSettingsModule = () => {
       </div>
 
       {/* Security Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Security Settings
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('securitySettings')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Session Timeout (minutes)</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('sessionTimeoutMinutes')}</label>
             <input
               type="number"
               value={systemSettings.sessionTimeout}
@@ -628,11 +801,17 @@ const LabSettingsModule = () => {
                 setSystemSettings({...systemSettings, sessionTimeout: parseInt(e.target.value)});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Max Login Attempts</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('maxLoginAttempts')}</label>
             <input
               type="number"
               value={systemSettings.maxLoginAttempts}
@@ -640,16 +819,24 @@ const LabSettingsModule = () => {
                 setSystemSettings({...systemSettings, maxLoginAttempts: parseInt(e.target.value)});
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
         </div>
 
         <div className="mt-6">
-          <h4 className="font-medium text-gray-900 mb-3">Password Policy</h4>
+          <h4 className={`font-medium mb-3 ${
+            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+          }`}>{t('passwordPolicy')}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Minimum Length</label>
+              <label className={`block text-sm font-medium mb-2 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+              }`}>{t('minimumLength')}</label>
               <input
                 type="number"
                 value={systemSettings.passwordPolicy.minLength}
@@ -660,11 +847,17 @@ const LabSettingsModule = () => {
                   });
                   setHasChanges(true);
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                  darkMode
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'border-gray-300 focus:ring-teal-500'
+                }`}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Expiry (Days)</label>
+              <label className={`block text-sm font-medium mb-2 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+              }`}>{t('expiryDays')}</label>
               <input
                 type="number"
                 value={systemSettings.passwordPolicy.expiryDays}
@@ -675,15 +868,19 @@ const LabSettingsModule = () => {
                   });
                   setHasChanges(true);
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                  darkMode
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'border-gray-300 focus:ring-teal-500'
+                }`}
               />
             </div>
           </div>
           <div className="mt-4 space-y-2">
             {[
-              { key: 'requireUppercase', label: 'Require Uppercase Letters' },
-              { key: 'requireNumbers', label: 'Require Numbers' },
-              { key: 'requireSpecialChars', label: 'Require Special Characters' }
+              { key: 'requireUppercase', label: t('requireUppercaseLetters') },
+              { key: 'requireNumbers', label: t('requireNumbers') },
+              { key: 'requireSpecialChars', label: t('requireSpecialCharacters') }
             ].map(policy => (
               <div key={policy.key} className="flex items-center space-x-2">
                 <input
@@ -696,9 +893,15 @@ const LabSettingsModule = () => {
                     });
                     setHasChanges(true);
                   }}
-                  className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                  className={`rounded focus:ring-2 transition-colors ${
+                    darkMode
+                      ? 'border-[#133037] text-[#79CAC2] focus:ring-[#79CAC2]'
+                      : 'border-gray-300 text-teal-600 focus:ring-teal-500'
+                  }`}
                 />
-                <span className="text-sm text-gray-700">{policy.label}</span>
+                <span className={`text-sm ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                }`}>{policy.label}</span>
               </div>
             ))}
           </div>
@@ -708,10 +911,14 @@ const LabSettingsModule = () => {
       <div className="flex justify-end">
         <button
           onClick={() => handleSaveSettings('System')}
-          className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+          className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+            darkMode
+              ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+              : 'bg-teal-500 hover:bg-teal-600 text-white'
+          }`}
         >
           <Save className="w-4 h-4" />
-          Save Changes
+          {t('saveChanges')}
         </button>
       </div>
     </div>
@@ -720,22 +927,34 @@ const LabSettingsModule = () => {
   const NotificationSection = () => (
     <div className="space-y-6">
       {/* Notification Methods */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Notification Methods
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('notificationMethods')}
         </h3>
         <div className="space-y-4">
           {[
-            { key: 'emailNotifications', label: 'Email Notifications', icon: Mail },
-            { key: 'smsNotifications', label: 'SMS Notifications', icon: Phone },
-            { key: 'pushNotifications', label: 'Push Notifications', icon: Bell }
+            { key: 'emailNotifications', label: t('emailNotifications'), icon: Mail },
+            { key: 'smsNotifications', label: t('smsNotifications'), icon: Phone },
+            { key: 'pushNotifications', label: t('pushNotifications'), icon: Bell }
           ].map(method => {
             const Icon = method.icon;
             return (
               <div key={method.key} className="flex items-center justify-between">
                 <div className="flex items-center space-x-3">
-                  <Icon className="w-5 h-5 text-gray-400" />
-                  <div className="font-medium text-gray-900">{method.label}</div>
+                  <Icon className={`w-5 h-5 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                  }`} />
+                  <div className={`font-medium ${
+                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                  }`}>{method.label}</div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
                   <input
@@ -747,7 +966,11 @@ const LabSettingsModule = () => {
                     }}
                     className="sr-only peer"
                   />
-                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+                  <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                    darkMode
+                      ? 'bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#79CAC2] peer-checked:bg-[#79CAC2] after:border-gray-600'
+                      : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 peer-checked:bg-teal-500 after:border-gray-300'
+                  }`}></div>
                 </label>
               </div>
             );
@@ -756,15 +979,27 @@ const LabSettingsModule = () => {
       </div>
 
       {/* Critical Alerts */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-red-500 pl-3">
-          Critical Alerts
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-red-500'
+            : 'text-gray-900 border-red-500'
+        }`}>
+          {t('criticalAlerts')}
         </h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900">Enable Critical Alerts</div>
-              <div className="text-sm text-gray-500">Send immediate notifications for critical results</div>
+              <div className={`font-medium ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('enableCriticalAlerts')}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{t('sendImmediateNotificationsForCriticalResults')}</div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -779,13 +1014,19 @@ const LabSettingsModule = () => {
                 }}
                 className="sr-only peer"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+              <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                darkMode
+                  ? 'bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-400 peer-checked:bg-red-500 after:border-gray-600'
+                  : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-red-300 peer-checked:bg-red-500 after:border-gray-300'
+              }`}></div>
             </label>
           </div>
 
           {notificationSettings.criticalAlerts.enabled && (
             <div className="mt-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Alert Recipients</label>
+              <label className={`block text-sm font-medium mb-2 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+              }`}>{t('alertRecipients')}</label>
               <div className="space-y-2">
                 {notificationSettings.criticalAlerts.recipients.map((recipient, index) => (
                   <div key={index} className="flex items-center space-x-2">
@@ -800,7 +1041,11 @@ const LabSettingsModule = () => {
                           criticalAlerts: {...notificationSettings.criticalAlerts, recipients: newRecipients}
                         });
                       }}
-                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                      className={`flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                        darkMode
+                          ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                          : 'border-gray-300 focus:ring-teal-500'
+                      }`}
                     />
                     <button
                       onClick={() => {
@@ -810,7 +1055,11 @@ const LabSettingsModule = () => {
                           criticalAlerts: {...notificationSettings.criticalAlerts, recipients: newRecipients}
                         });
                       }}
-                      className="text-red-600 hover:text-red-700 p-2"
+                      className={`p-2 transition-colors ${
+                        darkMode
+                          ? 'text-red-400 hover:text-red-300'
+                          : 'text-red-600 hover:text-red-700'
+                      }`}
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -826,10 +1075,14 @@ const LabSettingsModule = () => {
                       }
                     });
                   }}
-                  className="flex items-center space-x-2 text-teal-600 hover:text-teal-700"
+                  className={`flex items-center space-x-2 transition-colors ${
+                    darkMode
+                      ? 'text-[#79CAC2] hover:text-[#58B4AA]'
+                      : 'text-teal-600 hover:text-teal-700'
+                  }`}
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Add Recipient</span>
+                  <span>{t('addRecipient')}</span>
                 </button>
               </div>
             </div>
@@ -838,21 +1091,33 @@ const LabSettingsModule = () => {
       </div>
 
       {/* System Alerts */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          System Alerts
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('systemAlerts')}
         </h3>
         <div className="space-y-4">
           {[
-            { key: 'downtime', label: 'System Downtime', description: 'Alert when system goes offline' },
-            { key: 'maintenance', label: 'Maintenance Schedules', description: 'Upcoming maintenance notifications' },
-            { key: 'backupStatus', label: 'Backup Status', description: 'Backup success/failure notifications' },
-            { key: 'lowStorage', label: 'Low Storage', description: 'Alert when storage space is low' }
+            { key: 'downtime', label: t('systemDowntime'), description: t('alertWhenSystemGoesOffline') },
+            { key: 'maintenance', label: t('maintenanceSchedules'), description: t('upcomingMaintenanceNotifications') },
+            { key: 'backupStatus', label: t('backupStatus'), description: t('backupSuccessFailureNotifications') },
+            { key: 'lowStorage', label: t('lowStorage'), description: t('alertWhenStorageSpaceIsLow') }
           ].map(alert => (
             <div key={alert.key} className="flex items-center justify-between">
               <div>
-                <div className="font-medium text-gray-900">{alert.label}</div>
-                <div className="text-sm text-gray-500">{alert.description}</div>
+                <div className={`font-medium ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{alert.label}</div>
+                <div className={`text-sm ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                }`}>{alert.description}</div>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input
@@ -867,7 +1132,11 @@ const LabSettingsModule = () => {
                   }}
                   className="sr-only peer"
                 />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500"></div>
+                <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${
+                  darkMode
+                    ? 'bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#79CAC2] peer-checked:bg-[#79CAC2] after:border-gray-600'
+                    : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 peer-checked:bg-teal-500 after:border-gray-300'
+                }`}></div>
               </label>
             </div>
           ))}
@@ -877,10 +1146,14 @@ const LabSettingsModule = () => {
       <div className="flex justify-end">
         <button
           onClick={() => handleSaveSettings('Notifications')}
-          className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+          className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+            darkMode
+              ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+              : 'bg-teal-500 hover:bg-teal-600 text-white'
+          }`}
         >
           <Save className="w-4 h-4" />
-          Save Changes
+          {t('saveChanges')}
         </button>
       </div>
     </div>
@@ -889,37 +1162,60 @@ const LabSettingsModule = () => {
   const EquipmentSection = () => (
     <div className="space-y-6">
       {/* Equipment List */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 border-l-4 border-teal-500 pl-3">
-            Laboratory Equipment
+          <h3 className={`text-lg font-semibold border-l-4 pl-3 ${
+            darkMode
+              ? 'text-[#F5FEFF] border-[#79CAC2]'
+              : 'text-gray-900 border-teal-500'
+          }`}>
+            {t('laboratoryEquipment')}
           </h3>
-          <button className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2">
+          <button className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+            darkMode
+              ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+              : 'bg-teal-500 hover:bg-teal-600 text-white'
+          }`}>
             <Plus className="w-4 h-4" />
-            Add Equipment
+            {t('addEquipment')}
           </button>
         </div>
 
         <div className="space-y-4">
           {equipmentSettings.instruments.map(instrument => (
-            <div key={instrument.id} className="border border-gray-200 rounded-lg p-4">
+            <div key={instrument.id} className={`border rounded-lg p-4 ${
+              darkMode
+                ? 'border-[#133037] bg-[#07181D]'
+                : 'border-gray-200'
+            }`}>
               <div className="flex justify-between items-start mb-3">
                 <div className="flex-1">
                   <div className="flex items-center space-x-3">
-                    <h4 className="font-medium text-gray-900">{instrument.name}</h4>
+                    <h4 className={`font-medium ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{instrument.name}</h4>
                     <span className={`px-2 py-1 text-xs font-medium rounded-full border ${getStatusColor(instrument.status)}`}>
-                      {instrument.status}
+                      {instrument.status === 'active' ? t('active') : 
+                       instrument.status === 'maintenance' ? t('maintenance') : 
+                       instrument.status === 'inactive' ? t('inactive') : 
+                       instrument.status}
                     </span>
                   </div>
-                  <div className="text-sm text-gray-500 mt-1">
+                  <div className={`text-sm mt-1 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>
                     {instrument.type} • {instrument.location}
                   </div>
                 </div>
                 <div className="flex space-x-2">
-                  <button className="text-gray-400 hover:text-gray-600">
+                  <button className={darkMode ? 'text-[#8AA2A7] hover:text-[#79CAC2]' : 'text-gray-400 hover:text-gray-600'}>
                     <Edit className="w-4 h-4" />
                   </button>
-                  <button className="text-red-400 hover:text-red-600">
+                  <button className={darkMode ? 'text-red-400 hover:text-red-300' : 'text-red-400 hover:text-red-600'}>
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
@@ -927,16 +1223,22 @@ const LabSettingsModule = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                 <div>
-                  <span className="font-medium text-gray-700">Calibration Due:</span>
-                  <div className="text-gray-600">{instrument.calibrationDue}</div>
+                  <span className={`font-medium ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                  }`}>{t('calibrationDue')}:</span>
+                  <div className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{instrument.calibrationDue}</div>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">Maintenance Due:</span>
-                  <div className="text-gray-600">{instrument.maintenanceDue}</div>
+                  <span className={`font-medium ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                  }`}>{t('maintenanceDue')}:</span>
+                  <div className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{instrument.maintenanceDue}</div>
                 </div>
                 <div>
-                  <span className="font-medium text-gray-700">QC Frequency:</span>
-                  <div className="text-gray-600">{instrument.settings.qualityControl}</div>
+                  <span className={`font-medium ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                  }`}>{t('qcFrequency')}:</span>
+                  <div className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{instrument.settings.qualityControl}</div>
                 </div>
               </div>
 
@@ -954,9 +1256,15 @@ const LabSettingsModule = () => {
                       setEquipmentSettings({...equipmentSettings, instruments: updatedInstruments});
                       setHasChanges(true);
                     }}
-                    className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    className={`rounded focus:ring-2 transition-colors ${
+                      darkMode
+                        ? 'border-[#133037] text-[#79CAC2] focus:ring-[#79CAC2]'
+                        : 'border-gray-300 text-teal-600 focus:ring-teal-500'
+                    }`}
                   />
-                  <span className="text-sm text-gray-700">Auto Start</span>
+                  <span className={`text-sm ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                  }`}>{t('autoStart')}</span>
                 </label>
                 <label className="flex items-center space-x-2">
                   <input
@@ -971,9 +1279,15 @@ const LabSettingsModule = () => {
                       setEquipmentSettings({...equipmentSettings, instruments: updatedInstruments});
                       setHasChanges(true);
                     }}
-                    className="rounded border-gray-300 text-teal-600 focus:ring-teal-500"
+                    className={`rounded focus:ring-2 transition-colors ${
+                      darkMode
+                        ? 'border-[#133037] text-[#79CAC2] focus:ring-[#79CAC2]'
+                        : 'border-gray-300 text-teal-600 focus:ring-teal-500'
+                    }`}
                   />
-                  <span className="text-sm text-gray-700">Data Backup</span>
+                  <span className={`text-sm ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                  }`}>{t('dataBackup')}</span>
                 </label>
               </div>
             </div>
@@ -982,13 +1296,23 @@ const LabSettingsModule = () => {
       </div>
 
       {/* Default Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Default Equipment Settings
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('defaultEquipmentSettings')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Calibration Interval (days)</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('calibrationIntervalDays')}</label>
             <input
               type="number"
               value={equipmentSettings.defaultSettings.calibrationInterval}
@@ -999,11 +1323,17 @@ const LabSettingsModule = () => {
                 });
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Maintenance Interval (days)</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('maintenanceIntervalDays')}</label>
             <input
               type="number"
               value={equipmentSettings.defaultSettings.maintenanceInterval}
@@ -1014,11 +1344,17 @@ const LabSettingsModule = () => {
                 });
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">QC Frequency</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('qcFrequency')}</label>
             <select
               value={equipmentSettings.defaultSettings.qualityControlFrequency}
               onChange={(e) => {
@@ -1028,15 +1364,21 @@ const LabSettingsModule = () => {
                 });
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="monthly">Monthly</option>
+              <option value="daily">{t('daily')}</option>
+              <option value="weekly">{t('weekly')}</option>
+              <option value="monthly">{t('monthly')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Reagent Low Alert (%)</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('reagentLowAlert')}</label>
             <input
               type="number"
               value={equipmentSettings.defaultSettings.alertThresholds.reagentLow}
@@ -1050,7 +1392,11 @@ const LabSettingsModule = () => {
                 });
                 setHasChanges(true);
               }}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             />
           </div>
         </div>
@@ -1059,10 +1405,14 @@ const LabSettingsModule = () => {
       <div className="flex justify-end">
         <button
           onClick={() => handleSaveSettings('Equipment')}
-          className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2"
+          className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+            darkMode
+              ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+              : 'bg-teal-500 hover:bg-teal-600 text-white'
+          }`}
         >
           <Save className="w-4 h-4" />
-          Save Changes
+          {t('saveChanges')}
         </button>
       </div>
     </div>
@@ -1071,33 +1421,61 @@ const LabSettingsModule = () => {
   const UserSection = () => (
     <div className="space-y-6">
       {/* Locked Notice */}
-      <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+      <div className={`border-2 border-dashed rounded-lg p-8 text-center ${
+        darkMode
+          ? 'bg-[#07181D] border-[#133037]'
+          : 'bg-gray-50 border-gray-300'
+      }`}>
         <div className="flex flex-col items-center space-y-4">
-          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-            <Shield className="w-8 h-8 text-gray-400" />
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+            darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+          }`}>
+            <Shield className={`w-8 h-8 ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+            }`} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">User Management Locked</h3>
-            <p className="text-gray-600 mb-4 max-w-md">
-              Advanced user management features require administrator privileges. Contact your system administrator to unlock this section.
+            <h3 className={`text-lg font-semibold mb-2 ${
+              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+            }`}>{t('userManagementLocked')}</h3>
+            <p className={`mb-4 max-w-md ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+            }`}>
+              {t('advancedUserManagementFeaturesRequireAdministratorPrivileges')}
             </p>
-            <button className="bg-gray-300 text-gray-500 px-6 py-2 rounded-lg cursor-not-allowed flex items-center gap-2 mx-auto">
+            <button className={`px-6 py-2 rounded-lg cursor-not-allowed flex items-center gap-2 mx-auto ${
+              darkMode
+                ? 'bg-[#133037] text-[#8AA2A7]'
+                : 'bg-gray-300 text-gray-500'
+            }`}>
               <Shield className="w-4 h-4" />
-              Request Access
+              {t('requestAccess')}
             </button>
           </div>
         </div>
       </div>
 
       {/* Preview Content (Disabled) */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6 opacity-50 pointer-events-none">
+      <div className={`rounded-lg border p-6 opacity-50 pointer-events-none ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
         <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900 border-l-4 border-gray-300 pl-3">
-            User Roles & Permissions
+          <h3 className={`text-lg font-semibold border-l-4 pl-3 ${
+            darkMode
+              ? 'text-[#8AA2A7] border-[#133037]'
+              : 'text-gray-900 border-gray-300'
+          }`}>
+            {t('userRolesPermissions')}
           </h3>
-          <button className="bg-gray-300 text-gray-500 px-4 py-2 rounded-lg cursor-not-allowed flex items-center gap-2">
+          <button className={`px-4 py-2 rounded-lg cursor-not-allowed flex items-center gap-2 ${
+            darkMode
+              ? 'bg-[#133037] text-[#8AA2A7]'
+              : 'bg-gray-300 text-gray-500'
+          }`}>
             <Plus className="w-4 h-4" />
-            Add Role
+            {t('addRole')}
           </button>
         </div>
 
@@ -1134,23 +1512,43 @@ const LabSettingsModule = () => {
   const IntegrationSection = () => (
     <div className="space-y-6">
       {/* Locked Notice */}
-      <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+      <div className={`border-2 border-dashed rounded-lg p-8 text-center ${
+        darkMode
+          ? 'bg-[#07181D] border-[#133037]'
+          : 'bg-gray-50 border-gray-300'
+      }`}>
         <div className="flex flex-col items-center space-y-4">
-          <div className="w-16 h-16 bg-gray-200 rounded-full flex items-center justify-center">
-            <Shield className="w-8 h-8 text-gray-400" />
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center ${
+            darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+          }`}>
+            <Shield className={`w-8 h-8 ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+            }`} />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Integration Features Locked</h3>
-            <p className="text-gray-600 mb-4 max-w-md">
-              Third-party integrations require a Premium license. Upgrade your plan to connect with LIS, billing systems, and quality control platforms.
+            <h3 className={`text-lg font-semibold mb-2 ${
+              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+            }`}>{t('integrationFeaturesLocked')}</h3>
+            <p className={`mb-4 max-w-md ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+            }`}>
+              {t('thirdPartyIntegrationsRequirePremiumLicense')}
             </p>
             <div className="flex space-x-3">
-              <button className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors flex items-center gap-2">
+              <button className={`px-6 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                darkMode
+                  ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                  : 'bg-teal-500 hover:bg-teal-600 text-white'
+              }`}>
                 <Globe className="w-4 h-4" />
-                Upgrade Plan
+                {t('upgradePlan')}
               </button>
-              <button className="bg-gray-200 hover:bg-gray-300 text-gray-700 px-6 py-2 rounded-lg transition-colors">
-                Learn More
+              <button className={`px-6 py-2 rounded-lg transition-colors ${
+                darkMode
+                  ? 'bg-[#133037] hover:bg-[#1a3f47] text-[#C1D9DD]'
+                  : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+              }`}>
+                {t('learnMore')}
               </button>
             </div>
           </div>
@@ -1220,40 +1618,58 @@ const LabSettingsModule = () => {
 
   // Define tabs array with locked status
   const tabs = [
-    { id: 'general', label: 'General', icon: Settings, component: GeneralSection, locked: false },
-    { id: 'system', label: 'System', icon: Server, component: SystemSection, locked: true },
-    { id: 'notifications', label: 'Notifications', icon: Bell, component: NotificationSection, locked: true },
-    { id: 'equipment', label: 'Equipment', icon: Monitor, component: EquipmentSection, locked: true },
-    { id: 'users', label: 'Users', icon: Users, component: UserSection, locked: true },
-    { id: 'integrations', label: 'Integrations', icon: Globe, component: IntegrationSection, locked: true }
+    { id: 'general', label: t('general'), icon: Settings, component: GeneralSection, locked: false },
+    { id: 'system', label: t('system'), icon: Server, component: SystemSection, locked: true },
+    { id: 'notifications', label: t('notifications'), icon: Bell, component: NotificationSection, locked: true },
+    { id: 'equipment', label: t('equipment'), icon: Monitor, component: EquipmentSection, locked: true },
+    { id: 'users', label: t('users'), icon: Users, component: UserSection, locked: true },
+    { id: 'integrations', label: t('integrations'), icon: Globe, component: IntegrationSection, locked: true }
   ];
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       {/* Header */}
       <LabHeader />
 
       {/* Page Header */}
-      <div className="bg-white border-b border-gray-200">
+      <div className={`border-b ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Laboratory Settings</h1>
-              <p className="text-gray-600 mt-1">Configure your laboratory management system</p>
+              <h1 className={`text-2xl font-bold ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('laboratorySettings')}</h1>
+              <p className={`mt-1 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+              }`}>{t('configureYourLaboratoryManagementSystem')}</p>
             </div>
             <div className="flex items-center space-x-3">
               {hasChanges && (
-                <div className="flex items-center space-x-2 text-yellow-600 bg-yellow-50 px-3 py-1 rounded-full">
+                <div className={`flex items-center space-x-2 px-3 py-1 rounded-full ${
+                  darkMode
+                    ? 'text-yellow-400 bg-yellow-900 bg-opacity-30'
+                    : 'text-yellow-600 bg-yellow-50'
+                }`}>
                   <AlertTriangle className="w-4 h-4" />
-                  <span className="text-sm">Unsaved changes</span>
+                  <span className="text-sm">{t('unsavedChanges')}</span>
                 </div>
               )}
               <button
                 onClick={() => setShowSaveDialog(true)}
-                className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  darkMode
+                    ? 'bg-[#133037] hover:bg-[#1a3f47] text-[#C1D9DD]'
+                    : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                }`}
               >
                 <Settings className="w-4 h-4" />
-                Export Settings
+                {t('exportSettings')}
               </button>
             </div>
           </div>
@@ -1274,16 +1690,24 @@ const LabSettingsModule = () => {
                     onClick={() => !tab.locked && setActiveTab(tab.id)}
                     className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors relative ${
                       activeTab === tab.id
-                        ? 'bg-teal-50 text-teal-700 border-r-2 border-teal-500'
+                        ? darkMode
+                          ? 'bg-[#133037] text-[#79CAC2] border-r-2 border-[#79CAC2]'
+                          : 'bg-teal-50 text-teal-700 border-r-2 border-teal-500'
                         : tab.locked
-                        ? 'text-gray-400 cursor-not-allowed'
-                        : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                        ? darkMode
+                          ? 'text-[#8AA2A7] cursor-not-allowed'
+                          : 'text-gray-400 cursor-not-allowed'
+                        : darkMode
+                          ? 'text-[#C1D9DD] hover:bg-[#133037] hover:text-[#F5FEFF]'
+                          : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                     }`}
                   >
                     <Icon className="w-5 h-5" />
                     <span className="font-medium">{tab.label}</span>
                     {tab.locked && (
-                      <Shield className="w-4 h-4 ml-auto text-gray-400" />
+                      <Shield className={`w-4 h-4 ml-auto ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                      }`} />
                     )}
                   </button>
                 );
@@ -1298,17 +1722,29 @@ const LabSettingsModule = () => {
               if (currentTab?.locked) {
                 // Show locked message for locked tabs
                 return (
-                  <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+                  <div className={`rounded-lg border p-12 text-center ${
+                    darkMode
+                      ? 'bg-[#0D2026] border-[#133037]'
+                      : 'bg-white border-gray-200'
+                  }`}>
                     <div className="text-6xl mb-4">🔒</div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Module Locked</h2>
-                    <p className="text-gray-600 mb-4">
-                      The {currentTab.label} module is currently locked and unavailable.
+                    <h2 className={`text-2xl font-bold mb-2 ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{t('moduleLocked')}</h2>
+                    <p className={`mb-4 ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>
+                      {t('theModuleIsCurrentlyLockedAndUnavailable', { module: currentTab.label })}
                     </p>
                     <button
                       onClick={() => setActiveTab('general')}
-                      className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors"
+                      className={`px-6 py-2 rounded-lg transition-colors ${
+                        darkMode
+                          ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                          : 'bg-teal-500 hover:bg-teal-600 text-white'
+                      }`}
                     >
-                      Return to General Settings
+                      {t('returnToGeneralSettings')}
                     </button>
                   </div>
                 );
@@ -1322,18 +1758,32 @@ const LabSettingsModule = () => {
       {/* Save Dialog */}
       {showSaveDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
+          <div className={`rounded-lg p-6 max-w-sm w-full mx-4 ${
+            darkMode ? 'bg-[#0D2026]' : 'bg-white'
+          }`}>
             <div className="flex items-center space-x-3 mb-4">
-              <div className="w-10 h-10 bg-teal-100 rounded-full flex items-center justify-center">
-                <Check className="w-6 h-6 text-teal-600" />
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                darkMode ? 'bg-[#133037]' : 'bg-teal-100'
+              }`}>
+                <Check className={`w-6 h-6 ${
+                  darkMode ? 'text-[#79CAC2]' : 'text-teal-600'
+                }`} />
               </div>
               <div>
-                <h3 className="font-medium text-gray-900">Saving Settings</h3>
-                <p className="text-sm text-gray-500">Please wait...</p>
+                <h3 className={`font-medium ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{t('savingSettings')}</h3>
+                <p className={`text-sm ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                }`}>{t('pleaseWait')}</p>
               </div>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-teal-500 h-2 rounded-full animate-pulse" style={{ width: '75%' }}></div>
+            <div className={`w-full rounded-full h-2 ${
+              darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+            }`}>
+              <div className={`h-2 rounded-full animate-pulse ${
+                darkMode ? 'bg-[#79CAC2]' : 'bg-teal-500'
+              }`} style={{ width: '75%' }}></div>
             </div>
           </div>
         </div>
@@ -1343,37 +1793,57 @@ const LabSettingsModule = () => {
       {showSuccessMessage && (
         <div className="fixed top-4 right-4 z-50">
           <div className={`rounded-lg p-4 shadow-lg max-w-sm ${
-            successMessage.includes('Failed') 
-              ? 'bg-red-50 border border-red-200' 
-              : 'bg-green-50 border border-green-200'
+            successMessage.includes(t('failed')) 
+              ? darkMode
+                ? 'bg-red-900 bg-opacity-30 border border-red-700'
+                : 'bg-red-50 border border-red-200'
+              : darkMode
+                ? 'bg-green-900 bg-opacity-30 border border-green-700'
+                : 'bg-green-50 border border-green-200'
           }`}>
             <div className="flex items-center space-x-3">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                successMessage.includes('Failed') 
-                  ? 'bg-red-100' 
-                  : 'bg-green-100'
+                successMessage.includes(t('failed'))
+                  ? darkMode
+                    ? 'bg-red-900 bg-opacity-50'
+                    : 'bg-red-100'
+                  : darkMode
+                    ? 'bg-green-900 bg-opacity-50'
+                    : 'bg-green-100'
               }`}>
-                {successMessage.includes('Failed') ? (
-                  <X className="w-5 h-5 text-red-600" />
+                {successMessage.includes(t('failed')) ? (
+                  <X className={`w-5 h-5 ${
+                    darkMode ? 'text-red-300' : 'text-red-600'
+                  }`} />
                 ) : (
-                  <Check className="w-5 h-5 text-green-600" />
+                  <Check className={`w-5 h-5 ${
+                    darkMode ? 'text-green-300' : 'text-green-600'
+                  }`} />
                 )}
               </div>
               <div className="flex-1">
                 <p className={`text-sm font-medium ${
-                  successMessage.includes('Failed') 
-                    ? 'text-red-800' 
-                    : 'text-green-800'
+                  successMessage.includes(t('failed'))
+                    ? darkMode
+                      ? 'text-red-300'
+                      : 'text-red-800'
+                    : darkMode
+                      ? 'text-green-300'
+                      : 'text-green-800'
                 }`}>
                   {successMessage}
                 </p>
               </div>
               <button
                 onClick={() => setShowSuccessMessage(false)}
-                className={`ml-2 ${
-                  successMessage.includes('Failed') 
-                    ? 'text-red-400 hover:text-red-600' 
-                    : 'text-green-400 hover:text-green-600'
+                className={`ml-2 transition-colors ${
+                  successMessage.includes(t('failed'))
+                    ? darkMode
+                      ? 'text-red-400 hover:text-red-300'
+                      : 'text-red-400 hover:text-red-600'
+                    : darkMode
+                      ? 'text-green-400 hover:text-green-300'
+                      : 'text-green-400 hover:text-green-600'
                 }`}
               >
                 <X className="w-4 h-4" />

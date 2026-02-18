@@ -74,6 +74,9 @@ import RadiologySettingsModule from './components/Radiology/settings';
 import RadiologyTemplates from './components/Radiology/templates';
 import PACSViewer from './components/Radiology/PACS';
 import RadiologyHeader from './components/Radiology/header';
+import RadiologyChangePassword from './components/Radiology/ChangePassword';
+import ImagingViewer from './components/Doctors/ImagingViewer';
+import PatientImaging from './components/Patients/Imaging';
 
 
 
@@ -120,6 +123,9 @@ function App() {
         <Route path="/doctor/change-password" element={<ChangePassword />} />
         <Route path="/doctor/settings" element={<DoctorSettings />} />
         <Route path="/doctor/profile/:patientId" element={<PatientProfile />} />
+        <Route path="/doctor/pacs" element={<ImagingViewer />} />
+        <Route path="/doctor/imaging/:studyId" element={<ImagingViewer />} />
+        <Route path="/doctor/imaging" element={<ImagingViewer />} />
 
 
         {/* 🧑‍⚕️ Patient Pages */}
@@ -131,6 +137,8 @@ function App() {
         <Route path="/patient/hospital" element={<Hospital />} />
         <Route path="/patient/profile" element={<PatientProfile />} />
         <Route path="/patient/settings" element={<PatientSettings />} />
+        <Route path="/patient/imaging" element={<PatientImaging />} />
+        <Route path="/patient/pacs" element={<PatientImaging />} />
 
 
         {/* 🏥 Receptionist Pages */}
@@ -191,6 +199,7 @@ function App() {
         <Route path="/radiology/settings" element={<RadiologySettingsModule />} />
         <Route path="/radiology/templates" element={<RadiologyTemplates />} />
         <Route path="/radiology/pacs" element={<PACSViewer />} />
+        <Route path="/radiology/change-password" element={<RadiologyChangePassword />} />
 
         
 

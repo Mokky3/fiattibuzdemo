@@ -1,12 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Search, Filter, User, FileText, Calendar, Download, Plus, Eye, Clock, CheckCircle, AlertTriangle } from 'lucide-react';
 // Import the header component
 import LabHeader from './header';
 import { getPatients, getPatientById } from '../../services/labService';
 
 const LabPatientsModule = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [activeTab, setActiveTab] = useState('reports');
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,7 +63,7 @@ const LabPatientsModule = () => {
       } catch (e) {
         console.error('Error loading lab patients:', e);
         if (active) {
-          setError('Failed to load patients');
+          setError(t('failedToLoadPatients'));
           setPatients([]);
         }
       } finally {
@@ -64,22 +83,33 @@ const LabPatientsModule = () => {
   });
 
   const getStatusColor = (status) => {
-    switch (status) {
-      case 'normal': return 'text-green-600 bg-green-50';
-      case 'high': 
-      case 'low': 
-      case 'borderline': return 'text-yellow-600 bg-yellow-50';
-      case 'critical': return 'text-red-600 bg-red-50';
-      default: return 'text-gray-600 bg-gray-50';
+    if (darkMode) {
+      switch (status) {
+        case 'normal': return 'text-green-300 bg-green-900 bg-opacity-30';
+        case 'high': 
+        case 'low': 
+        case 'borderline': return 'text-yellow-300 bg-yellow-900 bg-opacity-30';
+        case 'critical': return 'text-red-300 bg-red-900 bg-opacity-30';
+        default: return 'text-gray-300 bg-gray-700 bg-opacity-30';
+      }
+    } else {
+      switch (status) {
+        case 'normal': return 'text-green-600 bg-green-50';
+        case 'high': 
+        case 'low': 
+        case 'borderline': return 'text-yellow-600 bg-yellow-50';
+        case 'critical': return 'text-red-600 bg-red-50';
+        default: return 'text-gray-600 bg-gray-50';
+      }
     }
   };
 
   const getTestStatusIcon = (status) => {
     switch (status) {
-      case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
-      case 'pending': return <Clock className="w-4 h-4 text-yellow-500" />;
-      case 'critical': return <AlertTriangle className="w-4 h-4 text-red-500" />;
-      default: return <FileText className="w-4 h-4 text-gray-500" />;
+      case 'completed': return <CheckCircle className={`w-4 h-4 ${darkMode ? 'text-green-400' : 'text-green-500'}`} />;
+      case 'pending': return <Clock className={`w-4 h-4 ${darkMode ? 'text-yellow-400' : 'text-yellow-500'}`} />;
+      case 'critical': return <AlertTriangle className={`w-4 h-4 ${darkMode ? 'text-red-400' : 'text-red-500'}`} />;
+      default: return <FileText className={`w-4 h-4 ${darkMode ? 'text-gray-400' : 'text-gray-500'}`} />;
     }
   };
 
@@ -167,8 +197,14 @@ const LabPatientsModule = () => {
     
     return (
       <div 
-        className={`bg-white rounded-lg border p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
-          selectedPatient?.id === patient.id ? 'border-teal-500 bg-teal-50' : 'border-gray-200 hover:border-teal-300'
+        className={`rounded-lg border p-4 cursor-pointer transition-all duration-200 hover:shadow-md ${
+          selectedPatient?.id === patient.id
+            ? darkMode
+              ? 'border-[#79CAC2] bg-[#79CAC2] bg-opacity-10'
+              : 'border-teal-500 bg-teal-50'
+            : darkMode
+              ? 'bg-[#0D2026] border-[#133037] hover:border-[#79CAC2]'
+              : 'bg-white border-gray-200 hover:border-teal-300'
         }`}
         onClick={() => {
           // Set the summary first, then useEffect will fetch full details
@@ -176,16 +212,26 @@ const LabPatientsModule = () => {
         }}
       >
         <div className="flex items-center space-x-3">
-          <div className="w-12 h-12 rounded-lg bg-teal-500 flex items-center justify-center text-white font-semibold text-sm">
+          <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-white font-semibold text-sm ${
+            darkMode ? 'bg-[#79CAC2]' : 'bg-teal-500'
+          }`}>
             {avatar}
           </div>
           <div className="flex-1">
-            <h3 className="font-semibold text-gray-900">{patientName}</h3>
-            <p className="text-sm text-gray-500">#{patientId}</p>
+            <h3 className={`font-semibold ${
+              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+            }`}>{patientName}</h3>
+            <p className={`text-sm ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+            }`}>#{patientId}</p>
           </div>
           <div className="text-right">
-            <div className="text-sm text-gray-600">{patientAge} y.o.</div>
-            <div className="text-xs text-gray-500">{patientGender}</div>
+            <div className={`text-sm ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+            }`}>{patientAge} {t('yO')}</div>
+            <div className={`text-xs ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+            }`}>{patientGender}</div>
           </div>
         </div>
       </div>
@@ -194,7 +240,15 @@ const LabPatientsModule = () => {
 
   const PatientDetails = ({ patient }) => {
     if (!patient) {
-      return <div className="bg-white rounded-lg border border-gray-200 p-6">No patient selected</div>;
+      return (
+        <div className={`rounded-lg border p-6 ${
+          darkMode
+            ? 'bg-[#0D2026] border-[#133037] text-[#F5FEFF]'
+            : 'bg-white border-gray-200'
+        }`}>
+          {t('noPatientSelected')}
+        </div>
+      );
     }
     
     const patientName = patient.name || `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || 'Unknown Patient';
@@ -214,11 +268,19 @@ const LabPatientsModule = () => {
     
     if (patientDetailsLoading) {
       return (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className={`rounded-lg border p-6 ${
+          darkMode
+            ? 'bg-[#0D2026] border-[#133037]'
+            : 'bg-white border-gray-200'
+        }`}>
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
-              <p className="text-gray-600">Loading patient details...</p>
+              <div className={`animate-spin rounded-full h-12 w-12 border-b-2 mx-auto mb-4 ${
+                darkMode ? 'border-[#79CAC2]' : 'border-teal-500'
+              }`}></div>
+              <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+                {t('loadingPatientDetails')}
+              </p>
             </div>
           </div>
         </div>
@@ -227,12 +289,22 @@ const LabPatientsModule = () => {
     
     if (patientDetailsError) {
       return (
-        <div className="bg-white rounded-lg border border-gray-200 p-6">
+        <div className={`rounded-lg border p-6 ${
+          darkMode
+            ? 'bg-[#0D2026] border-[#133037]'
+            : 'bg-white border-gray-200'
+        }`}>
           <div className="flex items-center justify-center py-12">
             <div className="text-center">
-              <AlertTriangle className="w-12 h-12 text-red-300 mx-auto mb-4" />
-              <p className="text-red-500 mb-2">Error loading patient details</p>
-              <p className="text-gray-500 text-sm">{patientDetailsError}</p>
+              <AlertTriangle className={`w-12 h-12 mx-auto mb-4 ${
+                darkMode ? 'text-red-400' : 'text-red-300'
+              }`} />
+              <p className={darkMode ? 'text-red-400 mb-2' : 'text-red-500 mb-2'}>
+                {t('errorLoadingPatientDetails')}
+              </p>
+              <p className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{patientDetailsError}</p>
             </div>
           </div>
         </div>
@@ -240,35 +312,55 @@ const LabPatientsModule = () => {
     }
     
     return (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className={`rounded-lg border p-6 ${
+      darkMode
+        ? 'bg-[#0D2026] border-[#133037]'
+        : 'bg-white border-gray-200'
+    }`}>
       {/* Patient Header */}
       <div className="flex items-start justify-between mb-6">
         <div className="flex items-center space-x-4">
-          <div className="w-16 h-16 rounded-lg bg-gray-200 flex items-center justify-center">
-            <User className="w-8 h-8 text-gray-400" />
+          <div className={`w-16 h-16 rounded-lg flex items-center justify-center ${
+            darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+          }`}>
+            <User className={`w-8 h-8 ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+            }`} />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">{patientName}</h2>
-            <p className="text-gray-600">{patient.dateOfBirth || 'N/A'} ({patient.age || 0} y.o.) • {patient.gender || 'Unknown'}</p>
+            <h2 className={`text-2xl font-bold ${
+              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+            }`}>{patientName}</h2>
+            <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+              {patient.dateOfBirth || t('notAvailable')} ({patient.age || 0} {t('yO')}) • {patient.gender || t('unknown')}
+            </p>
           </div>
         </div>
         <div className="flex space-x-2">
-          <button className="px-4 py-2 border border-teal-500 text-teal-700 rounded-lg hover:bg-teal-50 transition-colors">
+          <button className={`px-4 py-2 border rounded-lg transition-colors ${
+            darkMode
+              ? 'border-[#79CAC2] text-[#79CAC2] hover:bg-[#133037]'
+              : 'border-teal-500 text-teal-700 hover:bg-teal-50'
+          }`}>
             <Eye className="w-4 h-4 inline mr-2" />
-            View
+            {t('view')}
           </button>
           <button 
             onClick={() => {
               if (selectedPatient && selectedPatient.id) {
                 navigate(`/lab/reports/new/${selectedPatient.id}`);
               } else {
-                alert('Please select a patient first');
+                alert(t('pleaseSelectAPatientFirst'));
               }
             }}
-            className="px-4 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-colors"
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              darkMode
+                ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                : 'bg-teal-500 hover:bg-teal-600 text-white'
+            }`}
           >
             <Plus className="w-4 h-4 inline mr-2" />
-            Add Report
+            {t('addReport')}
           </button>
         </div>
       </div>
@@ -276,63 +368,103 @@ const LabPatientsModule = () => {
       {/* Medical Information Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="font-semibold text-gray-900 mb-3">Blood Information</h3>
+          <div className={`rounded-lg p-4 ${
+            darkMode ? 'bg-[#07181D]' : 'bg-gray-50'
+          }`}>
+            <h3 className={`font-semibold mb-3 ${
+              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+            }`}>{t('bloodInformation')}</h3>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">Blood Group:</span>
-                <span className="font-medium">{patient.bloodGroup || '—'}</span>
+                <span className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{t('bloodGroup')}:</span>
+                <span className={`font-medium ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{patient.bloodGroup || '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">RH Factor:</span>
-                <span className="font-medium">{patient.rhFactor || '—'}</span>
+                <span className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{t('rhFactor')}:</span>
+                <span className={`font-medium ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{patient.rhFactor || '—'}</span>
               </div>
             </div>
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="font-semibold text-gray-900 mb-3">Physical Measurements</h3>
+          <div className={`rounded-lg p-4 ${
+            darkMode ? 'bg-[#07181D]' : 'bg-gray-50'
+          }`}>
+            <h3 className={`font-semibold mb-3 ${
+              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+            }`}>{t('physicalMeasurements')}</h3>
             <div className="space-y-2">
               <div className="flex justify-between">
-                <span className="text-gray-600">Height:</span>
-                <span className="font-medium">{patient?.height && patient.height !== 'N/A' ? patient.height : '—'}</span>
+                <span className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{t('height')}:</span>
+                <span className={`font-medium ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{patient?.height && patient.height !== 'N/A' ? patient.height : '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">Weight:</span>
-                <span className="font-medium">{patient?.weight && patient.weight !== 'N/A' ? patient.weight : '—'}</span>
+                <span className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{t('weight')}:</span>
+                <span className={`font-medium ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{patient?.weight && patient.weight !== 'N/A' ? patient.weight : '—'}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-600">BMI:</span>
-                <span className="font-medium">{patient?.bmi && patient.bmi !== 'N/A' ? patient.bmi : '—'}</span>
+                <span className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>{t('bmi')}:</span>
+                <span className={`font-medium ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{patient?.bmi && patient.bmi !== 'N/A' ? patient.bmi : '—'}</span>
               </div>
               {patient.lastMeasured && (
-                <p className="text-xs text-gray-500 mt-2">Last measured: {patient.lastMeasured}</p>
+                <p className={`text-xs mt-2 ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                }`}>{t('lastMeasured')}: {patient.lastMeasured}</p>
               )}
             </div>
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <h3 className="font-semibold text-gray-900 mb-3">Contact Information</h3>
+          <div className={`rounded-lg p-4 ${
+            darkMode ? 'bg-[#07181D]' : 'bg-gray-50'
+          }`}>
+            <h3 className={`font-semibold mb-3 ${
+              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+            }`}>{t('contactInformation')}</h3>
             <div className="space-y-2">
               <div>
-                <span className="text-gray-600 text-sm">Address:</span>
-                <p className="font-medium text-sm">{patient.address || '—'}</p>
+                <span className={`text-sm ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>{t('address')}:</span>
+                <p className={`font-medium text-sm ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{patient.address || '—'}</p>
               </div>
               <div>
-                <span className="text-gray-600 text-sm">Temporary:</span>
-                <p className="font-medium text-sm">{patient.temporaryAddress || '—'}</p>
+                <span className={`text-sm ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>{t('temporaryAddress')}:</span>
+                <p className={`font-medium text-sm ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{patient.temporaryAddress || '—'}</p>
               </div>
               <div>
-                <span className="text-gray-600 text-sm">Work Place:</span>
-                <p className="font-medium text-sm">{patient.workPlace || '—'}</p>
+                <span className={`text-sm ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>{t('workPlace')}:</span>
+                <p className={`font-medium text-sm ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{patient.workPlace || '—'}</p>
               </div>
               <div>
-                <span className="text-gray-600 text-sm">Occupation:</span>
-                <p className="font-medium text-sm">{patient.occupation || '—'}</p>
+                <span className={`text-sm ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>{t('occupation')}:</span>
+                <p className={`font-medium text-sm ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{patient.occupation || '—'}</p>
               </div>
             </div>
           </div>
@@ -340,27 +472,37 @@ const LabPatientsModule = () => {
       </div>
 
       {/* Tabs */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className={`border-b mb-6 ${
+        darkMode ? 'border-[#133037]' : 'border-gray-200'
+      }`}>
         <nav className="flex space-x-8">
           <button
             onClick={() => setActiveTab('reports')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'reports'
-                ? 'border-teal-500 text-teal-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? darkMode
+                  ? 'border-[#79CAC2] text-[#79CAC2]'
+                  : 'border-teal-500 text-teal-600'
+                : darkMode
+                  ? 'border-transparent text-[#8AA2A7] hover:text-[#C1D9DD]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            Lab Reports
+            {t('labReports')}
           </button>
           <button
             onClick={() => setActiveTab('history')}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+            className={`py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
               activeTab === 'history'
-                ? 'border-teal-500 text-teal-600'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
+                ? darkMode
+                  ? 'border-[#79CAC2] text-[#79CAC2]'
+                  : 'border-teal-500 text-teal-600'
+                : darkMode
+                  ? 'border-transparent text-[#8AA2A7] hover:text-[#C1D9DD]'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
             }`}
           >
-            Test History
+            {t('testHistory')}
           </button>
         </nav>
       </div>
@@ -369,59 +511,101 @@ const LabPatientsModule = () => {
       {activeTab === 'reports' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h3 className="text-lg font-semibold text-gray-900">Recent Lab Reports</h3>
+            <h3 className={`text-lg font-semibold ${
+              darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+            }`}>{t('recentLabReports')}</h3>
             <div className="flex space-x-2">
-              <button className="text-sm text-gray-500 hover:text-gray-700">
+              <button className={`text-sm transition-colors ${
+                darkMode
+                  ? 'text-[#8AA2A7] hover:text-[#C1D9DD]'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}>
                 <Filter className="w-4 h-4 inline mr-1" />
-                Filter
+                {t('filter')}
               </button>
-              <button className="text-sm text-teal-600 hover:text-teal-700">
+              <button className={`text-sm transition-colors ${
+                darkMode
+                  ? 'text-[#79CAC2] hover:text-[#58B4AA]'
+                  : 'text-teal-600 hover:text-teal-700'
+              }`}>
                 <Download className="w-4 h-4 inline mr-1" />
-                Export All
+                {t('exportAll')}
               </button>
             </div>
           </div>
 
           {recentTestsArray.map((test) => (
-            <div key={test.id} className="bg-white border border-gray-200 rounded-lg p-6">
+            <div key={test.id} className={`border rounded-lg p-6 ${
+              darkMode
+                ? 'bg-[#0D2026] border-[#133037]'
+                : 'bg-white border-gray-200'
+            }`}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-4">
-                  <div className="bg-teal-100 text-teal-800 px-3 py-1 rounded-lg text-sm font-medium">
+                  <div className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                    darkMode
+                      ? 'bg-[#79CAC2] bg-opacity-20 text-[#79CAC2]'
+                      : 'bg-teal-100 text-teal-800'
+                  }`}>
                     {test.time}
                   </div>
                   <div>
-                    <h4 className="font-semibold text-gray-900">{test.type}</h4>
-                    <p className="text-sm text-gray-600">{test.description}</p>
-                    <p className="text-xs text-gray-500">Provider: {test.physician}</p>
+                    <h4 className={`font-semibold ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{test.type}</h4>
+                    <p className={`text-sm ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>{test.description}</p>
+                    <p className={`text-xs ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                    }`}>{t('provider')}: {test.physician}</p>
                   </div>
                 </div>
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center space-x-1">
                     {getTestStatusIcon(test.status)}
-                    <span className="text-sm text-gray-600 capitalize">{test.status}</span>
+                    <span className={`text-sm capitalize ${
+                      darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                    }`}>{test.status}</span>
                   </div>
-                  <button className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors">
-                    View
+                  <button className={`px-4 py-2 rounded-lg transition-colors ${
+                    darkMode
+                      ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                      : 'bg-teal-500 hover:bg-teal-600 text-white'
+                  }`}>
+                    {t('view')}
                   </button>
                 </div>
               </div>
 
               {test.results && test.results.length > 0 && (
                 <div className="mt-4">
-                  <h5 className="font-medium text-gray-900 mb-3">Test Results:</h5>
+                  <h5 className={`font-medium mb-3 ${
+                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                  }`}>{t('testResults')}:</h5>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {test.results.map((result, index) => (
-                      <div key={index} className="bg-gray-50 rounded-lg p-3">
+                      <div key={index} className={`rounded-lg p-3 ${
+                        darkMode ? 'bg-[#07181D]' : 'bg-gray-50'
+                      }`}>
                         <div className="flex justify-between items-start mb-2">
-                          <span className="font-medium text-sm text-gray-900">{result.test}</span>
+                          <span className={`font-medium text-sm ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                          }`}>{result.test}</span>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(result.status)}`}>
                             {result.status}
                           </span>
                         </div>
-                        <div className="text-lg font-bold text-gray-900">
-                          {result.value} <span className="text-sm font-normal text-gray-500">{result.unit}</span>
+                        <div className={`text-lg font-bold ${
+                          darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                        }`}>
+                          {result.value} <span className={`text-sm font-normal ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>{result.unit}</span>
                         </div>
-                        <div className="text-xs text-gray-500">Range: {result.range}</div>
+                        <div className={`text-xs ${
+                          darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                        }`}>{t('range')}: {result.range}</div>
                       </div>
                     ))}
                   </div>
@@ -434,11 +618,21 @@ const LabPatientsModule = () => {
 
       {activeTab === 'history' && (
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold text-gray-900">Complete Test History</h3>
-          <div className="bg-gray-50 rounded-lg p-8 text-center">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-600">Complete test history view coming soon</p>
-            <p className="text-sm text-gray-500">This will show a chronological timeline of all lab tests</p>
+          <h3 className={`text-lg font-semibold ${
+            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+          }`}>{t('completeTestHistory')}</h3>
+          <div className={`rounded-lg p-8 text-center ${
+            darkMode ? 'bg-[#07181D]' : 'bg-gray-50'
+          }`}>
+            <Calendar className={`w-12 h-12 mx-auto mb-4 ${
+              darkMode ? 'text-[#133037]' : 'text-gray-400'
+            }`} />
+            <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+              {t('completeTestHistoryViewComingSoon')}
+            </p>
+            <p className={`text-sm ${
+              darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+            }`}>{t('thisWillShowAChronologicalTimelineOfAllLabTests')}</p>
           </div>
         </div>
       )}
@@ -447,19 +641,29 @@ const LabPatientsModule = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       {/* Header Component */}
       <LabHeader />
 
       <div className="flex h-[calc(100vh-64px)]">
         {/* Left Sidebar - Fixed */}
-        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+        <div className={`w-80 border-r overflow-y-auto ${
+          darkMode
+            ? 'bg-[#0D2026] border-[#133037]'
+            : 'bg-white border-gray-200'
+        }`}>
           <div className="p-6">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 border-l-4 border-teal-500 pl-3">
-                  Patients List
+                <h2 className={`text-lg font-semibold border-l-4 pl-3 ${
+                  darkMode
+                    ? 'text-[#F5FEFF] border-[#79CAC2]'
+                    : 'text-gray-900 border-teal-500'
+                }`}>
+                  {t('patientsList')}
                 </h2>
-                <button className="text-gray-400 hover:text-gray-600">
+                <button className={darkMode ? 'text-[#8AA2A7] hover:text-[#79CAC2]' : 'text-gray-400 hover:text-gray-600'}>
                   <Filter className="w-5 h-5" />
                 </button>
               </div>
@@ -467,11 +671,17 @@ const LabPatientsModule = () => {
               {/* Search */}
               <div className="mb-4">
                 <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                  <Search className={`w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                  }`} />
                   <input
                     type="text"
-                    placeholder="Search patients..."
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500"
+                    placeholder={t('searchPatients')}
+                    className={`w-full pl-10 pr-4 py-2 border rounded-lg focus:outline-none focus:ring-2 transition-colors ${
+                      darkMode
+                        ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] placeholder-[#8AA2A7] focus:ring-[#79CAC2]'
+                        : 'border-gray-300 focus:ring-teal-500'
+                    }`}
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
@@ -484,21 +694,29 @@ const LabPatientsModule = () => {
                   onClick={() => setFilterStatus('all')}
                   className={`px-3 py-1 text-xs rounded-full transition-colors ${
                     filterStatus === 'all'
-                      ? 'bg-teal-100 text-teal-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      ? darkMode
+                        ? 'bg-[#79CAC2] bg-opacity-20 text-[#79CAC2]'
+                        : 'bg-teal-100 text-teal-700'
+                      : darkMode
+                        ? 'bg-[#07181D] text-[#C1D9DD] hover:bg-[#133037]'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  All
+                  {t('all')}
                 </button>
                 <button
                   onClick={() => setFilterStatus('recent')}
                   className={`px-3 py-1 text-xs rounded-full transition-colors ${
                     filterStatus === 'recent'
-                      ? 'bg-teal-100 text-teal-700'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      ? darkMode
+                        ? 'bg-[#79CAC2] bg-opacity-20 text-[#79CAC2]'
+                        : 'bg-teal-100 text-teal-700'
+                      : darkMode
+                        ? 'bg-[#07181D] text-[#C1D9DD] hover:bg-[#133037]'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
-                  Recent Tests
+                  {t('recentTests')}
                 </button>
               </div>
 
@@ -506,16 +724,30 @@ const LabPatientsModule = () => {
               {loading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="bg-white rounded-lg border p-4 animate-pulse">
+                    <div key={i} className={`rounded-lg border p-4 animate-pulse ${
+                      darkMode
+                        ? 'bg-[#0D2026] border-[#133037]'
+                        : 'bg-white border-gray-200'
+                    }`}>
                       <div className="flex items-center space-x-3">
-                        <div className="w-12 h-12 rounded-lg bg-gray-200"></div>
+                        <div className={`w-12 h-12 rounded-lg ${
+                          darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+                        }`}></div>
                         <div className="flex-1">
-                          <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                          <div className="h-3 bg-gray-200 rounded w-1/2"></div>
+                          <div className={`h-4 rounded w-3/4 mb-2 ${
+                            darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+                          }`}></div>
+                          <div className={`h-3 rounded w-1/2 ${
+                            darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+                          }`}></div>
                         </div>
                         <div className="text-right">
-                          <div className="h-3 bg-gray-200 rounded w-8 mb-1"></div>
-                          <div className="h-3 bg-gray-200 rounded w-12"></div>
+                          <div className={`h-3 rounded w-8 mb-1 ${
+                            darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+                          }`}></div>
+                          <div className={`h-3 rounded w-12 ${
+                            darkMode ? 'bg-[#133037]' : 'bg-gray-200'
+                          }`}></div>
                         </div>
                       </div>
                     </div>
@@ -523,9 +755,15 @@ const LabPatientsModule = () => {
                 </div>
               ) : error ? (
                 <div className="text-center py-8">
-                  <AlertTriangle className="w-12 h-12 text-red-300 mx-auto mb-4" />
-                  <p className="text-red-500 mb-2">Error loading patients</p>
-                  <p className="text-gray-500 text-sm">{error}</p>
+                  <AlertTriangle className={`w-12 h-12 mx-auto mb-4 ${
+                    darkMode ? 'text-red-400' : 'text-red-300'
+                  }`} />
+                  <p className={darkMode ? 'text-red-400 mb-2' : 'text-red-500 mb-2'}>
+                    {t('errorLoadingPatients')}
+                  </p>
+                  <p className={`text-sm ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>{error}</p>
                 </div>
               ) : (
                 <>
@@ -537,8 +775,12 @@ const LabPatientsModule = () => {
 
                   {filteredPatients.length === 0 && (
                     <div className="text-center py-8">
-                      <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                      <p className="text-gray-500">No patients found</p>
+                      <User className={`w-12 h-12 mx-auto mb-4 ${
+                        darkMode ? 'text-[#133037]' : 'text-gray-300'
+                      }`} />
+                      <p className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'}>
+                        {t('noPatientsFound')}
+                      </p>
                     </div>
                   )}
                 </>
@@ -552,10 +794,20 @@ const LabPatientsModule = () => {
             {selectedPatient ? (
               <PatientDetails patient={selectedPatient} />
             ) : (
-              <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
-                <User className="w-20 h-20 text-gray-300 mx-auto mb-6" />
-                <h3 className="text-xl font-semibold text-gray-900 mb-2">Select a Patient</h3>
-                <p className="text-gray-600">Choose a patient from the list to view their lab reports and medical information</p>
+              <div className={`rounded-lg border p-12 text-center ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037]'
+                  : 'bg-white border-gray-200'
+              }`}>
+                <User className={`w-20 h-20 mx-auto mb-6 ${
+                  darkMode ? 'text-[#133037]' : 'text-gray-300'
+                }`} />
+                <h3 className={`text-xl font-semibold mb-2 ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{t('selectAPatient')}</h3>
+                <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+                  {t('chooseAPatientFromTheListToViewTheirLabReportsAndMedicalInformation')}
+                </p>
               </div>
             )}
           </div>

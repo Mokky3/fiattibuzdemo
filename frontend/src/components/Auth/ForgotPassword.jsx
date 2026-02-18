@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react'
 import { authAPI } from '../../services/apiService'
 
 const ForgotPassword = () => {
+  const { t, i18n } = useTranslation()
   const [formData, setFormData] = useState({
     email: ''
   })
@@ -15,6 +17,38 @@ const ForgotPassword = () => {
     message: ''
   })
   const navigate = useNavigate()
+
+  // Dark mode state
+  const [darkMode, setDarkMode] = useState(() => {
+    const hasDarkClass = document.documentElement.classList.contains('dark');
+    return hasDarkClass;
+  });
+
+  // Apply theme when darkMode state changes
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
+  const toggleDarkMode = () => {
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
+    
+    const root = document.documentElement;
+    if (newDarkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  };
 
   // Debounced email validation
   useEffect(() => {
@@ -30,7 +64,7 @@ const ForgotPassword = () => {
         setEmailValidation({ 
           isValidating: false, 
           exists: false, 
-          message: 'Please enter a valid email address' 
+          message: t('invalidEmail')
         })
         return
       }
@@ -42,14 +76,14 @@ const ForgotPassword = () => {
         setEmailValidation({
           isValidating: false,
           exists: response.exists,
-          message: response.message
+          message: response.exists ? t('emailExists') : t('emailNotExists')
         })
       } catch (err) {
         console.error('Email validation error:', err)
         setEmailValidation({
           isValidating: false,
           exists: null,
-          message: 'Unable to validate email. Please try again.'
+          message: t('emailValidationError')
         })
       }
     }
@@ -71,13 +105,13 @@ const ForgotPassword = () => {
     
     // Check if email validation is still in progress
     if (emailValidation.isValidating) {
-      setError('Please wait while we validate your email...')
+      setError(t('pleaseWait'))
       return
     }
     
     // Check if email doesn't exist
     if (emailValidation.exists === false) {
-      setError(emailValidation.message)
+      setError(emailValidation.message || t('emailNotExists'))
       return
     }
     
@@ -102,21 +136,89 @@ const ForgotPassword = () => {
 
 
   return (
-    <div className="flex flex-col h-screen">
-      <div className="flex-1 flex justify-center items-center bg-white">
-        <div className="w-full max-w-md border-2 border-[#5DC692] rounded-lg p-10" style={{ borderColor: '#5DC692' }}>
+    <div className={`flex flex-col h-screen transition-colors duration-500 ${
+      darkMode 
+        ? 'bg-[#050C0F] text-[#F5FEFF]' 
+        : 'bg-gray-50 text-gray-900'
+    }`}>
+      {/* Header */}
+      <div className="flex justify-between items-center px-10 py-6">
+        <div>
+          <img 
+            src={darkMode ? "/4darkmode.png" : "/favicon.png"} 
+            alt="Fiattib" 
+            className="h-8 w-auto cursor-pointer"
+            onClick={() => navigate('/')}
+          />
+        </div>
+        <div className="flex items-center gap-4">
+          {/* Language Dropdown */}
+          <select
+            value={i18n.language}
+            onChange={(e) => i18n.changeLanguage(e.target.value)}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-all duration-200 cursor-pointer shadow-sm hover:shadow-md focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+              darkMode
+                ? 'border-[#133037] bg-[#0D2026] text-[#F5FEFF] hover:bg-[#10262D] focus:ring-[#79CAC2]'
+                : 'border-gray-300 bg-white text-gray-900 hover:bg-gray-50 focus:ring-[#5ACCC3]'
+            }`}
+          >
+            <option value="uz" className={darkMode ? 'bg-[#0D2026] text-[#F5FEFF]' : 'bg-white text-gray-900'}>🇺🇿 UZ</option>
+            <option value="en" className={darkMode ? 'bg-[#0D2026] text-[#F5FEFF]' : 'bg-white text-gray-900'}>🇺🇸 EN</option>
+            <option value="ru" className={darkMode ? 'bg-[#0D2026] text-[#F5FEFF]' : 'bg-white text-gray-900'}>🇷🇺 RU</option>
+          </select>
+
+          {/* Theme Toggle Switch */}
+          <button
+            onClick={toggleDarkMode}
+            type="button"
+            role="switch"
+            aria-checked={darkMode}
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+            className={`relative w-12 h-6 rounded-full p-[2px] cursor-pointer flex items-center transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+              darkMode 
+                ? 'bg-[#133037] focus:ring-[#79CAC2]' 
+                : 'bg-[#5ACCC3] focus:ring-[#5ACCC3]'
+            }`}
+          >
+            <div
+              className={`h-5 w-5 rounded-full bg-white shadow-lg transform transition-transform duration-300 ${
+                darkMode ? 'translate-x-6' : 'translate-x-0'
+              }`}
+            ></div>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 flex justify-center items-center overflow-y-auto py-8">
+        <div className={`w-full max-w-md border rounded-lg p-10 transition-colors duration-500 ${
+          darkMode
+            ? 'border-[#133037] bg-[#0D2026]'
+            : 'border-gray-300 bg-white'
+        }`}>
           <div className="text-center mb-10">
-            <h1 className="text-[#F44A53] text-4xl font-bold mb-3">AKFA MEDLINE</h1>
-            <p className="text-gray-700 text-lg">forgot password</p>
+            <h1 className={`text-4xl font-bold mb-3 ${
+              darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+            }`}>FIATTIB</h1>
+            <p className={`text-lg ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('forgotPasswordTitle')}</p>
           </div>
           
           <div className="mb-6">
-            <p className="text-gray-600 text-center">
-              Enter your email address and we'll send you a link to reset your password.
+            <p className={`text-center ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+            }`}>
+              {t('forgotPasswordDescription')}
             </p>
           </div>
           
-          {error ? (<div className="text-red-600 text-sm mb-3 px-1">{error}</div>) : null}
+          {error ? (
+            <div className={`text-sm mb-3 px-1 rounded-md p-3 ${
+              darkMode
+                ? 'bg-[#2A0E15] text-[#FB7185]'
+                : 'bg-red-50 text-red-600'
+            }`}>{error}</div>
+          ) : null}
           
           <form onSubmit={handleSubmit} className="mt-8">
             <div className="mb-6">
@@ -126,34 +228,39 @@ const ForgotPassword = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="email"
-                  className={`w-full px-4 py-4 border-2 rounded-md focus:outline-none pr-12 ${
+                  placeholder={t('email')}
+                  className={`w-full px-4 py-4 pr-12 border-2 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors ${
                     emailValidation.exists === false 
-                      ? 'border-red-500' 
+                      ? darkMode
+                        ? 'border-[#FB7185] bg-[#0D2026] text-[#F5FEFF] placeholder-[#8AA2A7] focus:border-[#FB7185] focus:ring-[#FB7185]'
+                        : 'border-red-500 bg-white text-gray-900 placeholder-gray-400 focus:border-red-500 focus:ring-red-500'
                       : emailValidation.exists === true 
-                        ? 'border-green-500' 
-                        : 'border-[#5DC692]'
+                        ? darkMode
+                          ? 'border-[#4ADE80] bg-[#0D2026] text-[#F5FEFF] placeholder-[#8AA2A7] focus:border-[#4ADE80] focus:ring-[#4ADE80]'
+                          : 'border-green-500 bg-white text-gray-900 placeholder-gray-400 focus:border-green-500 focus:ring-green-500'
+                        : darkMode
+                        ? 'border-[#133037] bg-[#0D2026] text-[#F5FEFF] placeholder-[#8AA2A7] focus:border-[#79CAC2] focus:ring-[#79CAC2]'
+                        : 'border-gray-300 bg-white text-gray-900 placeholder-gray-400 focus:border-[#5ACCC3] focus:ring-[#5ACCC3]'
                   }`}
-                  style={{ 
-                    borderColor: emailValidation.exists === false 
-                      ? '#ef4444' 
-                      : emailValidation.exists === true 
-                        ? '#10b981' 
-                        : '#5DC692' 
-                  }}
                   required
                 />
                 
                 {/* Email validation icon */}
                 <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                   {emailValidation.isValidating && (
-                    <Loader2 className="w-5 h-5 text-gray-400 animate-spin" />
+                    <Loader2 className={`w-5 h-5 animate-spin ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                    }`} />
                   )}
                   {!emailValidation.isValidating && emailValidation.exists === true && (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
+                    <CheckCircle className={`w-5 h-5 ${
+                      darkMode ? 'text-[#4ADE80]' : 'text-green-500'
+                    }`} />
                   )}
                   {!emailValidation.isValidating && emailValidation.exists === false && (
-                    <AlertCircle className="w-5 h-5 text-red-500" />
+                    <AlertCircle className={`w-5 h-5 ${
+                      darkMode ? 'text-[#FB7185]' : 'text-red-500'
+                    }`} />
                   )}
                 </div>
               </div>
@@ -162,10 +269,10 @@ const ForgotPassword = () => {
               {emailValidation.message && (
                 <div className={`mt-2 text-sm px-1 ${
                   emailValidation.exists === false 
-                    ? 'text-red-600' 
+                    ? darkMode ? 'text-[#FB7185]' : 'text-red-600'
                     : emailValidation.exists === true 
-                      ? 'text-green-600' 
-                      : 'text-gray-600'
+                      ? darkMode ? 'text-[#4ADE80]' : 'text-green-600'
+                      : darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
                 }`}>
                   {emailValidation.message}
                 </div>
@@ -175,15 +282,21 @@ const ForgotPassword = () => {
             <button
               type="submit"
               disabled={submitting || emailValidation.isValidating || emailValidation.exists === false}
-              className="w-full py-3 px-4 bg-[#5DC692] text-white font-medium rounded-md text-lg disabled:opacity-70"
+              className={`w-full py-3 px-4 font-medium rounded-md text-lg disabled:opacity-70 transition-colors ${
+                darkMode
+                  ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                  : 'bg-[#5ACCC3] text-white hover:bg-[#4DB6B0]'
+              }`}
             >
-              {submitting ? 'Sending...' : 'Send Reset Code & Continue'}
+              {submitting ? t('sending') : t('sendResetCode')}
             </button>
           </form>
           
           <div className="mt-8 text-center">
-            <Link to="/signin" className="text-sm text-[#5DC692] hover:underline">
-              Back to Sign In
+            <Link to="/signin" className={`text-sm hover:underline ${
+              darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+            }`}>
+              {t('backToSignIn')}
             </Link>
           </div>
         </div>

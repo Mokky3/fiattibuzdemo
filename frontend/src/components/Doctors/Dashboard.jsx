@@ -1,10 +1,31 @@
 import React, { useState, useEffect } from 'react'
 import { Header } from './Header'
+import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { format, isSameDay, parseISO } from 'date-fns'
 import CalendarSidebar from './Dashboard/Calendar'
 import { dashboardAPI, isAuthenticated, getCurrentUser, doctorAppointmentsAPI, checkBackendHealth } from '../../services/apiService'
 
 const Dashboard = () => {
+  const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
   const [currentDate, setCurrentDate] = useState(new Date())
   const [selectedDate, setSelectedDate] = useState(new Date())
   const [isLoaded, setIsLoaded] = useState(false)
@@ -46,7 +67,9 @@ const Dashboard = () => {
         }
 
         // Check backend health
-        const health = await fetch('http://localhost:8000/health').then(r => r.ok).catch(() => false)
+        const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+        const healthUrl = `${apiBaseUrl}/health`;
+        const health = await fetch(healthUrl).then(r => r.ok).catch(() => false)
         setBackendConnected(health)
 
         if (!health) {
@@ -145,9 +168,12 @@ const Dashboard = () => {
               time: timeText,
               patient: apt.patient || apt.patient_name || 'Unknown Patient',
               problem: apt.problem || apt.appointment_type || 'General Consultation',
+              description: apt.description || apt.notes || '',
               status: apt.status || 'pending',
               hospital: apt.hospital || apt.hospital_name || 'Main Hospital',
-              provider: apt.provider || apt.doctor_specialization || 'General Medicine'
+              provider: apt.provider || apt.doctor_specialization || 'General Medicine',
+              patient_id: apt.patient_id,
+              report_id: apt.report_id || apt.reportId || null
             }
           })
           
@@ -255,22 +281,42 @@ const Dashboard = () => {
   // Show login prompt if not authenticated
   if (!authenticated) {
     return (
-      <div className="flex flex-col min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
+      <div className={`flex flex-col min-h-screen transition-colors duration-500 ${
+        darkMode
+          ? 'bg-[#050C0F]'
+          : 'bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50'
+      }`}>
         <Header />
         <div className="flex-1 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-8 max-w-md w-full text-center">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#5ACCC3] to-[#4DB6B0] rounded-full flex items-center justify-center mx-auto mb-6">
+          <div className={`rounded-xl shadow-lg border p-8 max-w-md w-full text-center transition-colors ${
+            darkMode
+              ? 'bg-[#0D2026] border-[#133037]'
+              : 'bg-white border-gray-100'
+          }`}>
+            <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${
+              darkMode
+                ? 'bg-gradient-to-br from-[#79CAC2] to-[#58B4AA]'
+                : 'bg-gradient-to-br from-[#5ACCC3] to-[#4DB6B0]'
+            }`}>
               <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">Authentication Required</h2>
-            <p className="text-gray-600 mb-6">Please log in to access the doctor dashboard.</p>
+            <h2 className={`text-2xl font-bold mb-4 ${
+              darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+            }`}>{t('authenticationRequired')}</h2>
+            <p className={`mb-6 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+            }`}>{t('pleaseLoginToAccess')}</p>
             <button 
               onClick={() => window.location.href = '/signin'}
-              className="w-full bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] text-white py-3 px-6 rounded-lg font-medium hover:from-[#4DB6B0] hover:to-[#5ACCC3] transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-[#5ACCC3]/50 focus:ring-offset-2"
+              className={`w-full text-white py-3 px-6 rounded-lg font-medium transition-all duration-300 transform hover:scale-105 hover:shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+                darkMode
+                  ? 'bg-gradient-to-r from-[#79CAC2] to-[#58B4AA] hover:from-[#58B4AA] hover:to-[#79CAC2] focus:ring-[#79CAC2]/50'
+                  : 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] hover:from-[#4DB6B0] hover:to-[#5ACCC3] focus:ring-[#5ACCC3]/50'
+              }`}
             >
-              Go to Login
+              {t('goToLogin')}
             </button>
           </div>
         </div>
@@ -279,28 +325,40 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="bg-gray-50 min-h-screen">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       <Header />
       
       {/* Backend status indicator */}
       {!backendConnected && (
-        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 mx-2 sm:mx-4 mt-4 rounded">
+        <div className={`border px-4 py-3 mx-2 sm:mx-4 mt-4 rounded transition-colors ${
+          darkMode
+            ? 'bg-[#251F07] border-[#FACC15] text-[#FACC15]'
+            : 'bg-yellow-100 border-yellow-400 text-yellow-700'
+        }`}>
           <div className="flex items-center">
             <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
             </svg>
-            Backend disconnected - showing mock data
+            {t('backendDisconnected')}
           </div>
         </div>
       )}
       
       {/* Error banner */}
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 mx-2 sm:mx-4 mt-4 rounded">
+        <div className={`border px-4 py-3 mx-2 sm:mx-4 mt-4 rounded transition-colors ${
+          darkMode
+            ? 'bg-[#2A0E15] border-[#FB7185] text-[#FB7185]'
+            : 'bg-red-100 border-red-400 text-red-700'
+        }`}>
           {error}
           <button 
             onClick={() => setError(null)}
-            className="float-right text-red-700 hover:text-red-900"
+            className={`float-right transition-colors ${
+              darkMode ? 'text-[#FB7185] hover:text-[#FB7185]' : 'text-red-700 hover:text-red-900'
+            }`}
           >
             ×
           </button>
@@ -313,12 +371,20 @@ const Dashboard = () => {
           <div className="flex items-center gap-4">
             <button
               onClick={() => setShowSidebar(!showSidebar)}
-              className="lg:hidden bg-gray-200 text-gray-700 px-3 py-2 rounded-lg hover:bg-gray-300 transition-colors"
+              className={`lg:hidden px-3 py-2 rounded-lg transition-colors ${
+                darkMode
+                  ? 'bg-[#0D2026] text-[#F5FEFF] hover:bg-[#10262D]'
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
             >
-              {showSidebar ? '←' : '→'} Dashboard
+              {showSidebar ? '←' : '→'} {t('dashboard')}
             </button>
-            <h2 className="text-2xl font-bold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">
-              Doctor Dashboard
+            <h2 className={`text-2xl font-bold bg-clip-text text-transparent ${
+              darkMode
+                ? 'bg-gradient-to-r from-[#79CAC2] to-[#58B4AA]'
+                : 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0]'
+            }`}>
+              {t('doctorDashboard')}
             </h2>
           </div>
         </div>
@@ -334,14 +400,26 @@ const Dashboard = () => {
         {/* Main Layout: Sidebar + Content */}
         <div className="flex gap-6">
           {/* Left Sidebar */}
-          <div className={`${showSidebar ? 'block' : 'hidden'} lg:block w-80 flex-shrink-0 relative z-30 lg:z-auto lg:relative fixed lg:static top-0 left-0 h-full lg:h-auto bg-white lg:bg-transparent p-4 lg:p-0 lg:shadow-none shadow-lg`}>
+          <div className={`${showSidebar ? 'block' : 'hidden'} lg:block w-80 flex-shrink-0 relative z-30 lg:z-auto lg:relative fixed lg:static top-0 left-0 h-full lg:h-auto p-4 lg:p-0 lg:shadow-none shadow-lg transition-colors ${
+            darkMode
+              ? 'bg-[#07181D] lg:bg-transparent'
+              : 'bg-white lg:bg-transparent'
+          }`}>
             {/* Calendar Section */}
-            <div className="bg-white p-4 rounded-lg shadow mb-6">
+            <div className={`p-4 rounded-lg shadow mb-6 transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border border-[#133037]'
+                : 'bg-white'
+            }`}>
               <div className="flex items-center space-x-2 mb-4">
-                <svg className="w-5 h-5 text-[#5ACCC3]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className={`w-5 h-5 ${
+                  darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+                }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                 </svg>
-                <h3 className="text-lg font-semibold text-gray-900">Calendar</h3>
+                <h3 className={`text-lg font-semibold ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{t('calendar')}</h3>
               </div>
               <CalendarSidebar
                 selectedDate={selectedDate}
@@ -349,42 +427,71 @@ const Dashboard = () => {
                 currentDate={currentDate}
                 onMonthChange={handleMonthChange}
                 appointments={appointments}
+                darkMode={darkMode}
               />
             </div>
             
             {/* Messages Section */}
-            <div className="bg-white p-4 rounded-lg shadow">
+            <div className={`p-4 rounded-lg shadow transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border border-[#133037]'
+                : 'bg-white'
+            }`}>
               <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Messages</h3>
+                <h3 className={`text-lg font-semibold ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{t('messages')}</h3>
                 {backendConnected && (
-                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${
+                    darkMode ? 'bg-[#4ADE80]' : 'bg-green-500'
+                  }`}></div>
                 )}
               </div>
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {messages.length > 0 ? messages.map((message, index) => (
                   <div 
                     key={message.id} 
-                    className="bg-gray-50 rounded-lg p-3 hover:bg-gray-100 transition-colors cursor-pointer"
+                    className={`rounded-lg p-3 transition-colors cursor-pointer ${
+                      darkMode
+                        ? 'bg-[#10262D] hover:bg-[#133037]'
+                        : 'bg-gray-50 hover:bg-gray-100'
+                    }`}
                   >
                     <div className="flex items-center">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#5ACCC3] to-[#4DB6B0] flex items-center justify-center text-white font-semibold mr-3 text-sm">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-semibold mr-3 text-sm ${
+                        darkMode
+                          ? 'bg-gradient-to-br from-[#79CAC2] to-[#58B4AA]'
+                          : 'bg-gradient-to-br from-[#5ACCC3] to-[#4DB6B0]'
+                      }`}>
                         {message.avatar}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-gray-800 text-sm truncate">{message.name}</div>
-                        <div className="text-xs text-gray-500 truncate">{message.lastMessage}</div>
+                        <div className={`font-semibold text-sm truncate ${
+                          darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                        }`}>{message.name}</div>
+                        <div className={`text-xs truncate ${
+                          darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                        }`}>{message.lastMessage}</div>
                       </div>
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></div>
+                      <div className={`w-2 h-2 rounded-full animate-pulse flex-shrink-0 ${
+                        darkMode ? 'bg-[#4ADE80]' : 'bg-green-500'
+                      }`}></div>
                     </div>
                   </div>
                 )) : (
-                  <div className="text-center py-4 text-gray-500 text-sm">
-                    No messages available
+                  <div className={`text-center py-4 text-sm ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>
+                    {t('noMessagesAvailable')}
                   </div>
                 )}
               </div>
-              <button className="mt-4 w-full py-2 bg-[#4DB6B0] text-white rounded-lg text-sm font-medium hover:bg-[#3DA6A0] transition-colors">
-                View All Messages
+              <button className={`mt-4 w-full py-2 rounded-lg text-sm font-medium transition-colors ${
+                darkMode
+                  ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                  : 'bg-[#4DB6B0] text-white hover:bg-[#3DA6A0]'
+              }`}>
+                {t('viewAllMessages')}
               </button>
             </div>
           </div>
@@ -392,33 +499,55 @@ const Dashboard = () => {
           {/* Main Content */}
           <div className="flex-1 min-w-0 space-y-6">
             {/* Appointments Section */}
-            <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+            <div className={`p-6 rounded-xl shadow border transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border-[#133037]'
+                : 'bg-white border-gray-100'
+            }`}>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center">
-                  <div className="w-2 h-6 bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0] rounded-full mr-3"></div>
-                  <h2 className="text-xl font-semibold text-gray-900">
-                    Appointments for {format(selectedDate, 'MMMM d, yyyy')}
+                  <div className={`w-2 h-6 rounded-full mr-3 ${
+                    darkMode
+                      ? 'bg-gradient-to-b from-[#79CAC2] to-[#58B4AA]'
+                      : 'bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0]'
+                  }`}></div>
+                  <h2 className={`text-xl font-semibold ${
+                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                  }`}>
+                    {t('appointmentsFor')} {format(selectedDate, 'MMMM d, yyyy')}
                   </h2>
                   {backendConnected && (
-                    <div className="ml-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <div className={`ml-2 w-2 h-2 rounded-full animate-pulse ${
+                      darkMode ? 'bg-[#4ADE80]' : 'bg-green-500'
+                    }`}></div>
                   )}
                 </div>
                 <div className="flex items-center space-x-2">
                   {loading ? (
-                    <div className="w-3 h-3 bg-blue-500 rounded-full animate-pulse"></div>
+                    <div className={`w-3 h-3 rounded-full animate-pulse ${
+                      darkMode ? 'bg-[#79CAC2]' : 'bg-blue-500'
+                    }`}></div>
                   ) : (
-                    <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                    <div className={`w-3 h-3 rounded-full animate-pulse ${
+                      darkMode ? 'bg-[#4ADE80]' : 'bg-green-500'
+                    }`}></div>
                   )}
-                  <span className="text-sm text-gray-500">
-                    {loading ? 'Loading...' : `${getAppointmentsForDate(selectedDate).length} appointments`}
+                  <span className={`text-sm ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>
+                    {loading ? t('loading') : `${getAppointmentsForDate(selectedDate).length} ${t('appointments')}`}
                   </span>
                 </div>
               </div>
             
               {loading ? (
                 <div className="flex justify-center items-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5ACCC3]"></div>
-                  <span className="ml-3 text-gray-500">Loading appointments...</span>
+                  <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${
+                    darkMode ? 'border-[#79CAC2]' : 'border-[#5ACCC3]'
+                  }`}></div>
+                  <span className={`ml-3 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>{t('loadingAppointments')}</span>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -426,34 +555,84 @@ const Dashboard = () => {
                     getAppointmentsForDate(selectedDate).map((appointment, index) => (
                       <div 
                         key={appointment.id} 
-                        className="bg-gray-50 rounded-lg border border-gray-200 p-4 hover:bg-gray-100 transition-colors"
+                        className={`rounded-lg border p-4 transition-colors ${
+                          darkMode
+                            ? 'bg-[#10262D] border-[#133037] hover:bg-[#133037]'
+                            : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                        }`}
                       >
                         <div className="grid grid-cols-1 sm:grid-cols-12 items-center gap-4">
                           <div className="col-span-1 sm:col-span-2">
-                            <div className="bg-[#4DB6B0] text-white rounded-lg p-2 font-bold text-sm text-center">
-                              {appointment.time}
+                            <div className={`border-2 rounded-lg p-2 text-center ${
+                              darkMode
+                                ? 'bg-[#0D2026] border-[#79CAC2]'
+                                : 'bg-white border-[#5ACCC3]'
+                            }`}>
+                              <div className={`font-bold text-sm ${
+                                darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+                              }`}>{appointment.time}</div>
+                              <div className={`text-xs mt-0.5 ${
+                                darkMode ? 'text-[#79CAC2]' : 'text-[#5ACCC3]'
+                              }`}>{appointment.formattedDate || appointment.date || format(selectedDate, 'MMM d, yyyy')}</div>
                             </div>
                           </div>
                           <div className="col-span-1 sm:col-span-2">
-                            <div className="font-semibold text-gray-800">{appointment.patient}</div>
+                            <div className={`font-semibold ${
+                              darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                            }`}>{appointment.patient}</div>
                           </div>
                           <div className="col-span-1 sm:col-span-2">
-                            <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full text-xs font-medium">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              darkMode
+                                ? 'bg-[#251F07] text-[#FACC15]'
+                                : 'bg-orange-100 text-orange-800'
+                            }`}>
                               {appointment.problem}
                             </span>
                           </div>
-                          <div className="col-span-1 sm:col-span-4 text-gray-600 text-sm">
+                          <div className={`col-span-1 sm:col-span-2 text-sm ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                          }`}>
                             {appointment.description}
                           </div>
-                          <div className="col-span-1 sm:col-span-1 text-gray-500 text-xs">
+                          <div className={`col-span-1 sm:col-span-1 text-xs ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>
+                            {appointment.hospital || t('unknownHospital')}
+                          </div>
+                          <div className={`col-span-1 sm:col-span-1 text-xs ${
+                            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                          }`}>
                             {appointment.provider}
                           </div>
-                          <div className="col-span-1">
+                          <div className="col-span-1 sm:col-span-3 flex space-x-2">
+                            {appointment.patient_id && (
+                              <button 
+                                onClick={() => navigate(`/doctor/report/${appointment.patient_id}`)}
+                                className={`flex-1 px-4 py-3 border-2 rounded-lg text-sm font-medium transition-colors ${
+                                  darkMode
+                                    ? 'bg-[#0D2026] border-[#79CAC2] text-[#79CAC2] hover:bg-[#10262D]'
+                                    : 'bg-white border-[#5ACCC3] text-[#5ACCC3] hover:bg-[#5ACCC3]/10'
+                                }`}
+                              >
+                                {t('start')}
+                              </button>
+                            )}
                             <button 
-                              onClick={() => handleViewAppointment(appointment.id)}
-                              className="w-full px-3 py-2 bg-[#4DB6B0] text-white rounded-lg text-sm font-medium hover:bg-[#3DA6A0] transition-colors"
+                              onClick={() => {
+                                if (appointment.report_id) {
+                                  navigate(`/reports/${appointment.report_id}`)
+                                } else {
+                                  handleViewAppointment(appointment.id)
+                                }
+                              }}
+                              className={`${appointment.patient_id ? 'flex-1' : 'w-full'} px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                                darkMode
+                                  ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                                  : 'bg-[#5ACCC3] text-white hover:bg-[#4DB6B0]'
+                              }`}
                             >
-                              View
+                              {appointment.report_id ? t('viewReport') : t('view')}
                             </button>
                           </div>
                         </div>
@@ -461,13 +640,21 @@ const Dashboard = () => {
                     ))
                   ) : (
                     <div className="text-center py-12">
-                      <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${
+                        darkMode ? 'bg-[#10262D]' : 'bg-gray-100'
+                      }`}>
+                        <svg className={`w-8 h-8 ${
+                          darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                        }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
                       </div>
-                      <p className="text-gray-500 font-medium">No appointments scheduled</p>
-                      <p className="text-gray-400 text-sm">for {format(selectedDate, 'MMMM d, yyyy')}</p>
+                      <p className={`font-medium ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-500'
+                      }`}>{t('noAppointmentsScheduled')}</p>
+                      <p className={`text-sm ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                      }`}>{t('for')} {format(selectedDate, 'MMMM d, yyyy')}</p>
                     </div>
                   )}
                 </div>
@@ -475,44 +662,78 @@ const Dashboard = () => {
             </div>
             
             {/* To-Do Section */}
-            <div className="bg-white p-6 rounded-xl shadow border border-gray-100">
+            <div className={`p-6 rounded-xl shadow border transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border-[#133037]'
+                : 'bg-white border-gray-100'
+            }`}>
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center">
-                  <div className="w-2 h-6 bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0] rounded-full mr-3"></div>
-                  <h2 className="text-xl font-semibold text-gray-900">To-Do</h2>
+                  <div className={`w-2 h-6 rounded-full mr-3 ${
+                    darkMode
+                      ? 'bg-gradient-to-b from-[#79CAC2] to-[#58B4AA]'
+                      : 'bg-gradient-to-b from-[#5ACCC3] to-[#4DB6B0]'
+                  }`}></div>
+                  <h2 className={`text-xl font-semibold ${
+                    darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                  }`}>{t('toDo')}</h2>
                   {backendConnected && (
-                    <div className="ml-2 w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                    <div className={`ml-2 w-2 h-2 rounded-full animate-pulse ${
+                      darkMode ? 'bg-[#4ADE80]' : 'bg-green-500'
+                    }`}></div>
                   )}
                 </div>
-                <span className="bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm font-medium">
-                  {todos.filter(todo => !todo.completed).length} pending
+                <span className={`px-3 py-1 rounded-full text-sm font-medium ${
+                  darkMode
+                    ? 'bg-[#113A3A] text-[#79CAC2]'
+                    : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {todos.filter(todo => !todo.completed).length} {t('pending')}
                 </span>
               </div>
               <div className="space-y-4">
                 {todos.length > 0 ? todos.map((todo, index) => (
                   <div 
                     key={todo.id} 
-                    className={`bg-gray-50 rounded-lg border p-4 hover:bg-gray-100 transition-colors ${
+                    className={`rounded-lg border p-4 transition-colors ${
                       todo.completed 
-                        ? 'border-green-200 bg-green-50 opacity-75' 
-                        : 'border-gray-200'
+                        ? darkMode
+                          ? 'border-[#062412] bg-[#062412] opacity-75'
+                          : 'border-green-200 bg-green-50 opacity-75'
+                        : darkMode
+                        ? 'bg-[#10262D] border-[#133037] hover:bg-[#133037]'
+                        : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
                     }`}
                   >
                     <div className="grid grid-cols-1 sm:grid-cols-12 items-center gap-4">
                       <div className="col-span-1 sm:col-span-2">
-                        <span className="bg-purple-100 text-purple-800 px-2 py-1 rounded-full text-xs font-medium">
+                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                          darkMode
+                            ? 'bg-[#113A3A] text-[#79CAC2]'
+                            : 'bg-purple-100 text-purple-800'
+                        }`}>
                           {todo.date}
                         </span>
                       </div>
-                      <div className={`col-span-1 sm:col-span-6 transition-all duration-300 ${todo.completed ? 'line-through text-gray-400' : 'text-gray-600'}`}>
+                      <div className={`col-span-1 sm:col-span-6 transition-all duration-300 ${
+                        todo.completed 
+                          ? darkMode ? 'line-through text-[#8AA2A7]' : 'line-through text-gray-400'
+                          : darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                      }`}>
                         {todo.description}
                       </div>
-                      <div className="col-span-1 sm:col-span-2 text-gray-500 text-sm">
+                      <div className={`col-span-1 sm:col-span-2 text-sm ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                      }`}>
                         {todo.provider}
                       </div>
                       <div className="col-span-1">
-                        <button className="w-full px-3 py-2 bg-indigo-500 text-white rounded-lg text-sm font-medium hover:bg-indigo-600 transition-colors">
-                          Docs
+                        <button className={`w-full px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          darkMode
+                            ? 'bg-[#79CAC2] text-[#050C0F] hover:bg-[#58B4AA]'
+                            : 'bg-indigo-500 text-white hover:bg-indigo-600'
+                        }`}>
+                          {t('docs')}
                         </button>
                       </div>
                       <div className="col-span-1 text-center">
@@ -522,19 +743,27 @@ const Dashboard = () => {
                             checked={todo.completed}
                             onChange={() => toggleTodoCompletion(todo.id)}
                             disabled={loading}
-                            className="w-5 h-5 text-[#5ACCC3] rounded border-2 border-gray-300 focus:ring-[#5ACCC3] focus:ring-2 transition-all duration-200"
+                            className={`w-5 h-5 rounded border-2 focus:ring-2 transition-all duration-200 ${
+                              darkMode
+                                ? 'text-[#79CAC2] border-[#133037] focus:ring-[#79CAC2]'
+                                : 'text-[#5ACCC3] border-gray-300 focus:ring-[#5ACCC3]'
+                            }`}
                           />
-                          <span className="ml-2 sr-only">Mark as completed</span>
+                          <span className="ml-2 sr-only">{t('markAsCompleted')}</span>
                         </label>
                       </div>
                     </div>
                     {todo.completed && (
-                      <div className="h-1 bg-green-500 animate-pulse mt-2 rounded"></div>
+                      <div className={`h-1 animate-pulse mt-2 rounded ${
+                        darkMode ? 'bg-[#4ADE80]' : 'bg-green-500'
+                      }`}></div>
                     )}
                   </div>
                 )) : (
-                  <div className="text-center py-8 text-gray-500">
-                    No tasks available
+                  <div className={`text-center py-8 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>
+                    {t('noTasksAvailable')}
                   </div>
                 )}
               </div>
@@ -545,17 +774,27 @@ const Dashboard = () => {
       
       {/* View Appointment Modal */}
       {showViewAppointmentModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-md flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className={`fixed inset-0 backdrop-blur-md flex items-center justify-center z-50 p-4 ${
+          darkMode ? 'bg-[#050C0F]/80' : 'bg-white/30'
+        }`}>
+          <div className={`rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto transition-colors ${
+            darkMode
+              ? 'bg-[#0D2026] border border-[#133037]'
+              : 'bg-white'
+          }`}>
             <div className="p-6">
               <div className="flex items-center justify-between mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Appointment Details</h2>
+                <h2 className={`text-2xl font-bold ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{t('appointmentDetails')}</h2>
                 <button
                   onClick={() => {
                     setShowViewAppointmentModal(false)
                     setSelectedAppointmentDetails(null)
                   }}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  className={`transition-colors ${
+                    darkMode ? 'text-[#8AA2A7] hover:text-[#F5FEFF]' : 'text-gray-400 hover:text-gray-600'
+                  }`}
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -565,87 +804,125 @@ const Dashboard = () => {
 
               {loadingAppointmentDetails ? (
                 <div className="flex justify-center items-center py-12">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5ACCC3]"></div>
-                  <span className="ml-3 text-gray-600">Loading appointment details...</span>
+                  <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${
+                    darkMode ? 'border-[#79CAC2]' : 'border-[#5ACCC3]'
+                  }`}></div>
+                  <span className={`ml-3 ${
+                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                  }`}>{t('loadingAppointmentDetails')}</span>
                 </div>
               ) : selectedAppointmentDetails ? (
                 <div className="space-y-6">
                   {/* Patient Information */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Patient Information</h3>
+                  <div className={`p-4 rounded-lg ${
+                    darkMode ? 'bg-[#10262D]' : 'bg-gray-50'
+                  }`}>
+                    <h3 className={`text-lg font-semibold mb-3 ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{t('patientInformation')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Patient Name</label>
-                        <p className="text-gray-900">{selectedAppointmentDetails.patient_name || 'N/A'}</p>
+                        <label className={`block text-sm font-medium mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                        }`}>{t('patientName')}</label>
+                        <p className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{selectedAppointmentDetails.patient_name || t('nA')}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Patient ID</label>
-                        <p className="text-gray-900">{selectedAppointmentDetails.patient_id || 'N/A'}</p>
+                        <label className={`block text-sm font-medium mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                        }`}>{t('patientId')}</label>
+                        <p className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{selectedAppointmentDetails.patient_id || t('nA')}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Appointment Details */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Appointment Details</h3>
+                  <div className={`p-4 rounded-lg ${
+                    darkMode ? 'bg-[#10262D]' : 'bg-gray-50'
+                  }`}>
+                    <h3 className={`text-lg font-semibold mb-3 ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{t('appointmentDetails')}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
-                        <p className="text-gray-900">{selectedAppointmentDetails.formatted_date || selectedAppointmentDetails.date || 'N/A'}</p>
+                        <label className={`block text-sm font-medium mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                        }`}>{t('date')}</label>
+                        <p className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{selectedAppointmentDetails.formatted_date || selectedAppointmentDetails.date || t('nA')}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Time</label>
-                        <p className="text-gray-900">{selectedAppointmentDetails.time || 'N/A'}</p>
+                        <label className={`block text-sm font-medium mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                        }`}>{t('time')}</label>
+                        <p className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{selectedAppointmentDetails.time || t('nA')}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+                        <label className={`block text-sm font-medium mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                        }`}>{t('status')}</label>
                         <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                          selectedAppointmentDetails.status === 'booked' ? 'bg-green-100 text-green-800' :
-                          selectedAppointmentDetails.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                          selectedAppointmentDetails.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                          'bg-gray-100 text-gray-800'
+                          selectedAppointmentDetails.status === 'booked' ? darkMode ? 'bg-[#062412] text-[#4ADE80]' : 'bg-green-100 text-green-800' :
+                          selectedAppointmentDetails.status === 'pending' ? darkMode ? 'bg-[#251F07] text-[#FACC15]' : 'bg-yellow-100 text-yellow-800' :
+                          selectedAppointmentDetails.status === 'cancelled' ? darkMode ? 'bg-[#2A0E15] text-[#FB7185]' : 'bg-red-100 text-red-800' :
+                          darkMode ? 'bg-[#10262D] text-[#C1D9DD]' : 'bg-gray-100 text-gray-800'
                         }`}>
-                          {selectedAppointmentDetails.status || 'N/A'}
+                          {selectedAppointmentDetails.status || t('nA')}
                         </span>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                        <p className="text-gray-900">{selectedAppointmentDetails.appointment_type || 'N/A'}</p>
+                        <label className={`block text-sm font-medium mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                        }`}>{t('type')}</label>
+                        <p className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{selectedAppointmentDetails.appointment_type || t('nA')}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Clinical Information */}
-                  <div className="bg-gray-50 p-4 rounded-lg">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-3">Clinical Information</h3>
+                  <div className={`p-4 rounded-lg ${
+                    darkMode ? 'bg-[#10262D]' : 'bg-gray-50'
+                  }`}>
+                    <h3 className={`text-lg font-semibold mb-3 ${
+                      darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                    }`}>{t('clinicalInformation')}</h3>
                     <div className="space-y-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Problem/Reason</label>
-                        <p className="text-gray-900">{selectedAppointmentDetails.problem || selectedAppointmentDetails.description || 'N/A'}</p>
+                        <label className={`block text-sm font-medium mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                        }`}>{t('problemReason')}</label>
+                        <p className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{selectedAppointmentDetails.problem || selectedAppointmentDetails.description || t('nA')}</p>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                        <p className="text-gray-900">{selectedAppointmentDetails.notes || 'No notes available'}</p>
+                        <label className={`block text-sm font-medium mb-1 ${
+                          darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                        }`}>{t('notes')}</label>
+                        <p className={darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'}>{selectedAppointmentDetails.notes || t('noNotesAvailable')}</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex justify-end space-x-3 pt-4 border-t">
+                  <div className={`flex justify-end space-x-3 pt-4 border-t ${
+                    darkMode ? 'border-[#133037]' : 'border-gray-200'
+                  }`}>
                     <button
                       onClick={() => {
                         setShowViewAppointmentModal(false)
                         setSelectedAppointmentDetails(null)
                       }}
-                      className="px-4 py-2 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                      className={`px-4 py-2 rounded-lg transition-colors ${
+                        darkMode
+                          ? 'text-[#F5FEFF] bg-[#10262D] hover:bg-[#133037]'
+                          : 'text-gray-700 bg-gray-100 hover:bg-gray-200'
+                      }`}
                     >
-                      Close
+                      {t('close')}
                     </button>
                   </div>
                 </div>
               ) : (
                 <div className="text-center py-12">
-                  <p className="text-gray-500">No appointment details available</p>
+                  <p className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'}>{t('noAppointmentDetailsAvailable')}</p>
                 </div>
               )}
             </div>

@@ -44,6 +44,18 @@ const userProfileService = {
       console.log('🔍 [DEBUG] User data:', u)
       console.log('🔍 [DEBUG] User role:', u.role)
       console.log('🔍 [DEBUG] User status:', u.status)
+      console.log('🔍 [DEBUG] Custom permissions:', u.custom_permissions)
+      
+      // Transform permissions array to object format
+      // Backend stores permissions as: { permissions: ['viewHistory', 'prescribe'] }
+      // Frontend expects: { viewHistory: true, prescribe: false, editMedical: true, ... }
+      const permissionsArray = u.custom_permissions?.permissions || []
+      const accessObject = {}
+      // Initialize all possible permissions based on role
+      const allPermissions = ['viewHistory', 'prescribe', 'editMedical', 'accessAnalytics']
+      allPermissions.forEach(perm => {
+        accessObject[perm] = permissionsArray.includes(perm)
+      })
       
       return {
         id: u.id,
@@ -55,7 +67,7 @@ const userProfileService = {
         clinicId: u.organization_id || '',
         createdAt: u.created_at,
         lastLogin: u.last_login,
-        access: u.custom_permissions || {},
+        access: accessObject,
       }
     } catch (error) {
       console.error('Error fetching user profile:', error)
@@ -104,7 +116,15 @@ const userProfileService = {
         payload.status = statusMapping[userData.status] || userData.status.toLowerCase()
       }
       if (userData.access) {
-        payload.custom_permissions = userData.access
+        // Transform access object to permissions array format
+        // Frontend has: { viewHistory: true, prescribe: false, editMedical: true, ... }
+        // Backend expects: { permissions: ['viewHistory', 'editMedical'] }
+        const permissionsArray = Object.keys(userData.access).filter(
+          key => userData.access[key] === true
+        )
+        payload.custom_permissions = {
+          permissions: permissionsArray
+        }
       }
       
       console.log('🔍 [DEBUG] Update payload:', payload)
@@ -135,6 +155,14 @@ const userProfileService = {
       console.log('🔍 [DEBUG] Updated status:', u.status)
       console.log('🔍 [DEBUG] Updated custom_permissions:', u.custom_permissions)
       
+      // Transform permissions array to object format
+      const permissionsArray = u.custom_permissions?.permissions || []
+      const accessObject = {}
+      const allPermissions = ['viewHistory', 'prescribe', 'editMedical', 'accessAnalytics']
+      allPermissions.forEach(perm => {
+        accessObject[perm] = permissionsArray.includes(perm)
+      })
+      
       return {
         id: u.id,
         name: [u.first_name, u.last_name].filter(Boolean).join(' ').trim() || u.email,
@@ -145,7 +173,7 @@ const userProfileService = {
         clinicId: u.organization_id || '',
         createdAt: u.created_at,
         lastLogin: u.last_login,
-        access: u.custom_permissions || userData.access || {},
+        access: accessObject,
       }
     } catch (error) {
       console.error('Error updating user profile:', error)

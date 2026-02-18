@@ -6,13 +6,29 @@ import {
   ZoomIn, ZoomOut, RotateCw, RotateCcw, Maximize, Minimize, Move, Square,
   Circle, Ruler, MousePointer, Save, Download, Share, Settings, Info,
   ChevronLeft, ChevronRight, SkipBack, SkipForward, Volume2, VolumeX,
-  Contrast, Sun, Sliders, Grid3X3, Layout, Layers, Target
+  Contrast, Sun, Sliders, Grid3X3, Layout, Layers, Target, ArrowLeft
 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router-dom';
 // Import the radiology header component
 import RadiologyHeader from './header';
 import { getPACSStudies, getPACSStudyDetails, getPACSSeries, getPACSImages, getPACSStats, savePACSAnnotations, getPACSAnnotations } from '../../services/radiologyService';
 
+// OHIF Base URL - should be configured in .env file as VITE_OHIF_URL
+// Default to localhost:3000 if not set
+const getOHIFBaseURL = () => {
+  const envUrl = import.meta.env.VITE_OHIF_URL;
+  if (envUrl) {
+    // Ensure it ends with a slash
+    return envUrl.endsWith('/') ? envUrl : `${envUrl}/`;
+  }
+  // Default fallback
+  return 'http://localhost:3000/';
+};
+
 const PACSViewer = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const ohifBaseUrl = getOHIFBaseURL();
   const [currentStudy, setCurrentStudy] = useState(null);
   const [currentSeries, setCurrentSeries] = useState(0);
   const [currentImage, setCurrentImage] = useState(0);
@@ -32,6 +48,11 @@ const PACSViewer = () => {
   const [layout, setLayout] = useState('single'); // single, quad, compare
   const [measurements, setMeasurements] = useState([]);
   const [annotations, setAnnotations] = useState([]);
+  const [selectedStudyInstanceUID, setSelectedStudyInstanceUID] = useState(null);
+  const [ohifUrl, setOhifUrl] = useState(ohifBaseUrl);
+  const [ohifError, setOhifError] = useState(null);
+  const [loadingOhifStudy, setLoadingOhifStudy] = useState(false);
+  const [iframeLoadError, setIframeLoadError] = useState(false);
   const viewerRef = useRef(null);
 
   // API data state
@@ -163,6 +184,57 @@ const PACSViewer = () => {
   // Use currentStudy from API data or fallback to mock
   const study = currentStudy || mockStudy;
 
+  // Initialize OHIF URL on component mount and handle studyInstanceUID from navigation
+  useEffect(() => {
+    // Check if studyInstanceUID or orthancStudyId was passed via navigation state
+    const state = location.state;
+    setLoadingOhifStudy(false);
+    setIframeLoadError(false);
+    setOhifError(null);
+    
+    if (state) {
+      const studyInstanceUID = state.studyInstanceUID;
+      const orthancStudyId = state.orthancStudyId;
+      
+      // Use studyInstanceUID if available (preferred - comes from database)
+      if (studyInstanceUID) {
+        setSelectedStudyInstanceUID(studyInstanceUID);
+        setLoadingOhifStudy(true);
+        // OHIF URL format: <baseUrl>viewer?StudyInstanceUIDs=<uid>
+        // Use encodeURIComponent to properly encode the UID
+        // OHIF base URL should end with a slash, so we don't add another one
+        const encodedUID = encodeURIComponent(studyInstanceUID);
+        const viewerUrl = `${ohifBaseUrl}viewer?StudyInstanceUIDs=${encodedUID}`;
+        
+        // Set the URL directly - don't try to verify accessibility (CORS blocks it)
+        setOhifUrl(viewerUrl);
+        console.log('Opening OHIF with StudyInstanceUID:', studyInstanceUID);
+        console.log('OHIF Base URL:', ohifBaseUrl);
+        console.log('OHIF Viewer URL:', viewerUrl);
+        
+        // Set a timeout to clear loading state
+        const timeoutId = setTimeout(() => {
+          setLoadingOhifStudy(false);
+        }, 3000);
+        
+        return () => clearTimeout(timeoutId);
+      } else if (orthancStudyId) {
+        // Fallback: if we only have orthancStudyId, we can't verify it from frontend due to CORS
+        // Just try to use it directly (some OHIF configs might support this)
+        // Note: This is less reliable than using StudyInstanceUID
+        console.warn('Using Orthanc study ID directly - StudyInstanceUID preferred');
+        const encodedId = encodeURIComponent(orthancStudyId);
+        setOhifUrl(`${ohifBaseUrl}viewer?studyId=${encodedId}`);
+      } else {
+        // No study specified, show study list
+        setOhifUrl(ohifBaseUrl);
+      }
+    } else {
+      // Set initial OHIF URL to show study list
+      setOhifUrl(ohifBaseUrl);
+    }
+  }, [location.state, ohifBaseUrl]);
+
   // PACS Tools
   const tools = [
     { id: 'pointer', name: 'Pointer', icon: MousePointer },
@@ -216,6 +288,63 @@ const PACSViewer = () => {
     }
   };
 
+  // Fetch StudyInstanceUID from Orthanc for a study
+  const fetchStudyInstanceUIDFromOrthanc = async (studyId) => {
+    try {
+      // Query Orthanc for studies
+      const response = await fetch('http://localhost:8042/studies');
+      const studyIds = await response.json();
+      
+      if (!studyIds || studyIds.length === 0) {
+        return null;
+      }
+      
+      // If studyId matches an Orthanc study ID directly, use it
+      if (studyIds.includes(studyId)) {
+        // Get the StudyInstanceUID from the study metadata
+        try {
+          const studyInfo = await fetch(`http://localhost:8042/studies/${studyId}`);
+          const studyData = await studyInfo.json();
+          // Orthanc returns StudyInstanceUID in MainDicomTags
+          return studyData.MainDicomTags?.StudyInstanceUID || studyId;
+        } catch (e) {
+          console.warn('Error fetching study metadata:', e);
+          return studyId; // Fallback to using the ID directly
+        }
+      }
+      
+      // Try to match by accession number or other identifier
+      for (const orthancStudyId of studyIds) {
+        try {
+          const studyInfo = await fetch(`http://localhost:8042/studies/${orthancStudyId}`);
+          const studyData = await studyInfo.json();
+          
+          // Match by accession number, patient ID, or study description
+          const accessionNumber = studyData.MainDicomTags?.AccessionNumber;
+          const patientId = studyData.MainDicomTags?.PatientID;
+          
+          if (accessionNumber === studyId || patientId === studyId) {
+            return studyData.MainDicomTags?.StudyInstanceUID || orthancStudyId;
+          }
+        } catch (e) {
+          console.warn('Error fetching study info:', e);
+        }
+      }
+      
+      // If no match found, use the first study's StudyInstanceUID
+      try {
+        const firstStudyInfo = await fetch(`http://localhost:8042/studies/${studyIds[0]}`);
+        const firstStudyData = await firstStudyInfo.json();
+        return firstStudyData.MainDicomTags?.StudyInstanceUID || studyIds[0];
+      } catch (e) {
+        return studyIds[0]; // Fallback
+      }
+    } catch (err) {
+      console.error('Error fetching StudyInstanceUID from Orthanc:', err);
+    }
+    return null;
+  };
+
   const handleStudySelect = async (studyId) => {
     try {
       const studyData = await getPACSStudyDetails(studyId);
@@ -223,6 +352,18 @@ const PACSViewer = () => {
         setCurrentStudy(studyData);
         setCurrentSeries(0);
         setCurrentImage(0);
+        
+        // Try to fetch StudyInstanceUID from Orthanc
+        const studyInstanceUID = await fetchStudyInstanceUIDFromOrthanc(studyId);
+        if (studyInstanceUID) {
+          setSelectedStudyInstanceUID(studyInstanceUID);
+          // Update OHIF URL to open the specific study
+          setOhifUrl(`http://localhost:3000/viewer?StudyInstanceUIDs=${studyInstanceUID}`);
+        } else {
+          // If no StudyInstanceUID found, just show the study list
+          setSelectedStudyInstanceUID(null);
+          setOhifUrl('http://localhost:3000');
+        }
       }
     } catch (err) {
       console.error('Error loading study details:', err);
@@ -708,59 +849,253 @@ const PACSViewer = () => {
     </div>
   );
 
-  const ViewerCanvas = () => (
-    <div className="flex-1 bg-black relative overflow-hidden">
-      <iframe
-        src={`http://localhost:3001/viewer?StudyInstanceUID=1.2.840.113619.2.55.3.2831164352.781.1591788880.467`}
-        className="w-full h-full border-none"
-        title="OHIF DICOM Viewer"
-      />
-    </div>
-  );
-
-  // Main Component Return
-  return (
-    <div className="h-screen bg-gray-50 flex flex-col">
-      <RadiologyHeader />
-      <PACSHeader />
-      <Toolbar />
-      
-      {/* Loading State */}
-      {loading && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-500 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading PACS data...</p>
-          </div>
-        </div>
-      )}
-
-      {/* Error State */}
-      {error && (
-        <div className="flex-1 flex items-center justify-center">
-          <div className="bg-red-50 border border-red-200 rounded-lg p-6 max-w-md">
-            <div className="flex items-center mb-4">
-              <X className="w-5 h-5 text-red-500 mr-2" />
-              <h3 className="text-sm font-medium text-red-800">Error loading PACS data</h3>
+  const ViewerCanvas = () => {
+    return (
+      <div className="flex-1 bg-black relative overflow-hidden">
+        {ohifUrl ? (
+          <iframe
+            key={ohifUrl} // Force re-render when URL changes
+            src={ohifUrl}
+            className="w-full h-full border-none"
+            title="OHIF DICOM Viewer"
+            allow="camera; microphone; fullscreen"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-white">
+            <div className="text-center">
+              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
+              <p className="text-lg font-semibold mb-2">OHIF Viewer Not Available</p>
+              <p className="text-sm text-gray-400">
+                Please ensure OHIF is running on http://localhost:3000
+              </p>
             </div>
-            <p className="text-sm text-red-600">{error}</p>
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    );
+  };
 
-      {/* Main PACS Interface */}
-      {!loading && !error && (
-        <div className="flex-1 flex overflow-hidden">
-          <SeriesPanel />
-          
-          <div className="flex-1 flex flex-col">
-            <ViewerCanvas />
-            <ImageControls />
+  const handleBack = () => {
+    // Navigate to studies page (main radiology page)
+    navigate('/radiology/studies');
+  };
+
+  // Main Component Return - Only OHIF Viewer with Navbar
+  return (
+    <div className="h-screen w-screen bg-black flex flex-col">
+      <RadiologyHeader />
+      <div className="flex-1 relative">
+        {ohifUrl ? (
+          <>
+            {/* Back button overlay - positioned at top left of OHIF viewer */}
+            <button
+              onClick={handleBack}
+              className="absolute top-2 left-2 z-20 bg-gray-800 hover:bg-gray-700 text-white px-3 py-2 rounded-lg shadow-lg flex items-center space-x-2 transition-colors"
+              title="Go back"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span className="text-sm font-medium">Back</span>
+            </button>
+            
+            <iframe
+              key={ohifUrl}
+              ref={viewerRef}
+              src={ohifUrl}
+              className="w-full h-full border-none"
+              title="OHIF DICOM Viewer"
+              allow="camera; microphone; fullscreen"
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"
+              onLoad={() => {
+                // Clear loading state
+                setLoadingOhifStudy(false);
+                
+                // Try to detect if we got a 404 by checking the iframe after a short delay
+                // Note: This may not work due to CORS, but we'll try
+                setTimeout(() => {
+                  try {
+                    const iframe = viewerRef.current;
+                    if (iframe && iframe.contentWindow) {
+                      // Check if we can access the iframe's location (may fail due to CORS)
+                      try {
+                        const iframeUrl = iframe.contentWindow.location.href;
+                        if (iframeUrl.includes('404') || iframeUrl.includes('not-found')) {
+                          setOhifError('OHIF returned a 404 error. The /viewer route may not be configured.');
+                          setIframeLoadError(true);
+                        } else {
+                          // If we can access it and it doesn't have 404, assume success
+                          setOhifError(null);
+                          setIframeLoadError(false);
+                        }
+                      } catch (e) {
+                        // CORS blocked - can't check, but iframe loaded so assume it's OK
+                        // User will see 404 in console if it exists
+                        console.log('Cannot check iframe content (CORS), but iframe loaded');
+                        setOhifError(null);
+                        setIframeLoadError(false);
+                      }
+                    }
+                  } catch (e) {
+                    // Can't access iframe - that's OK, just log it
+                    console.log('Could not check iframe status:', e);
+                    setOhifError(null);
+                    setIframeLoadError(false);
+                  }
+                }, 1000);
+              }}
+              onError={() => {
+                // This may not fire for iframes, but we'll try
+                console.error('OHIF iframe failed to load');
+                setIframeLoadError(true);
+                setLoadingOhifStudy(false);
+                setOhifError('Failed to load OHIF viewer. Please check if OHIF is running and accessible.');
+              }}
+            />
+            {/* Show a note if trying to open a specific study */}
+            {selectedStudyInstanceUID && !ohifError && !iframeLoadError && (
+              <div className="absolute top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-10 max-w-md">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">Opening study in OHIF</p>
+                    <p className="text-xs text-blue-200 mt-1 truncate">
+                      {selectedStudyInstanceUID}
+                    </p>
+                    {loadingOhifStudy && (
+                      <p className="text-xs text-blue-300 mt-1">
+                        If you see a 404 error in the console, OHIF may not be configured correctly.
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => {
+                      setSelectedStudyInstanceUID(null);
+                      setOhifError(null);
+                      setIframeLoadError(false);
+                      setOhifUrl(ohifBaseUrl);
+                    }}
+                    className="ml-2 text-blue-200 hover:text-white"
+                    title="Close and return to study list"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+            {/* Show loading indicator when opening a specific study */}
+            {loadingOhifStudy && (
+              <div className="absolute top-4 left-4 bg-blue-600 text-white px-4 py-3 rounded-lg shadow-lg text-sm z-10 max-w-md">
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+                  <p>Loading study in OHIF...</p>
+                </div>
+              </div>
+            )}
+            
+            {/* Show error message if OHIF fails to load or returns 404 */}
+            {(ohifError || iframeLoadError) && (
+              <div className="absolute top-4 left-4 bg-red-600 text-white px-4 py-3 rounded-lg shadow-lg text-sm z-10 max-w-lg">
+                <div className="flex items-start space-x-2">
+                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium mb-2">Failed to load study in OHIF (404 Error)</p>
+                    <p className="text-xs text-red-200 mb-3">
+                      OHIF returned a 404 error. This usually means:
+                    </p>
+                    <ul className="text-xs text-red-200 mb-3 list-disc list-inside space-y-1">
+                      <li>OHIF is not running on {ohifBaseUrl}</li>
+                      <li>OHIF is not configured with the /viewer route</li>
+                      <li>OHIF is not connected to Orthanc as a DICOMweb server</li>
+                      <li>The study is not accessible via OHIF's configured PACS</li>
+                    </ul>
+                    <div className="text-xs text-red-100 mb-3 p-2 bg-red-700 rounded">
+                      <p className="font-medium mb-1">URL being used:</p>
+                      <code className="break-all">{ohifUrl}</code>
+                    </div>
+                    <div className="text-xs text-red-200 mb-3">
+                      <p className="font-medium mb-1">To fix this:</p>
+                      <ol className="list-decimal list-inside space-y-1 ml-2">
+                        <li>Ensure OHIF is running on port 3000 (or update VITE_OHIF_URL in .env)</li>
+                        <li>Configure OHIF to connect to Orthanc at http://localhost:8042</li>
+                        <li>Enable DICOMweb plugin in Orthanc</li>
+                        <li>Verify the study exists in Orthanc</li>
+                      </ol>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => {
+                          setOhifError(null);
+                          setIframeLoadError(false);
+                          setSelectedStudyInstanceUID(null);
+                          setOhifUrl(ohifBaseUrl);
+                        }}
+                        className="px-3 py-1 bg-red-700 hover:bg-red-800 rounded text-xs"
+                      >
+                        Open Study List
+                      </button>
+                      <button
+                        onClick={() => {
+                          setOhifError(null);
+                          setIframeLoadError(false);
+                          // Retry with the same URL
+                          const currentUrl = ohifUrl;
+                          setOhifUrl('');
+                          setTimeout(() => setOhifUrl(currentUrl), 100);
+                        }}
+                        className="px-3 py-1 bg-red-700 hover:bg-red-800 rounded text-xs"
+                      >
+                        Retry
+                      </button>
+                      <button
+                        onClick={() => {
+                          // Try alternative URL format without /viewer
+                          const altUrl = `${ohifBaseUrl}?StudyInstanceUIDs=${encodeURIComponent(selectedStudyInstanceUID || '')}`;
+                          setOhifUrl(altUrl);
+                          console.log('Trying alternative URL format:', altUrl);
+                        }}
+                        className="px-3 py-1 bg-blue-700 hover:bg-blue-800 rounded text-xs"
+                      >
+                        Try Alternative URL
+                      </button>
+                      <button
+                        onClick={() => {
+                          window.open(ohifUrl, '_blank');
+                        }}
+                        className="px-3 py-1 bg-blue-700 hover:bg-blue-800 rounded text-xs"
+                      >
+                        Open in New Tab
+                      </button>
+                      <button
+                        onClick={() => {
+                          window.open(ohifBaseUrl, '_blank');
+                        }}
+                        className="px-3 py-1 bg-gray-700 hover:bg-gray-800 rounded text-xs"
+                      >
+                        Test OHIF Base URL
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-white">
+            <div className="text-center">
+              <AlertCircle className="w-12 h-12 mx-auto mb-4 text-yellow-500" />
+              <p className="text-lg font-semibold mb-2">OHIF Viewer Not Available</p>
+              <p className="text-sm text-gray-400 mb-2">
+                Please ensure OHIF is running and accessible at:
+              </p>
+              <p className="text-sm text-blue-400 font-mono mb-4">
+                {ohifBaseUrl}
+              </p>
+              <p className="text-xs text-gray-500">
+                Configure VITE_OHIF_URL in your .env file if OHIF is on a different host/port
+              </p>
+            </div>
           </div>
-          
-          <WindowLevelPanel />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 };

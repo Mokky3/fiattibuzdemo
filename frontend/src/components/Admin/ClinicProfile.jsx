@@ -4,6 +4,38 @@ import { adminAPI, pricingAPI, departmentAPI } from '../../services/apiService'
 import { FiMapPin, FiEdit2, FiTrash2, FiPlus, FiHome, FiUsers, FiActivity, FiDollarSign, FiShield, FiLock, FiSave, FiX, FiEye, FiEyeOff, FiClock, FiCalendar, FiTrendingUp, FiTrendingDown, FiUserPlus, FiSettings, FiCheckCircle, FiXCircle, FiChevronDown } from 'react-icons/fi'
 import AdminHeader from './AdminHeader'
 
+// Move Modal outside component to prevent re-creation on every render
+const Modal = React.memo(({ show, onClose, title, children, size = 'md' }) => {
+  if (!show) return null
+  
+  const sizeClasses = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
+    lg: 'max-w-2xl',
+    xl: 'max-w-4xl'
+  }
+  
+  return (
+    <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className={`bg-white rounded-lg p-6 w-full ${sizeClasses[size]} border-2 border-[#4DB6B0] shadow-xl`}>
+        <div className="flex items-center justify-between mb-6 border-b border-[#4DB6B0] pb-4">
+          <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
+          <button 
+            onClick={onClose} 
+            className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
+          >
+            <FiX className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="space-y-4">
+          {children}
+        </div>
+      </div>
+    </div>
+  )
+})
+Modal.displayName = 'Modal'
+
 // TODO: Import your API service functions
 // import { clinicAPI, departmentAPI, pricingAPI, staffAPI, authAPI } from '../services/api'
 
@@ -50,8 +82,18 @@ const ClinicProfile = () => {
   const [showUserModal, setShowUserModal] = useState(false)
   const [showPermissionModal, setShowPermissionModal] = useState(false)
   const [showDepartmentModal, setShowDepartmentModal] = useState(false)
+  const [showDepartmentStaffModal, setShowDepartmentStaffModal] = useState(false)
+  const [showDepartmentServicesModal, setShowDepartmentServicesModal] = useState(false)
+  const [selectedDepartmentStaff, setSelectedDepartmentStaff] = useState([])
+  const [selectedDepartmentServices, setSelectedDepartmentServices] = useState([])
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null)
   const [formData, setFormData] = useState({})
+  
+  // Memoize close handler to prevent unnecessary re-renders
+  const handleCloseEditModal = useCallback(() => {
+    setShowEditModal(false)
+  }, [])
 
   // TODO: Implement role checks based on your auth system
   const isSuperAdmin = currentUser?.role === 'superadmin' || true // Temporary: allow for testing
@@ -77,7 +119,29 @@ const ClinicProfile = () => {
 
       // Fetch clinic details from Admin API
       const clinicRes = await adminAPI.getClinic(clinicId)
-      const clinicData = clinicRes?.data ?? clinicRes
+      const rawClinicData = clinicRes?.data ?? clinicRes
+      
+      // Transform backend response to match frontend expectations
+      const clinicData = {
+        id: rawClinicData.id,
+        name: rawClinicData.name,
+        type: rawClinicData.hospital_type || 'General Hospital',
+        status: rawClinicData.status || 'Active',
+        address: rawClinicData.address || '',
+        phone: rawClinicData.phone || '',
+        email: rawClinicData.email || '',
+        website: rawClinicData.website || '',
+        logo_url: rawClinicData.logo_url || '',
+        beds: rawClinicData.beds || 0,
+        founded: rawClinicData.established_date ? new Date(rawClinicData.established_date).getFullYear().toString() : '',
+        established_date: rawClinicData.established_date || '',
+        license_number: rawClinicData.license_number || '',
+        accreditation: rawClinicData.accreditation || '',
+        departments: rawClinicData.departments || [],
+        description: rawClinicData.description || '',
+        created_at: rawClinicData.created_at,
+        updated_at: rawClinicData.updated_at
+      }
       setClinic(clinicData)
 
       // Fetch departments, staff, pricing, and stats for the clinic using Vite proxy
@@ -269,12 +333,68 @@ const ClinicProfile = () => {
 
   const handleUpdateClinic = async () => {
     try {
-      // TODO: Call API to update clinic
-      // const response = await clinicAPI.updateClinic(clinic.id, formData)
-      // setClinic(response.data)
+      if (!clinic?.id) {
+        console.error('No clinic ID available')
+        return
+      }
+
+      // Prepare payload matching HospitalUpdate schema
+      const updatePayload = {
+        name: formData.name || undefined,
+        address: formData.address || undefined,
+        phone: formData.phone || undefined,
+        email: formData.email || undefined,
+        website: formData.website || undefined,
+        description: formData.description || undefined,
+        established_date: formData.established_date || undefined,
+        license_number: formData.license_number || undefined,
+        accreditation: formData.accreditation || undefined,
+        status: formData.status || undefined,
+      }
+
+      // Remove undefined values to avoid sending them
+      Object.keys(updatePayload).forEach(key => {
+        if (updatePayload[key] === undefined || updatePayload[key] === '') {
+          delete updatePayload[key]
+        }
+      })
+
+      console.log('[ClinicProfile] Updating clinic:', clinic.id, updatePayload)
+
+      const response = await adminAPI.updateClinic(clinic.id, updatePayload)
+      const updatedClinicData = response?.data || response
+
+      // Update local clinic state with the response
+      if (updatedClinicData) {
+        const transformedClinic = {
+          id: updatedClinicData.id || clinic.id,
+          name: updatedClinicData.name || formData.name,
+          type: updatedClinicData.hospital_type || clinic.type,
+          status: updatedClinicData.status || formData.status,
+          address: updatedClinicData.address || formData.address,
+          phone: updatedClinicData.phone || formData.phone,
+          email: updatedClinicData.email || formData.email,
+          website: updatedClinicData.website || formData.website,
+          logo_url: updatedClinicData.logo_url || clinic.logo_url,
+          beds: updatedClinicData.beds || clinic.beds,
+          founded: updatedClinicData.established_date ? new Date(updatedClinicData.established_date).getFullYear().toString() : clinic.founded,
+          established_date: updatedClinicData.established_date || formData.established_date,
+          license_number: updatedClinicData.license_number || formData.license_number,
+          accreditation: updatedClinicData.accreditation || formData.accreditation,
+          departments: updatedClinicData.departments || clinic.departments,
+          description: updatedClinicData.description || formData.description || clinic.description,
+          created_at: updatedClinicData.created_at || clinic.created_at,
+          updated_at: updatedClinicData.updated_at || new Date().toISOString()
+        }
+        setClinic(transformedClinic)
+      }
+
       setShowEditModal(false)
+      console.log('[ClinicProfile] Clinic updated successfully')
     } catch (err) {
-      console.error('Failed to update clinic:', err)
+      console.error('[ClinicProfile] Failed to update clinic:', err)
+      // You could add a toast notification here
+      alert(`Failed to update clinic: ${err?.message || 'Unknown error'}`)
     }
   }
 
@@ -369,49 +489,188 @@ const ClinicProfile = () => {
 
   const handleAddUser = async () => {
     try {
-      // TODO: Call API to add new user
-      // const response = await staffAPI.addStaff({
-      //   clinicId: clinic.id,
-      //   ...formData
-      // })
-      // setStaff([...staff, response.data])
+      if (!clinic?.id) {
+        console.error('No clinic ID available')
+        return
+      }
+
+      // Parse name into first_name and last_name
+      const nameParts = (formData.name || '').trim().split(' ')
+      const first_name = nameParts[0] || ''
+      const last_name = nameParts.slice(1).join(' ') || ''
+
+      // Find department_id from department name
+      let department_id = null
+      if (formData.department) {
+        const dept = departments.find(d => d.name === formData.department)
+        if (dept) {
+          department_id = dept.id
+        }
+      }
+
+      // Prepare payload matching ClinicStaffCreateRequest schema
+      const createPayload = {
+        first_name: first_name,
+        last_name: last_name,
+        email: formData.email || undefined,
+        phone: formData.phone || undefined,
+        role: formData.role || 'doctor',
+        department_id: department_id || undefined,
+      }
+
+      console.log('[ClinicProfile] Creating staff:', clinic.id, createPayload)
+
+      const response = await adminAPI.createStaff(clinic.id, createPayload)
+      const newStaffData = response?.data || response
+
+      // Transform backend response to match frontend structure
+      if (newStaffData) {
+        const transformedStaff = {
+          id: newStaffData.id,
+          name: newStaffData.name || `${first_name} ${last_name}`.trim() || formData.email,
+          email: newStaffData.email || formData.email,
+          phone: newStaffData.phone || formData.phone,
+          role: newStaffData.role || formData.role,
+          department: formData.department || '',
+          department_id: department_id,
+          status: newStaffData.status || 'Active',
+          permissions: formData.permissions || []
+        }
+        setStaff([...staff, transformedStaff])
+      }
+
       setShowUserModal(false)
+      setFormData({ name: '', role: '', department: '', email: '', phone: '', status: 'Active', permissions: [] })
+      console.log('[ClinicProfile] Staff created successfully')
     } catch (err) {
-      console.error('Failed to add user:', err)
+      console.error('[ClinicProfile] Failed to add user:', err)
+      alert(`Failed to add user: ${err?.message || 'Unknown error'}`)
     }
   }
 
   const handleUpdateUser = async () => {
     try {
-      // TODO: Call API to update user
-      // const response = await staffAPI.updateStaff(selectedItem.id, formData)
-      // setStaff(staff.map(s => s.id === selectedItem.id ? response.data : s))
+      if (!clinic?.id || !selectedItem?.id) {
+        console.error('No clinic ID or user ID available')
+        return
+      }
+
+      // Parse name into first_name and last_name
+      const nameParts = (formData.name || '').trim().split(' ')
+      const first_name = nameParts[0] || ''
+      const last_name = nameParts.slice(1).join(' ') || ''
+
+      // Find department_id from department name
+      let department_id = null
+      if (formData.department) {
+        const dept = departments.find(d => d.name === formData.department)
+        if (dept) {
+          department_id = dept.id
+        }
+      }
+
+      // Prepare payload matching ClinicStaffUpdateRequest schema
+      // Map status to uppercase for backend
+      let statusValue = formData.status
+      if (statusValue) {
+        statusValue = statusValue.toUpperCase()
+      }
+
+      // When editing, don't send name, email, or phone (these fields are disabled)
+      const updatePayload = {
+        // Only include editable fields when updating
+        role: formData.role || undefined,
+        department_id: department_id || undefined,
+        status: statusValue || undefined,
+        permissions: formData.permissions && formData.permissions.length > 0 ? formData.permissions : undefined,
+      }
+
+      // Remove undefined values
+      Object.keys(updatePayload).forEach(key => {
+        if (updatePayload[key] === undefined) {
+          delete updatePayload[key]
+        }
+      })
+
+      console.log('[ClinicProfile] Updating staff:', selectedItem.id, updatePayload)
+
+      const response = await adminAPI.updateStaff(clinic.id, selectedItem.id, updatePayload)
+      const updatedStaffData = response?.data || response
+
+      // Update local staff state with the response
+      if (updatedStaffData) {
+        // Map status from backend format (ACTIVE) to frontend format (Active)
+        const statusMap = {
+          'ACTIVE': 'Active',
+          'INACTIVE': 'Inactive',
+          'SUSPENDED': 'Suspended'
+        }
+        const mappedStatus = statusMap[updatedStaffData.status] || updatedStaffData.status || formData.status
+
+        const transformedStaff = {
+          id: updatedStaffData.id || selectedItem.id,
+          name: updatedStaffData.name || formData.name,
+          email: updatedStaffData.email || formData.email,
+          phone: updatedStaffData.phone || formData.phone,
+          role: updatedStaffData.role || formData.role,
+          department: updatedStaffData.department || formData.department,
+          department_id: updatedStaffData.department_id || department_id,
+          status: mappedStatus,
+          permissions: updatedStaffData.permissions || formData.permissions || selectedItem.permissions || []
+        }
+        setStaff(staff.map(s => s.id === selectedItem.id ? transformedStaff : s))
+      }
+
       setShowUserModal(false)
+      console.log('[ClinicProfile] Staff updated successfully')
     } catch (err) {
-      console.error('Failed to update user:', err)
+      console.error('[ClinicProfile] Failed to update user:', err)
+      alert(`Failed to update user: ${err?.message || 'Unknown error'}`)
     }
   }
 
   const handleDeleteUser = async (userId) => {
     try {
-      // TODO: Call API to delete user
-      // await staffAPI.deleteStaff(userId)
-      // setStaff(staff.filter(s => s.id !== userId))
+      if (!clinic?.id) {
+        console.error('No clinic ID available')
+        return
+      }
+
+      console.log('[ClinicProfile] Deleting staff:', clinic.id, userId)
+
+      await adminAPI.deleteStaff(clinic.id, userId)
+      setStaff(staff.filter(s => s.id !== userId))
+      console.log('[ClinicProfile] Staff deleted successfully')
     } catch (err) {
-      console.error('Failed to delete user:', err)
+      console.error('[ClinicProfile] Failed to delete user:', err)
+      alert(`Failed to delete user: ${err?.message || 'Unknown error'}`)
     }
   }
 
   const handleUpdatePermissions = async () => {
     try {
-      // TODO: Call API to update user permissions
-      // const response = await staffAPI.updatePermissions(selectedItem.id, {
-      //   permissions: selectedItem.permissions
-      // })
-      // setStaff(staff.map(s => s.id === selectedItem.id ? response.data : s))
+      if (!clinic?.id || !selectedItem?.id) {
+        console.error('No clinic ID or user ID available')
+        return
+      }
+
+      const permissions = selectedItem.permissions || []
+      console.log('[ClinicProfile] Updating permissions:', clinic.id, selectedItem.id, permissions)
+
+      await adminAPI.updatePermissions(clinic.id, selectedItem.id, permissions)
+      
+      // Update local staff state with new permissions
+      setStaff(staff.map(s => 
+        s.id === selectedItem.id 
+          ? { ...s, permissions: permissions }
+          : s
+      ))
+      
       setShowPermissionModal(false)
+      console.log('[ClinicProfile] Permissions updated successfully')
     } catch (err) {
-      console.error('Failed to update permissions:', err)
+      console.error('[ClinicProfile] Failed to update permissions:', err)
+      alert(`Failed to update permissions: ${err?.message || 'Unknown error'}`)
     }
   }
 
@@ -479,35 +738,6 @@ const ClinicProfile = () => {
     )
   }
 
-  const Modal = ({ show, onClose, title, children, size = 'md' }) => {
-    if (!show) return null
-    
-    const sizeClasses = {
-      sm: 'max-w-sm',
-      md: 'max-w-md',
-      lg: 'max-w-2xl',
-      xl: 'max-w-4xl'
-    }
-    
-    return (
-      <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50">
-        <div className={`bg-white rounded-lg p-6 w-full ${sizeClasses[size]} border-2 border-[#4DB6B0] shadow-xl`}>
-          <div className="flex items-center justify-between mb-6 border-b border-[#4DB6B0] pb-4">
-            <h3 className="text-xl font-semibold text-gray-900">{title}</h3>
-            <button 
-              onClick={onClose} 
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1 rounded-full hover:bg-gray-100"
-            >
-              <FiX className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="space-y-4">
-            {children}
-          </div>
-        </div>
-      </div>
-    )
-  }
 
   // Enhanced Interactive Chart Component
   const InteractiveChart = ({ data, color = '#4DB6B0', title }) => {
@@ -653,15 +883,19 @@ const ClinicProfile = () => {
               <FiHome className="text-white text-2xl" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">{clinic?.name || 'Loading...'}</h2>
+              <h2 className="text-xl font-bold text-gray-900">
+                {loading ? 'Loading...' : (clinic?.name || 'Clinic Name Not Available')}
+              </h2>
               <div className="flex items-center gap-2 text-gray-600 mt-1">
                 <FiMapPin className="text-sm" />
-                <span>{clinic?.address || 'Loading...'}</span>
+                <span>
+                  {loading ? 'Loading...' : (clinic?.address || 'Address not available')}
+                </span>
               </div>
               <div className="flex items-center gap-4 mt-2 text-sm text-gray-500">
-                <span>📞 {clinic?.phone || 'Loading...'}</span>
-                <span>✉️ {clinic?.email || 'Loading...'}</span>
-                <span>🌐 {clinic?.website || 'Loading...'}</span>
+                <span>📞 {loading ? 'Loading...' : (clinic?.phone || 'Not available')}</span>
+                <span>✉️ {loading ? 'Loading...' : (clinic?.email || 'Not available')}</span>
+                <span>🌐 {loading ? 'Loading...' : (clinic?.website || 'Not available')}</span>
               </div>
             </div>
           </div>
@@ -669,7 +903,21 @@ const ClinicProfile = () => {
             <button
               onClick={() => {
                 setSelectedItem(clinic)
-                setFormData(clinic)
+                // Initialize formData with all fields to prevent re-renders
+                setFormData({
+                  name: clinic?.name || '',
+                  city: clinic?.city || '',
+                  address: clinic?.address || '',
+                  phone: clinic?.phone || '',
+                  email: clinic?.email || '',
+                  website: clinic?.website || '',
+                  description: clinic?.description || '',
+                  status: clinic?.status || 'Active',
+                  founded: clinic?.founded || '',
+                  established_date: clinic?.established_date || '',
+                  license_number: clinic?.license_number || '',
+                  accreditation: clinic?.accreditation || ''
+                })
                 setShowEditModal(true)
               }}
               className="flex items-center gap-2 px-4 py-2 bg-[#4DB6B0] text-white rounded-lg hover:bg-[#43b0a8] transition-colors"
@@ -679,14 +927,26 @@ const ClinicProfile = () => {
             </button>
           )}
         </div>
-        <p className="text-gray-600">{clinic?.description || 'Loading...'}</p>
+        <p className="text-gray-600">
+          {loading ? 'Loading...' : (clinic?.description || 'No description available')}
+        </p>
         <div className="flex items-center gap-4 mt-4">
           <span className={`px-3 py-1 rounded-full text-sm font-medium ${
-            clinic?.status === 'Active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'
+            clinic?.status === 'Active' || clinic?.status === 'ACTIVE' 
+              ? 'bg-green-100 text-green-700' 
+              : clinic?.status === 'Inactive' || clinic?.status === 'INACTIVE'
+              ? 'bg-gray-100 text-gray-600'
+              : 'bg-gray-100 text-gray-600'
           }`}>
-            {clinic?.status || 'Loading...'}
+            {loading ? 'Loading...' : (clinic?.status || 'Status not available')}
           </span>
-          <span className="text-sm text-gray-500">Founded: {clinic?.founded || 'Loading...'}</span>
+          <span className="text-sm text-gray-500">
+            Founded: {loading 
+              ? 'Loading...' 
+              : (clinic?.founded || clinic?.established_date 
+                ? (clinic?.founded || new Date(clinic?.established_date).getFullYear().toString())
+                : 'Not available')}
+          </span>
         </div>
       </div>
 
@@ -880,10 +1140,22 @@ const ClinicProfile = () => {
               </span>
             </div>
             
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-5 gap-4 mb-4">
               <div className="text-center">
-                <div className="text-lg font-bold text-gray-900">{dept.staff || 0}</div>
+                <div className="text-lg font-bold text-gray-900">{dept.capacity || 0}</div>
+                <div className="text-xs text-gray-500">Beds</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-gray-900">
+                  {staff.filter(s => s.department_id === dept.id).length}
+                </div>
                 <div className="text-xs text-gray-500">Staff</div>
+              </div>
+              <div className="text-center">
+                <div className="text-lg font-bold text-gray-900">
+                  {pricing.filter(p => p.department_id === dept.id).length}
+                </div>
+                <div className="text-xs text-gray-500">Services</div>
               </div>
               <div className="text-center">
                 <div className="text-lg font-bold text-gray-900">{dept.patients || 0}</div>
@@ -891,7 +1163,10 @@ const ClinicProfile = () => {
               </div>
               <div className="text-center">
                 <div className="text-lg font-bold text-[#4DB6B0]">
-                  {dept.staff ? (dept.patients / dept.staff).toFixed(1) : 0}
+                  {(() => {
+                    const deptStaffCount = staff.filter(s => s.department_id === dept.id).length
+                    return deptStaffCount > 0 && dept.patients ? (dept.patients / deptStaffCount).toFixed(1) : 0
+                  })()}
                 </div>
                 <div className="text-xs text-gray-500">Ratio</div>
               </div>
@@ -901,13 +1176,29 @@ const ClinicProfile = () => {
               <div className="flex gap-2">
                 <button 
                   onClick={() => {
-                    // TODO: Handle view department
-                    // navigate(`/departments/${dept.id}`)
+                    // Filter staff by department_id
+                    const departmentStaff = staff.filter(s => s.department_id === dept.id)
+                    setSelectedDepartmentStaff(departmentStaff)
+                    setSelectedDepartmentId(dept.id)
+                    setShowDepartmentStaffModal(true)
                   }}
                   className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm"
                 >
                   <FiEye />
-                  View
+                  View Staff
+                </button>
+                <button 
+                  onClick={() => {
+                    // Filter services by department_id
+                    const departmentServices = pricing.filter(p => p.department_id === dept.id)
+                    setSelectedDepartmentServices(departmentServices)
+                    setSelectedDepartmentId(dept.id)
+                    setShowDepartmentServicesModal(true)
+                  }}
+                  className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-purple-100 text-purple-700 rounded-lg hover:bg-purple-200 transition-colors text-sm"
+                >
+                  <FiEye />
+                  View Services
                 </button>
                 <button 
                   onClick={() => {
@@ -1029,12 +1320,12 @@ const ClinicProfile = () => {
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-gray-900">Staff & Users</h3>
         {(isSuperAdmin || isClinicAdmin) && (
-          <button
-            onClick={() => {
-              setSelectedItem(null)
-              setFormData({ name: '', role: '', department: '', email: '', permissions: [] })
-              setShowUserModal(true)
-            }}
+            <button
+              onClick={() => {
+                setSelectedItem(null)
+                setFormData({ name: '', role: '', department: '', email: '', phone: '', status: 'Active', permissions: [] })
+                setShowUserModal(true)
+              }}
             className="flex items-center gap-2 px-4 py-2 bg-[#4DB6B0] text-white rounded-lg hover:bg-[#43b0a8] transition-colors"
           >
             <FiUserPlus />
@@ -1102,17 +1393,17 @@ const ClinicProfile = () => {
                       <button
                         onClick={() => {
                           setSelectedItem(user)
-                          setShowPermissionModal(true)
-                        }}
-                        className="text-purple-600 hover:text-purple-900"
-                        title="Manage Permissions"
-                      >
-                        <FiShield />
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSelectedItem(user)
-                          setFormData(user)
+                          // Initialize formData with all fields
+                          setFormData({
+                            name: user.name || '',
+                            email: user.email || '',
+                            phone: user.phone || '',
+                            role: user.role || '',
+                            department: user.department || '',
+                            department_id: user.department_id || '',
+                            status: user.status || 'Active',
+                            permissions: user.permissions || []
+                          })
                           setShowUserModal(true)
                         }}
                         className="text-blue-600 hover:text-blue-900"
@@ -1203,97 +1494,106 @@ const ClinicProfile = () => {
       </div>
 
       {/* Edit Clinic Modal */}
-      <Modal 
-        show={showEditModal} 
-        onClose={() => setShowEditModal(false)}
-        title="Edit Clinic Information"
-        size="lg"
-      >
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+      {showEditModal && (
+        <Modal 
+          show={showEditModal} 
+          onClose={handleCloseEditModal}
+          title="Edit Clinic Information"
+          size="lg"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Clinic Name</label>
+                <input
+                  key="clinic-name-input"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                  value={formData.name || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
+                <input
+                  key="clinic-city-input"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                  value={formData.city || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                />
+              </div>
+            </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Clinic Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
               <input
+                key="clinic-address-input"
                 type="text"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-                value={formData.name || ''}
-                onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                value={formData.address || ''}
+                onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))}
               />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                <input
+                  key="clinic-phone-input"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                  value={formData.phone || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <input
+                  key="clinic-email-input"
+                  type="email"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                  value={formData.email || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
+                <input
+                  key="clinic-website-input"
+                  type="text"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                  value={formData.website || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, website: e.target.value }))}
+                />
+              </div>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">City</label>
-              <input
-                type="text"
+              <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+              <textarea
+                key="clinic-description-input"
+                rows={3}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-                value={formData.city || ''}
-                onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                value={formData.description || ''}
+                onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
               />
             </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Address</label>
-            <input
-              type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-              value={formData.address || ''}
-              onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))}
-            />
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-                value={formData.phone || ''}
-                onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
-              <input
-                type="email"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-                value={formData.email || ''}
-                onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Website</label>
-              <input
-                type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-                value={formData.website || ''}
-                onChange={e => setFormData(prev => ({ ...prev, website: e.target.value }))}
-              />
+            <div className="flex items-center justify-end gap-3 pt-4">
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdateClinic}
+                className="flex items-center gap-2 bg-[#4DB6B0] hover:bg-[#43b0a8] text-white px-4 py-2 rounded-md text-sm"
+              >
+                <FiSave />
+                Save Changes
+              </button>
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-            <textarea
-              rows={3}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
-              value={formData.description || ''}
-              onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
-            />
-          </div>
-          <div className="flex items-center justify-end gap-3 pt-4">
-            <button
-              onClick={() => setShowEditModal(false)}
-              className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleUpdateClinic}
-              className="flex items-center gap-2 bg-[#4DB6B0] hover:bg-[#43b0a8] text-white px-4 py-2 rounded-md text-sm"
-            >
-              <FiSave />
-              Save Changes
-            </button>
-          </div>
-        </div>
-      </Modal>
+        </Modal>
+      )}
 
       {/* Price Modal */}
       <Modal 
@@ -1385,21 +1685,37 @@ const ClinicProfile = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">Full Name</label>
               <input
                 type="text"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                disabled={!!selectedItem}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md text-sm ${
+                  selectedItem 
+                    ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
+                    : 'focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent'
+                }`}
                 value={formData.name || ''}
                 onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Dr. John Doe"
               />
+              {selectedItem && (
+                <p className="text-xs text-gray-500 mt-1">Name cannot be edited</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
               <input
                 type="email"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                disabled={!!selectedItem}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md text-sm ${
+                  selectedItem 
+                    ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
+                    : 'focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent'
+                }`}
                 value={formData.email || ''}
                 onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
                 placeholder="john@mainhospital.com"
               />
+              {selectedItem && (
+                <p className="text-xs text-gray-500 mt-1">Email cannot be edited</p>
+              )}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -1442,6 +1758,38 @@ const ClinicProfile = () => {
                 ))}
                 <option value="General">General</option>
                 <option value="Administration">Administration</option>
+              </select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+              <input
+                type="text"
+                disabled={!!selectedItem}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md text-sm ${
+                  selectedItem 
+                    ? 'bg-gray-100 text-gray-500 cursor-not-allowed' 
+                    : 'focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent'
+                }`}
+                value={formData.phone || ''}
+                onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
+                placeholder="+998901234567"
+              />
+              {selectedItem && (
+                <p className="text-xs text-gray-500 mt-1">Phone cannot be edited</p>
+              )}
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
+              <select
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                value={formData.status || 'Active'}
+                onChange={e => setFormData(prev => ({ ...prev, status: e.target.value }))}
+              >
+                <option value="Active">Active</option>
+                <option value="Inactive">Inactive</option>
+                <option value="Suspended">Suspended</option>
               </select>
             </div>
           </div>
@@ -1696,6 +2044,182 @@ const ClinicProfile = () => {
           </div>
         </div>
       </Modal>
+
+      {/* Department Staff Modal */}
+      {showDepartmentStaffModal && (
+        <Modal 
+          show={showDepartmentStaffModal} 
+          onClose={() => {
+            setShowDepartmentStaffModal(false)
+            setSelectedDepartmentStaff([])
+            setSelectedDepartmentId(null)
+          }}
+          title="Department Staff Members"
+          size="lg"
+        >
+          <div className="space-y-4">
+            {selectedDepartmentStaff.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Name
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Email
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Phone
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Role
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {selectedDepartmentStaff.map((member) => (
+                      <tr key={member.id}>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {member.name}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          {member.email}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          {member.phone || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-xs">
+                            {member.role}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            member.status === 'ACTIVE' || member.status === 'Active'
+                              ? 'bg-green-100 text-green-700' 
+                              : member.status === 'SUSPENDED' || member.status === 'Suspended'
+                              ? 'bg-red-100 text-red-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {member.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <FiUsers className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No staff members</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  There are no staff members assigned to this department.
+                </p>
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t">
+              <button
+                onClick={() => {
+                  setShowDepartmentStaffModal(false)
+                  setSelectedDepartmentStaff([])
+                  setSelectedDepartmentId(null)
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* Department Services Modal */}
+      {showDepartmentServicesModal && (
+        <Modal 
+          show={showDepartmentServicesModal} 
+          onClose={() => {
+            setShowDepartmentServicesModal(false)
+            setSelectedDepartmentServices([])
+            setSelectedDepartmentId(null)
+          }}
+          title="Department Services"
+          size="lg"
+        >
+          <div className="space-y-4">
+            {selectedDepartmentServices.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Service Name
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Price
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Currency
+                      </th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {selectedDepartmentServices.map((service) => (
+                      <tr key={service.id}>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {service.service || service.service_name || 'N/A'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          {service.price || service.base_price || 0}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
+                          {service.currency || 'UZS'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-sm">
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            service.active !== false && service.is_active !== false
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-gray-100 text-gray-600'
+                          }`}>
+                            {service.active !== false && service.is_active !== false ? 'Active' : 'Inactive'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <FiDollarSign className="mx-auto h-12 w-12 text-gray-400" />
+                <h3 className="mt-2 text-sm font-medium text-gray-900">No services</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  There are no services assigned to this department.
+                </p>
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t">
+              <button
+                onClick={() => {
+                  setShowDepartmentServicesModal(false)
+                  setSelectedDepartmentServices([])
+                  setSelectedDepartmentId(null)
+                }}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 text-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

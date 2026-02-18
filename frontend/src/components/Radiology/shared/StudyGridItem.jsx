@@ -1,8 +1,8 @@
 import React from 'react'
-import { Flag } from 'lucide-react'
+import { Flag, Loader } from 'lucide-react'
 import { getModalityIcon, getPriorityColor, getReadingStatusColor, getTimeAgo } from './studyUtils'
 
-const StudyGridItem = ({ study, onSelect }) => {
+const StudyGridItem = ({ study, onSelect, isUpdating = false }) => {
   return (
     <div className={`bg-white rounded-lg shadow-sm border border-gray-100 p-4 hover:shadow-md transition-all duration-200 ${study.criticalFlag ? 'border-l-4 border-l-red-500' : ''}`}>
       <div className="flex items-center justify-between mb-3">
@@ -31,9 +31,17 @@ const StudyGridItem = ({ study, onSelect }) => {
         </span>
         <button
           onClick={() => onSelect(study)}
-          className="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1 rounded text-sm transition-colors"
+          disabled={isUpdating}
+          className="bg-teal-500 hover:bg-teal-600 text-white px-3 py-1 rounded text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-1"
         >
-          Read
+          {isUpdating ? (
+            <>
+              <Loader className="w-3 h-3 animate-spin" />
+              <span>Updating...</span>
+            </>
+          ) : (
+            <span>Read</span>
+          )}
         </button>
       </div>
     </div>

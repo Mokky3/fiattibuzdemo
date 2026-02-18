@@ -1,72 +1,119 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { medicationsAPI, icdCodesAPI } from '../../../services/apiService';
+import { useTranslation } from 'react-i18next';
+import { medicationsAPI, icdCodesAPI, doctorPatientsAPI } from '../../../services/apiService';
 
 // Shared UI primitives (reusing from OphthalmologyReportForm)
-const Card = React.memo(({ children, className = "", collapsible = false, isOpen = true, onToggle, title, counter }) => (
-  <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm ${className}`}>
-    {title && (
-      <div 
-        className="p-4 border-b border-slate-100 cursor-pointer hover:bg-slate-50"
-        onClick={collapsible ? onToggle : undefined}
-      >
-        <div className="flex items-center justify-between">
-          <h3 className="text-slate-800 font-semibold text-lg">
-            {title}
-            {counter !== undefined && <span className="text-slate-400 ml-2">({counter})</span>}
-          </h3>
-          {collapsible && (
-            <span className="text-slate-400 text-sm">
-              {isOpen ? '▼' : '▶'}
-            </span>
-          )}
+const Card = React.memo(({ children, className = "", collapsible = false, isOpen = true, onToggle, title, counter, subtitle, darkMode = false }) => {
+  const [internalIsOpen, setInternalIsOpen] = useState(isOpen);
+  
+  useEffect(() => {
+    setInternalIsOpen(isOpen);
+  }, [isOpen]);
+  
+  const handleToggle = () => {
+    const newState = !internalIsOpen;
+    setInternalIsOpen(newState);
+    if (onToggle) onToggle();
+  };
+  
+  const displayIsOpen = collapsible ? internalIsOpen : isOpen;
+  
+  return (
+    <div className={`rounded-2xl border shadow-sm ${
+      darkMode 
+        ? 'bg-slate-800 border-slate-700' 
+        : 'bg-white border-slate-100'
+    } ${className}`}>
+      {title && (
+        <div 
+          className={`p-4 border-b ${
+            darkMode ? 'border-slate-700' : 'border-slate-100'
+          } ${collapsible ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/50' : ''}`}
+          onClick={collapsible ? handleToggle : undefined}
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className={`font-semibold text-lg ${
+                darkMode ? 'text-slate-200' : 'text-slate-800'
+              }`}>
+                {title}
+                {counter !== undefined && <span className={`ml-2 ${
+                  darkMode ? 'text-slate-400' : 'text-slate-400'
+                }`}>({counter})</span>}
+              </h3>
+              {subtitle && (
+                <p className={`text-xs mt-1 ${
+                  darkMode ? 'text-slate-500' : 'text-slate-400'
+                }`}>{subtitle}</p>
+              )}
+            </div>
+            {collapsible && (
+              <span className={`text-sm ${
+                darkMode ? 'text-slate-400' : 'text-slate-400'
+              }`}>
+                {displayIsOpen ? '▼' : '▶'}
+              </span>
+            )}
+          </div>
         </div>
-      </div>
-    )}
-    {isOpen && (
-      <div className="p-4">
-        {children}
-      </div>
-    )}
-  </div>
-));
+      )}
+      {displayIsOpen && (
+        <div className="p-4">
+          {children}
+        </div>
+      )}
+    </div>
+  );
+});
 
-const FieldLabel = React.memo(({ children, required = false }) => (
-  <label className="block text-sm font-medium text-slate-700 mb-2">
+const FieldLabel = React.memo(({ children, required = false, darkMode = false }) => (
+  <label className={`block text-sm font-medium mb-2 ${
+    darkMode ? 'text-slate-300' : 'text-slate-700'
+  }`}>
     {children}
     {required && <span className="text-red-500 ml-1">*</span>}
   </label>
 ));
 
-const Input = React.memo(({ name, placeholder, value, onChange, className = "", type = "text", required = false }) => (
+const Input = React.memo(({ name, placeholder, value, onChange, className = "", type = "text", required = false, readOnly = false, darkMode = false }) => (
   <input
     type={type}
     name={name}
     placeholder={placeholder}
     value={value}
-    onChange={onChange}
+    onChange={readOnly ? () => {} : onChange}
+    readOnly={readOnly}
     required={required}
-    className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${className}`}
+    className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+      darkMode 
+        ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+        : 'text-slate-600 border-slate-200 bg-white'
+    } ${className}`}
   />
 ));
 
-const Select = React.memo(({ name, value, onChange, options, className = "", required = false }) => (
+const Select = React.memo(({ name, value, onChange, options, className = "", required = false, darkMode = false, selectPlaceholder = "Select..." }) => (
   <select
     name={name}
     value={value}
     onChange={onChange}
     required={required}
-    className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${className}`}
+    className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+      darkMode 
+        ? 'bg-slate-700 border-slate-600 text-slate-200' 
+        : 'text-slate-600 border-slate-200 bg-white'
+    } ${className}`}
   >
-    <option value="">Select...</option>
+    <option value="" className={darkMode ? 'bg-slate-800' : ''}>{selectPlaceholder}</option>
     {options.map(option => (
-      <option key={option.value} value={option.value}>
+      <option key={option.value} value={option.value} className={darkMode ? 'bg-slate-800' : ''}>
         {option.label}
       </option>
     ))}
   </select>
 ));
 
-const TextArea = React.memo(({ name, placeholder, value, onChange, className = "", rows = 3, required = false }) => (
+const TextArea = React.memo(({ name, placeholder, value, onChange, className = "", rows = 3, required = false, darkMode = false }) => (
   <textarea
     name={name}
     placeholder={placeholder}
@@ -74,18 +121,26 @@ const TextArea = React.memo(({ name, placeholder, value, onChange, className = "
     onChange={onChange}
     rows={rows}
     required={required}
-    className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-vertical ${className}`}
+    className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-vertical ${
+      darkMode 
+        ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+        : 'text-slate-600 border-slate-200 bg-white'
+    } ${className}`}
   />
 ));
 
-const Chip = React.memo(({ children, onRemove, onEdit, className = "" }) => (
-  <div className={`inline-flex items-center gap-2 px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-sm ${className}`}>
+const Chip = React.memo(({ children, onRemove, onEdit, className = "", darkMode = false }) => (
+  <div className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm ${
+    darkMode 
+      ? 'bg-slate-700 text-slate-300' 
+      : 'bg-slate-100 text-slate-700'
+  } ${className}`}>
     <span>{children}</span>
     {onEdit && (
       <button
         type="button"
         onClick={onEdit}
-        className="text-slate-500 hover:text-slate-700"
+        className={darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}
         aria-label="Edit"
       >
         ✎
@@ -95,7 +150,7 @@ const Chip = React.memo(({ children, onRemove, onEdit, className = "" }) => (
       <button
         type="button"
         onClick={onRemove}
-        className="text-slate-500 hover:text-red-600"
+        className={darkMode ? 'text-slate-400 hover:text-red-400' : 'text-slate-500 hover:text-red-600'}
         aria-label="Remove"
       >
         ×
@@ -105,7 +160,7 @@ const Chip = React.memo(({ children, onRemove, onEdit, className = "" }) => (
 ));
 
 // ICD Code Search Component
-const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search ICD code or description..." }) => {
+const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search ICD code or description...", darkMode = false }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -200,7 +255,11 @@ const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search I
           onFocus={() => searchQuery.trim().length >= 2 && setShowResults(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+            darkMode 
+              ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+              : 'text-slate-600 border-slate-200 bg-white'
+          }`}
         />
         {isSearching && (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -210,21 +269,35 @@ const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search I
       </div>
       
       {showResults && searchResults.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className={`absolute z-50 w-full mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto ${
+          darkMode 
+            ? 'bg-slate-800 border-slate-700' 
+            : 'bg-white border-slate-200'
+        }`}>
           {searchResults.map((result, index) => (
             <button
               key={result.id || result.code}
               type="button"
               onClick={() => handleSelect(result)}
-              className={`w-full text-left px-4 py-2 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none ${
-                index === selectedIndex ? 'bg-emerald-50' : ''
+              className={`w-full text-left px-4 py-2 focus:outline-none ${
+                darkMode
+                  ? index === selectedIndex 
+                    ? 'bg-emerald-900/50' 
+                    : 'hover:bg-slate-700'
+                  : index === selectedIndex 
+                    ? 'bg-emerald-50' 
+                    : 'hover:bg-emerald-50'
               }`}
             >
               <div className="flex items-start gap-2">
-                <span className="font-mono text-sm text-emerald-600 font-medium min-w-[100px]">
+                <span className={`font-mono text-sm font-medium min-w-[100px] ${
+                  darkMode ? 'text-emerald-400' : 'text-emerald-600'
+                }`}>
                   {result.code}
                 </span>
-                <span className="text-sm text-slate-700 flex-1">
+                <span className={`text-sm flex-1 ${
+                  darkMode ? 'text-slate-300' : 'text-slate-700'
+                }`}>
                   {result.description_en || result.description_ru || result.description_uz || result.description || result.name || 'No description'}
                 </span>
               </div>
@@ -237,7 +310,7 @@ const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search I
 };
 
 // Medication Search Component
-const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Search medication..." }) => {
+const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Search medication...", darkMode = false }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -345,7 +418,11 @@ const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Searc
           onFocus={() => searchQuery.trim().length >= 2 && setShowResults(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+          className={`w-full px-4 py-4 border rounded-lg text-base focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+            darkMode 
+              ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+              : 'text-slate-600 border-slate-200 bg-white'
+          }`}
         />
         {isSearching && (
           <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
@@ -355,28 +432,44 @@ const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Searc
       </div>
       
       {showResults && searchResults.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className={`absolute z-50 w-full mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto ${
+          darkMode 
+            ? 'bg-slate-800 border-slate-700' 
+            : 'bg-white border-slate-200'
+        }`}>
           {searchResults.map((result, index) => (
             <button
               key={result.id || index}
               type="button"
               onClick={() => handleSelect(result)}
-              className={`w-full text-left px-4 py-2 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none ${
-                index === selectedIndex ? 'bg-emerald-50' : ''
+              className={`w-full text-left px-4 py-2 focus:outline-none ${
+                darkMode
+                  ? index === selectedIndex 
+                    ? 'bg-emerald-900/50' 
+                    : 'hover:bg-slate-700'
+                  : index === selectedIndex 
+                    ? 'bg-emerald-50' 
+                    : 'hover:bg-emerald-50'
               }`}
             >
               <div className="flex items-start gap-2">
-                <span className="font-medium text-sm text-emerald-700 flex-1">
+                <span className={`font-medium text-sm flex-1 ${
+                  darkMode ? 'text-emerald-400' : 'text-emerald-700'
+                }`}>
                   {result.brand_name || result.name || 'Unknown'}
                 </span>
                 {result.strength && (
-                  <span className="text-xs text-slate-500">
+                  <span className={`text-xs ${
+                    darkMode ? 'text-slate-400' : 'text-slate-500'
+                  }`}>
                     {result.strength} {result.strength_unit?.name || ''}
                   </span>
                 )}
               </div>
               {result.mnn?.name && (
-                <div className="text-xs text-slate-500 mt-1">
+                <div className={`text-xs mt-1 ${
+                  darkMode ? 'text-slate-400' : 'text-slate-500'
+                }`}>
                   MNN: {result.mnn.name}
                 </div>
               )}
@@ -441,6 +534,51 @@ const NIHSS_ITEMS = [
 ];
 
 const NeurologyReportForm = ({ patient, encounter, onSave }) => {
+  const { t } = useTranslation();
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Sync theme on mount and when darkMode changes
+  useEffect(() => {
+    const syncTheme = () => {
+      const saved = localStorage.getItem('theme');
+      const root = document.documentElement;
+
+      if (saved === 'dark') {
+        root.classList.add('dark');
+        setDarkMode(true);
+      } else {
+        root.classList.remove('dark');
+        setDarkMode(false);
+      }
+    };
+
+    syncTheme(); // Sync on mount
+
+    const handleStorageChange = (e) => {
+      if (e.key === 'theme') {
+        syncTheme();
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    const handleThemeChange = () => syncTheme();
+    window.addEventListener('themechange', handleThemeChange);
+
+    const interval = setInterval(syncTheme, 100); // Periodically check for same-tab changes
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('themechange', handleThemeChange);
+      clearInterval(interval);
+    };
+  }, []);
+
   // Mode state
   const [mode, setMode] = useState('initial');
   
@@ -448,7 +586,7 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
   const [collapsedSections, setCollapsedSections] = useState({
     meta: false,
     hpi: false,
-    vitals: false,
+    vitals: true, // Collapsed by default - will auto-fill from backend
     mentalStatus: false,
     cranialNerves: false,
     motor: false,
@@ -458,10 +596,10 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
     autonomic: false,
     meningeal: false,
     painHeadache: false,
-    seizure: false,
-    stroke: false,
+    seizure: true, // Default collapsed - advanced/optional
+    stroke: true, // Default collapsed - advanced/optional
     localization: false,
-    tests: false,
+    tests: true, // Default collapsed - contains LP which is optional
     diagnosis: false,
     plan: false,
     procedures: false,
@@ -621,6 +759,10 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
   const [lastSaved, setLastSaved] = useState(null);
   const [showSaveToast, setShowSaveToast] = useState(false);
 
+  // Patient medications from database
+  const [patientMedications, setPatientMedications] = useState([]);
+  const [loadingMedications, setLoadingMedications] = useState(false);
+
   // Smart editor states
   const [editingMed, setEditingMed] = useState(null);
   const [editingMedIdx, setEditingMedIdx] = useState(null);
@@ -651,6 +793,89 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       doc_type: mode === 'discharge' ? 'neu.discharge' : 'neu.initial'
     }));
   }, [mode]);
+
+  // Fetch latest vitals from backend when patient/encounter changes
+  useEffect(() => {
+    const fetchVitals = async () => {
+      if (!patient?.patient_id) return;
+      
+      try {
+        const vitalsList = await doctorPatientsAPI.getVitals(patient.patient_id);
+        
+        if (vitalsList && vitalsList.length > 0) {
+          // Filter vitals to only include entries within the last 3 days
+          const threeDaysAgo = new Date();
+          threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+          
+          const recentVitals = vitalsList.filter(vital => {
+            if (!vital.recorded_at) return false;
+            const recordedDate = new Date(vital.recorded_at);
+            return recordedDate >= threeDaysAgo;
+          });
+          
+          // Get the most recent vitals entry from the filtered list (first in the list as it's sorted by recorded_at DESC)
+          const latestVitals = recentVitals.length > 0 ? recentVitals[0] : null;
+          
+          if (latestVitals) {
+            // Map backend vitals structure to form structure
+            const mappedVitals = {
+              bp_right: latestVitals.systolic_bp && latestVitals.diastolic_bp 
+                ? `${latestVitals.systolic_bp}/${latestVitals.diastolic_bp}` 
+                : formData.vitals.bp_right || '',
+              bp_left: latestVitals.systolic_bp && latestVitals.diastolic_bp 
+                ? `${latestVitals.systolic_bp}/${latestVitals.diastolic_bp}` 
+                : formData.vitals.bp_left || '',
+              hr: latestVitals.heart_rate?.toString() || formData.vitals.hr || '',
+              temp: latestVitals.temperature?.toString() || formData.vitals.temp || '',
+              spo2: latestVitals.oxygen_saturation?.toString() || formData.vitals.spo2 || ''
+            };
+            
+            // Only update if we have new vitals data
+            if (latestVitals.systolic_bp || latestVitals.heart_rate || latestVitals.temperature || latestVitals.oxygen_saturation) {
+              setFormData(prev => ({
+                ...prev,
+                vitals: mappedVitals
+              }));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching vitals:', error);
+        // Silently fail - don't block form usage if vitals can't be fetched
+      }
+    };
+    
+    fetchVitals();
+  }, [patient?.patient_id]); // Only depend on patient_id to avoid unnecessary re-fetches
+
+  // Fetch patient medications from database
+  useEffect(() => {
+    const fetchPatientMedications = async () => {
+      const patientId = patient?.patient_id || patient?.id || encounter?.patient_id || '';
+      if (!patientId) return;
+
+      try {
+        setLoadingMedications(true);
+        const medications = await doctorPatientsAPI.getMedications(patientId, true);
+        console.log('Fetched medications:', medications);
+        // Handle both SuccessResponse format and direct array
+        const medsArray = Array.isArray(medications) 
+          ? medications 
+          : (medications?.data && Array.isArray(medications.data) 
+            ? medications.data 
+            : []);
+        console.log('Processed medications array:', medsArray);
+        setPatientMedications(medsArray);
+      } catch (error) {
+        console.error('Error fetching patient medications:', error);
+        setPatientMedications([]);
+      } finally {
+        setLoadingMedications(false);
+      }
+    };
+    
+    fetchPatientMedications();
+  }, [patient?.patient_id, patient?.id, encounter?.patient_id]);
 
   // Helper functions
   const updateFormData = useCallback((path, value) => {
@@ -844,7 +1069,15 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       newErrors.chief_complaint = 'Chief complaint is required';
     }
 
-    if (!formData.diagnosis.main.trim()) {
+    // Main diagnosis validation - check both code and term
+    const mainDiag = formData.diagnosis.main;
+    if (typeof mainDiag === 'object') {
+      if (!mainDiag.code?.trim() && !mainDiag.term?.trim()) {
+        newErrors.diagnosis_main = 'Main diagnosis is required';
+      }
+    } else if (typeof mainDiag === 'string' && !mainDiag.trim()) {
+      newErrors.diagnosis_main = 'Main diagnosis is required';
+    } else if (!mainDiag) {
       newErrors.diagnosis_main = 'Main diagnosis is required';
     }
 
@@ -1032,7 +1265,9 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
   }, []);
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+    <div className={`max-w-6xl mx-auto p-6 space-y-6 min-h-screen ${
+      darkMode ? 'bg-slate-900' : 'bg-slate-50'
+    }`}>
       {/* Autosave Toast */}
       {showSaveToast && (
         <div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
@@ -1041,61 +1276,37 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       )}
 
       {/* Header */}
-      <Card title="Neurology Report" className="mb-6">
+      <Card title={t('neurologyReport.title') || 'Neurology Report'} className="mb-6" darkMode={darkMode}>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <FieldLabel>Mode</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.mode')}</FieldLabel>
             <Select
               name="mode"
               value={mode}
               onChange={(e) => handleModeChange(e.target.value)}
               options={[
-                { value: 'initial', label: 'Initial Assessment' },
-                { value: 'discharge', label: 'Discharge Summary' }
+                { value: 'initial', label: t('neurologyReport.initialAssessment') },
+                { value: 'discharge', label: t('neurologyReport.dischargeSummary') }
               ]}
+              darkMode={darkMode}
+              selectPlaceholder={t('neurologyReport.select')}
             />
-          </div>
-          <div>
-            <FieldLabel>Patient</FieldLabel>
-            <div className="text-slate-600">
-              {patient ? `${patient.first_name} ${patient.last_name}` : 'John Doe'} 
-              {patient && ` (${patient.age || 'N/A'} years, ${patient.gender || 'N/A'})`}
-            </div>
-          </div>
-          <div>
-            <FieldLabel>Clinic</FieldLabel>
-            <div className="text-slate-600">Neurology Department</div>
-          </div>
-          <div>
-            <FieldLabel>Physician</FieldLabel>
-            <div className="text-slate-600">Dr. Smith</div>
-          </div>
-          <div>
-            <FieldLabel>Encounter</FieldLabel>
-            <div className="text-slate-600">
-              {formData.meta.encounter_id} - {new Date(formData.meta.datetime).toLocaleString()}
-            </div>
-          </div>
-          <div>
-            <FieldLabel>Last Saved</FieldLabel>
-            <div className="text-slate-600">
-              {lastSaved ? lastSaved.toLocaleTimeString() : 'Not saved yet'}
-            </div>
           </div>
         </div>
       </Card>
 
       {/* Chief Complaint */}
-      <Card title="Chief Complaint">
+      <Card title={t('neurologyReport.chiefComplaint')} darkMode={darkMode}>
         <div className="space-y-4">
           <div>
-            <FieldLabel required>Chief Complaint</FieldLabel>
+            <FieldLabel required darkMode={darkMode}>{t('neurologyReport.chiefComplaint')}</FieldLabel>
             <Input
               name="chief_complaint"
-              placeholder="Enter chief complaint..."
+              placeholder={t('neurologyReport.enterChiefComplaint')}
               value={formData.chief_complaint}
               onChange={(e) => updateFormData('chief_complaint', e.target.value)}
               required
+              darkMode={darkMode}
             />
             {errors.chief_complaint && (
               <p className="text-red-500 text-sm mt-1">{errors.chief_complaint}</p>
@@ -1105,172 +1316,274 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* HPI */}
-      <Card title="History of Present Illness (HPI)" collapsible isOpen={!collapsedSections.hpi} onToggle={() => toggleSection('hpi')}>
+      <Card title={t('neurologyReport.historyOfPresentIllness')} collapsible isOpen={!collapsedSections.hpi} onToggle={() => toggleSection('hpi')} darkMode={darkMode}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>Onset Type</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.onsetType')}</FieldLabel>
               <Select
                 name="onset_type"
                 value={formData.hpi.onset_type}
                 onChange={(e) => updateFormData('hpi.onset_type', e.target.value)}
-                options={ONSET_TYPES.map(o => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }))}
+                options={[
+                  { value: 'sudden', label: t('neurologyReport.sudden') },
+                  { value: 'gradual', label: t('neurologyReport.gradual') },
+                  { value: 'progressive', label: t('neurologyReport.progressive') }
+                ]}
+                darkMode={darkMode}
+                selectPlaceholder={t('neurologyReport.select')}
               />
             </div>
             <div>
-              <FieldLabel>Last Known Well (LKW)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.lastKnownWell')}</FieldLabel>
               <Input
                 type="datetime-local"
                 name="lkw_time"
                 value={formData.hpi.lkw_time}
                 onChange={(e) => updateFormData('hpi.lkw_time', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Course</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.course')}</FieldLabel>
               <Input
                 name="course"
-                placeholder="Improving/worsening/stable..."
+                placeholder={t('neurologyReport.coursePlaceholder')}
                 value={formData.hpi.course}
                 onChange={(e) => updateFormData('hpi.course', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
           
           <div>
-            <FieldLabel>Triggers</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.triggers')}</FieldLabel>
             <Input
               name="triggers"
-              placeholder="What triggers or worsens symptoms?"
+              placeholder={t('neurologyReport.triggersPlaceholder')}
               value={formData.hpi.triggers}
               onChange={(e) => updateFormData('hpi.triggers', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
 
           <div>
-            <FieldLabel>Associated Symptoms</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.associatedSymptoms')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
-              {ASSOCIATED_SYMPTOMS.map(symptom => (
+              {[
+                { value: 'weakness', label: t('neurologyReport.weakness') },
+                { value: 'numbness', label: t('neurologyReport.numbness') },
+                { value: 'tingling', label: t('neurologyReport.tingling') },
+                { value: 'vision loss', label: t('neurologyReport.visionLoss') },
+                { value: 'diplopia', label: t('neurologyReport.diplopia') },
+                { value: 'dysarthria', label: t('neurologyReport.dysarthria') },
+                { value: 'aphasia', label: t('neurologyReport.aphasia') },
+                { value: 'vertigo', label: t('neurologyReport.vertigo') },
+                { value: 'ataxia', label: t('neurologyReport.ataxia') },
+                { value: 'syncope', label: t('neurologyReport.syncope') },
+                { value: 'tremor', label: t('neurologyReport.tremor') },
+                { value: 'memory loss', label: t('neurologyReport.memoryLoss') },
+                { value: 'seizure', label: t('neurologyReport.seizure') },
+                { value: 'headache', label: t('neurologyReport.headache') }
+              ].map(symptom => (
                 <button
-                  key={symptom}
+                  key={symptom.value}
                   type="button"
                   onClick={() => {
-                    if (formData.hpi.associated_symptoms.includes(symptom)) {
-                      removeFromArray('hpi.associated_symptoms', formData.hpi.associated_symptoms.indexOf(symptom));
+                    if (formData.hpi.associated_symptoms.includes(symptom.value)) {
+                      removeFromArray('hpi.associated_symptoms', formData.hpi.associated_symptoms.indexOf(symptom.value));
                     } else {
-                      addToArray('hpi.associated_symptoms', symptom);
+                      addToArray('hpi.associated_symptoms', symptom.value);
                     }
                   }}
-                  className={`px-3 py-1 rounded-lg text-sm ${
-                    formData.hpi.associated_symptoms.includes(symptom)
-                      ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                      : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                  className={`px-3 py-1 rounded-lg text-sm border ${
+                    formData.hpi.associated_symptoms.includes(symptom.value)
+                      ? darkMode
+                        ? 'bg-emerald-900/50 text-emerald-300 border-emerald-600'
+                        : 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                      : darkMode
+                        ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+                        : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
                   }`}
                 >
-                  {symptom}
+                  {symptom.label}
                 </button>
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
-              {formData.hpi.associated_symptoms.map((symptom, idx) => (
-                <Chip key={idx} onRemove={() => removeFromArray('hpi.associated_symptoms', idx)}>
-                  {symptom}
+              {formData.hpi.associated_symptoms.map((symptom, idx) => {
+                const symptomLabels = {
+                  'weakness': t('neurologyReport.weakness'),
+                  'numbness': t('neurologyReport.numbness'),
+                  'tingling': t('neurologyReport.tingling'),
+                  'vision loss': t('neurologyReport.visionLoss'),
+                  'diplopia': t('neurologyReport.diplopia'),
+                  'dysarthria': t('neurologyReport.dysarthria'),
+                  'aphasia': t('neurologyReport.aphasia'),
+                  'vertigo': t('neurologyReport.vertigo'),
+                  'ataxia': t('neurologyReport.ataxia'),
+                  'syncope': t('neurologyReport.syncope'),
+                  'tremor': t('neurologyReport.tremor'),
+                  'memory loss': t('neurologyReport.memoryLoss'),
+                  'seizure': t('neurologyReport.seizure'),
+                  'headache': t('neurologyReport.headache')
+                };
+                return (
+                <Chip key={idx} onRemove={() => removeFromArray('hpi.associated_symptoms', idx)} darkMode={darkMode}>
+                    {symptomLabels[symptom] || symptom}
                 </Chip>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           <div>
-            <FieldLabel>Headache Profile</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.headacheProfile')}</FieldLabel>
             <TextArea
               name="headache_profile"
-              placeholder="Location, quality, severity, duration, pattern..."
+              placeholder={t('neurologyReport.headacheProfilePlaceholder')}
               value={formData.hpi.headache_profile}
               onChange={(e) => updateFormData('hpi.headache_profile', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
 
           <div>
-            <FieldLabel>Seizure Semiology</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.seizureSemiology')}</FieldLabel>
             <TextArea
               name="seizure_semiology"
-              placeholder="Description of seizure type, aura, duration, postictal state..."
+              placeholder={t('neurologyReport.seizureSemiologyPlaceholder')}
               value={formData.hpi.seizure_semiology}
               onChange={(e) => updateFormData('hpi.seizure_semiology', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
 
           <div>
-            <FieldLabel>Risk Factors</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.riskFactors')}</FieldLabel>
             <div className="flex flex-wrap gap-4">
-              {Object.keys(formData.hpi.risk_factors).map(factor => (
+              {Object.keys(formData.hpi.risk_factors).map(factor => {
+                const riskFactorLabels = {
+                  'htn': t('neurologyReport.htn') || 'HTN',
+                  'dm': t('neurologyReport.dm') || 'DM',
+                  'af': t('neurologyReport.af') || 'AF',
+                  'smoking': t('neurologyReport.smoking') || 'Smoking',
+                  'anticoagulants': t('neurologyReport.anticoagulants') || 'Anticoagulants'
+                };
+                return (
                 <label key={factor} className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={formData.hpi.risk_factors[factor]}
                     onChange={(e) => updateFormData(`hpi.risk_factors.${factor}`, e.target.checked)}
-                    className="rounded border-slate-300"
+                    className={`rounded ${
+                      darkMode ? 'border-slate-600' : 'border-slate-300'
+                    }`}
                   />
-                  <span className="text-sm text-slate-600">{factor === 'htn' ? 'HTN' : factor === 'dm' ? 'DM' : factor === 'af' ? 'AF' : factor.charAt(0).toUpperCase() + factor.slice(1)}</span>
+                  <span className={`text-sm ${
+                    darkMode ? 'text-slate-300' : 'text-slate-600'
+                    }`}>{riskFactorLabels[factor] || factor.charAt(0).toUpperCase() + factor.slice(1)}</span>
                 </label>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Current Medications</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.currentMedications')}</FieldLabel>
+              {patientMedications.length > 0 && (
+                <div className={`mb-2 p-2 border rounded-lg ${
+                  darkMode 
+                    ? 'bg-blue-900/30 border-blue-700' 
+                    : 'bg-blue-50 border-blue-200'
+                }`}>
+                  <div className={`text-xs font-semibold mb-1 ${
+                    darkMode ? 'text-blue-300' : 'text-blue-800'
+                  }`}>{t('neurologyReport.fromPatientRecord') || 'From Patient Record'}</div>
+                  <div className="space-y-1">
+                    {patientMedications.map((med, idx) => (
+                      <div key={idx} className={`text-xs ${
+                        darkMode ? 'text-blue-300' : 'text-blue-700'
+                      }`}>
+                        • {med.medication_name} {med.dosage} {med.frequency} {med.route || ''}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const medsText = patientMedications.map(m => 
+                        `${m.medication_name} ${m.dosage} ${m.frequency} ${m.route || ''}`.trim()
+                      ).join(', ');
+                      updateFormData('hpi.meds', medsText);
+                    }}
+                    className={`mt-1 text-xs underline ${
+                      darkMode 
+                        ? 'text-blue-400 hover:text-blue-300' 
+                        : 'text-blue-600 hover:text-blue-800'
+                    }`}
+                  >
+                    {t('neurologyReport.copyToForm') || 'Copy to Form'}
+                  </button>
+                </div>
+              )}
               <TextArea
                 name="meds"
-                placeholder="List current medications..."
+                placeholder={t('neurologyReport.listCurrentMedications')}
                 value={formData.hpi.meds}
                 onChange={(e) => updateFormData('hpi.meds', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Allergies</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.allergies')}</FieldLabel>
               <Input
                 name="allergies"
-                placeholder="Drug allergies, reactions..."
+                placeholder={t('neurologyReport.drugAllergiesReactions')}
                 value={formData.hpi.allergies}
                 onChange={(e) => updateFormData('hpi.allergies', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
 
           <div>
-            <FieldLabel>Past Medical History</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.pastMedicalHistory')}</FieldLabel>
             <TextArea
               name="pmh"
-              placeholder="Previous neurological diagnoses, surgeries..."
+              placeholder={t('neurologyReport.previousNeurologicalDiagnoses')}
               value={formData.hpi.pmh}
               onChange={(e) => updateFormData('hpi.pmh', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Family History</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.familyHistory')}</FieldLabel>
               <TextArea
                 name="family"
-                placeholder="Family history of neurological conditions..."
+                placeholder={t('neurologyReport.familyHistoryNeurological')}
                 value={formData.hpi.family}
                 onChange={(e) => updateFormData('hpi.family', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Social History</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.socialHistory')}</FieldLabel>
               <TextArea
                 name="social"
-                placeholder="Smoking, alcohol, occupation, travel..."
+                placeholder={t('neurologyReport.socialHistoryPlaceholder')}
                 value={formData.hpi.social}
                 onChange={(e) => updateFormData('hpi.social', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
           </div>
@@ -1283,7 +1596,9 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
               className={`px-4 py-2 rounded-lg text-sm font-medium ${
                 formData.chief_complaint.trim()
                   ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                  : darkMode
+                    ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }`}
             >
               🧠 AI Suggest
@@ -1293,148 +1608,186 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Vitals */}
-      <Card title="Vitals" collapsible isOpen={!collapsedSections.vitals} onToggle={() => toggleSection('vitals')}>
+      <Card title={t('neurologyReport.vitals')} collapsible isOpen={!collapsedSections.vitals} onToggle={() => toggleSection('vitals')} darkMode={darkMode}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <FieldLabel>BP Right</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.bpRight')}</FieldLabel>
             <Input
               name="bp_right"
-              placeholder="120/80"
+              placeholder={t('neurologyReport.bpPlaceholder')}
               value={formData.vitals.bp_right}
               onChange={(e) => updateFormData('vitals.bp_right', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>BP Left</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.bpLeft')}</FieldLabel>
             <Input
               name="bp_left"
-              placeholder="120/80"
+              placeholder={t('neurologyReport.bpPlaceholder')}
               value={formData.vitals.bp_left}
               onChange={(e) => updateFormData('vitals.bp_left', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Heart Rate</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.heartRate')}</FieldLabel>
             <Input
               name="hr"
-              placeholder="72 bpm"
+              placeholder={t('neurologyReport.hrPlaceholder')}
               value={formData.vitals.hr}
               onChange={(e) => updateFormData('vitals.hr', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>Temperature</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.temperature')}</FieldLabel>
             <Input
               name="temp"
-              placeholder="36.5°C"
+              placeholder={t('neurologyReport.tempPlaceholder')}
               value={formData.vitals.temp}
               onChange={(e) => updateFormData('vitals.temp', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
           <div>
-            <FieldLabel>SpO2</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.spo2')}</FieldLabel>
             <Input
               name="spo2"
-              placeholder="98%"
+              placeholder={t('neurologyReport.spo2Placeholder')}
               value={formData.vitals.spo2}
               onChange={(e) => updateFormData('vitals.spo2', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
         </div>
       </Card>
 
       {/* Mental Status */}
-      <Card title="Mental Status" collapsible isOpen={!collapsedSections.mentalStatus} onToggle={() => toggleSection('mentalStatus')}>
+      <Card title={t('neurologyReport.mentalStatus')} collapsible isOpen={!collapsedSections.mentalStatus} onToggle={() => toggleSection('mentalStatus')} darkMode={darkMode}>
         <div className="space-y-4">
           <div>
-            <FieldLabel>Level of Consciousness</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.levelOfConsciousness')}</FieldLabel>
             <Select
               name="consciousness"
               value={formData.mental_status.consciousness}
               onChange={(e) => updateFormData('mental_status.consciousness', e.target.value)}
-              options={CONSCIOUSNESS_LEVELS.map(l => ({ value: l, label: l.charAt(0).toUpperCase() + l.slice(1) }))}
+              options={[
+                { value: 'alert', label: t('neurologyReport.alert') },
+                { value: 'drowsy', label: t('neurologyReport.drowsy') },
+                { value: 'stupor', label: t('neurologyReport.stupor') },
+                { value: 'coma', label: t('neurologyReport.coma') }
+              ]}
+              darkMode={darkMode}
+              selectPlaceholder={t('neurologyReport.select')}
             />
           </div>
           <div>
-            <FieldLabel>Orientation</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.orientation')}</FieldLabel>
             <div className="flex flex-wrap gap-4">
-              {Object.keys(formData.mental_status.orientation).map(field => (
+              {Object.keys(formData.mental_status.orientation).map(field => {
+                const fieldLabels = {
+                  person: t('neurologyReport.person') || 'Person',
+                  place: t('neurologyReport.place') || 'Place',
+                  time: t('neurologyReport.time') || 'Time'
+                };
+                return (
                 <label key={field} className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={formData.mental_status.orientation[field]}
                     onChange={(e) => updateFormData(`mental_status.orientation.${field}`, e.target.checked)}
-                    className="rounded border-slate-300"
+                    className={`rounded ${
+                      darkMode ? 'border-slate-600' : 'border-slate-300'
+                    }`}
                   />
-                  <span className="text-sm text-slate-600">{field.charAt(0).toUpperCase() + field.slice(1)}</span>
+                  <span className={`text-sm ${
+                    darkMode ? 'text-slate-300' : 'text-slate-600'
+                    }`}>{fieldLabels[field] || field.charAt(0).toUpperCase() + field.slice(1)}</span>
                 </label>
-              ))}
+                );
+              })}
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Attention & Memory</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.attentionMemory')}</FieldLabel>
               <TextArea
                 name="attention_memory"
-                placeholder="Digit span, serial 7s, recall..."
+                placeholder={t('neurologyReport.attentionMemoryPlaceholder')}
                 value={formData.mental_status.attention_memory}
                 onChange={(e) => updateFormData('mental_status.attention_memory', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Language</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.language')}</FieldLabel>
               <TextArea
                 name="language"
-                placeholder="Fluent, naming, repetition, comprehension..."
+                placeholder={t('neurologyReport.languagePlaceholder')}
                 value={formData.mental_status.language}
                 onChange={(e) => updateFormData('mental_status.language', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
           </div>
           <div>
-            <FieldLabel>Behavior</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.behavior')}</FieldLabel>
             <TextArea
               name="behavior"
-              placeholder="Appearance, mood, affect, insight..."
+              placeholder={t('neurologyReport.behaviorPlaceholder')}
               value={formData.mental_status.behavior}
               onChange={(e) => updateFormData('mental_status.behavior', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>MMSE Score</FieldLabel>
+              <FieldLabel darkMode={darkMode}>
+                {t('neurologyReport.mmseScore')} <span className={`text-xs font-normal ${
+                  darkMode ? 'text-slate-500' : 'text-slate-400'
+                }`}>({t('neurologyReport.recordIfPerformed') || 'record if performed'})</span>
+              </FieldLabel>
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   name="mmse_score"
-                  placeholder="Score"
+                  placeholder={t('neurologyReport.score')}
                   value={formData.mental_status.mmse.score}
                   onChange={(e) => updateFormData('mental_status.mmse.score', e.target.value)}
+                  darkMode={darkMode}
                 />
                 <Input
                   type="date"
                   name="mmse_date"
                   value={formData.mental_status.mmse.date}
                   onChange={(e) => updateFormData('mental_status.mmse.date', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
             <div>
-              <FieldLabel>MoCA Score</FieldLabel>
+              <FieldLabel darkMode={darkMode}>
+                {t('neurologyReport.mocaScore')} <span className={`text-xs font-normal ${
+                  darkMode ? 'text-slate-500' : 'text-slate-400'
+                }`}>({t('neurologyReport.recordIfPerformed') || 'record if performed'})</span>
+              </FieldLabel>
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   name="moca_score"
-                  placeholder="Score"
+                  placeholder={t('neurologyReport.score')}
                   value={formData.mental_status.moca.score}
                   onChange={(e) => updateFormData('mental_status.moca.score', e.target.value)}
+                  darkMode={darkMode}
                 />
                 <Input
                   type="date"
                   name="moca_date"
                   value={formData.mental_status.moca.date}
                   onChange={(e) => updateFormData('mental_status.moca.date', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
@@ -1443,106 +1796,120 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Cranial Nerves */}
-      <Card title="Cranial Nerves" collapsible isOpen={!collapsedSections.cranialNerves} onToggle={() => toggleSection('cranialNerves')}>
+      <Card title={t('neurologyReport.cranialNerves')} collapsible isOpen={!collapsedSections.cranialNerves} onToggle={() => toggleSection('cranialNerves')} darkMode={darkMode}>
         <div className="space-y-4">
           <div className="flex justify-end mb-4">
             <button
               type="button"
               onClick={fillNormalCNExam}
-              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+              className={`px-4 py-2 rounded-lg text-sm ${
+                darkMode 
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
             >
-              Fill Normal CN Exam
+              {t('neurologyReport.fillNormalCNExam')}
             </button>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>CN I (Olfactory)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn1')}</FieldLabel>
               <Input
                 name="cn1"
-                placeholder="Intact/bilaterally impaired..."
+                placeholder={t('neurologyReport.intactBilaterallyImpaired')}
                 value={formData.cranial_nerves.cn1}
                 onChange={(e) => updateFormData('cranial_nerves.cn1', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>CN II (Optic) - Visual Fields</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn2Fields')}</FieldLabel>
               <Input
                 name="cn2_fields"
-                placeholder="Full fields OU, hemianopia..."
+                placeholder={t('neurologyReport.fullFieldsOU')}
                 value={formData.cranial_nerves.cn2_fields}
                 onChange={(e) => updateFormData('cranial_nerves.cn2_fields', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>CN II (Optic) - Fundoscopy</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn2Fundoscopy')}</FieldLabel>
               <Input
                 name="cn2_fundoscopy"
-                placeholder="Discs, vessels, macula..."
+                placeholder={t('neurologyReport.discsVesselsMacula')}
                 value={formData.cranial_nerves.cn2_fundoscopy}
                 onChange={(e) => updateFormData('cranial_nerves.cn2_fundoscopy', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>CN III, IV, VI (Oculomotor, Trochlear, Abducens)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn3_4_6')}</FieldLabel>
               <Input
                 name="cn3_4_6_eyemov"
-                placeholder="Full EOM, nystagmus, ptosis..."
+                placeholder={t('neurologyReport.fullEOMNystagmus')}
                 value={formData.cranial_nerves.cn3_4_6_eyemov}
                 onChange={(e) => updateFormData('cranial_nerves.cn3_4_6_eyemov', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>CN V (Trigeminal)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn5')}</FieldLabel>
               <Input
                 name="cn5"
-                placeholder="Sensation V1-V3, muscles of mastication..."
+                placeholder={t('neurologyReport.sensationV1V3')}
                 value={formData.cranial_nerves.cn5}
                 onChange={(e) => updateFormData('cranial_nerves.cn5', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>CN VII (Facial)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn7')}</FieldLabel>
               <Input
                 name="cn7"
-                placeholder="Facial symmetry, all branches..."
+                placeholder={t('neurologyReport.facialSymmetry')}
                 value={formData.cranial_nerves.cn7}
                 onChange={(e) => updateFormData('cranial_nerves.cn7', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>CN VIII (Vestibulocochlear)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn8')}</FieldLabel>
               <Input
                 name="cn8"
-                placeholder="Hearing intact bilaterally..."
+                placeholder={t('neurologyReport.hearingIntact')}
                 value={formData.cranial_nerves.cn8}
                 onChange={(e) => updateFormData('cranial_nerves.cn8', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>CN IX, X (Glossopharyngeal, Vagus)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn9_10')}</FieldLabel>
               <Input
                 name="cn9_10"
-                placeholder="Gag intact, uvula midline..."
+                placeholder={t('neurologyReport.gagIntact')}
                 value={formData.cranial_nerves.cn9_10}
                 onChange={(e) => updateFormData('cranial_nerves.cn9_10', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>CN XI (Spinal Accessory)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn11')}</FieldLabel>
               <Input
                 name="cn11"
-                placeholder="SCM and trapezius strength..."
+                placeholder={t('neurologyReport.scmTrapezius')}
                 value={formData.cranial_nerves.cn11}
                 onChange={(e) => updateFormData('cranial_nerves.cn11', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>CN XII (Hypoglossal)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.cn12')}</FieldLabel>
               <Input
                 name="cn12"
-                placeholder="Tongue midline, no atrophy..."
+                placeholder={t('neurologyReport.tongueMidline')}
                 value={formData.cranial_nerves.cn12}
                 onChange={(e) => updateFormData('cranial_nerves.cn12', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
@@ -1550,25 +1917,38 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Motor */}
-      <Card title="Motor Examination" collapsible isOpen={!collapsedSections.motor} onToggle={() => toggleSection('motor')}>
+      <Card title={t('neurologyReport.motorExamination')} collapsible isOpen={!collapsedSections.motor} onToggle={() => toggleSection('motor')} darkMode={darkMode}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>Tone</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.tone') || 'Tone'}</FieldLabel>
               <Select
                 name="tone"
                 value={formData.motor.tone}
                 onChange={(e) => updateFormData('motor.tone', e.target.value)}
-                options={TONE_TYPES.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) }))}
+                options={[
+                  { value: 'normal', label: t('neurologyReport.normal') },
+                  { value: 'spastic', label: t('neurologyReport.spastic') },
+                  { value: 'rigid', label: t('neurologyReport.rigid') },
+                  { value: 'flaccid', label: t('neurologyReport.flaccid') }
+                ]}
+                darkMode={darkMode}
+                selectPlaceholder={t('neurologyReport.select')}
               />
             </div>
             <div>
-              <FieldLabel>Bulk</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.bulk')}</FieldLabel>
               <Select
                 name="bulk"
                 value={formData.motor.bulk}
                 onChange={(e) => updateFormData('motor.bulk', e.target.value)}
-                options={BULK_TYPES.map(b => ({ value: b, label: b.charAt(0).toUpperCase() + b.slice(1) }))}
+                options={[
+                  { value: 'normal', label: t('neurologyReport.normal') },
+                  { value: 'atrophy', label: t('neurologyReport.atrophy') },
+                  { value: 'hypertrophy', label: t('neurologyReport.hypertrophy') }
+                ]}
+                darkMode={darkMode}
+                selectPlaceholder={t('neurologyReport.select')}
               />
             </div>
             <div>
@@ -1577,34 +1957,63 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   type="checkbox"
                   checked={formData.motor.fasciculations}
                   onChange={(e) => updateFormData('motor.fasciculations', e.target.checked)}
-                  className="rounded border-slate-300"
+                  className={`rounded ${
+                    darkMode ? 'border-slate-600' : 'border-slate-300'
+                  }`}
                 />
-                <span className="text-sm text-slate-600">Fasciculations</span>
+                <span className={`text-sm ${
+                  darkMode ? 'text-slate-300' : 'text-slate-600'
+                }`}>{t('neurologyReport.fasciculations')}</span>
               </label>
             </div>
           </div>
           
           <div>
-            <FieldLabel>Strength (MRC 0-5)</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.strength')} (MRC 0-5)</FieldLabel>
             <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+              <table className={`w-full text-sm ${
+                darkMode ? 'text-slate-300' : 'text-slate-700'
+              }`}>
                 <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-2">Joint</th>
-                    <th className="text-center p-2">Right</th>
-                    <th className="text-center p-2">Left</th>
+                  <tr className={`border-b ${
+                    darkMode ? 'border-slate-700' : 'border-slate-200'
+                  }`}>
+                    <th className={`text-left p-2 ${
+                      darkMode ? 'text-slate-300' : 'text-slate-700'
+                    }`}>{t('neurologyReport.joint')}</th>
+                    <th className={`text-center p-2 ${
+                      darkMode ? 'text-slate-300' : 'text-slate-700'
+                    }`}>{t('neurologyReport.right')}</th>
+                    <th className={`text-center p-2 ${
+                      darkMode ? 'text-slate-300' : 'text-slate-700'
+                    }`}>{t('neurologyReport.left')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {['shoulder', 'elbow', 'wrist', 'hip', 'knee', 'ankle'].map(joint => (
-                    <tr key={joint} className="border-b">
-                      <td className="p-2 capitalize">{joint}</td>
+                  {['shoulder', 'elbow', 'wrist', 'hip', 'knee', 'ankle'].map(joint => {
+                    const jointLabels = {
+                      shoulder: t('neurologyReport.shoulder'),
+                      elbow: t('neurologyReport.elbow'),
+                      wrist: t('neurologyReport.wrist'),
+                      hip: t('neurologyReport.hip'),
+                      knee: t('neurologyReport.knee'),
+                      ankle: t('neurologyReport.ankle')
+                    };
+                    return (
+                    <tr key={joint} className={`border-b ${
+                      darkMode ? 'border-slate-700' : 'border-slate-200'
+                    }`}>
+                      <td className={`p-2 ${
+                        darkMode ? 'text-slate-300' : 'text-slate-700'
+                      }`}>{jointLabels[joint] || joint}</td>
                       <td className="p-2">
                         <Select
                           name={`strength_R_${joint}`}
                           value={formData.motor.strength.R[joint]}
                           onChange={(e) => updateFormData(`motor.strength.R.${joint}`, e.target.value)}
                           options={MRC_GRADES.map(g => ({ value: g, label: g }))}
+                          darkMode={darkMode}
+                          selectPlaceholder={t('neurologyReport.select')}
                         />
                       </td>
                       <td className="p-2">
@@ -1613,10 +2022,13 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                           value={formData.motor.strength.L[joint]}
                           onChange={(e) => updateFormData(`motor.strength.L.${joint}`, e.target.value)}
                           options={MRC_GRADES.map(g => ({ value: g, label: g }))}
+                          darkMode={darkMode}
+                          selectPlaceholder={t('neurologyReport.select')}
                         />
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1624,39 +2036,53 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
           
           <div>
-            <FieldLabel>Pronator Drift</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.pronatorDrift')}</FieldLabel>
             <Select
               name="pronator_drift"
               value={formData.motor.pronator_drift}
               onChange={(e) => updateFormData('motor.pronator_drift', e.target.value)}
               options={[
-                { value: 'present', label: 'Present' },
-                { value: 'absent', label: 'Absent' }
+                { value: 'present', label: t('neurologyReport.present') },
+                { value: 'absent', label: t('neurologyReport.absent') }
               ]}
+              darkMode={darkMode}
+              selectPlaceholder={t('neurologyReport.select')}
             />
           </div>
         </div>
       </Card>
 
       {/* Reflexes */}
-      <Card title="Reflexes" collapsible isOpen={!collapsedSections.reflexes} onToggle={() => toggleSection('reflexes')}>
+      <Card title={t('neurologyReport.reflexes')} collapsible isOpen={!collapsedSections.reflexes} onToggle={() => toggleSection('reflexes')} darkMode={darkMode}>
         <div className="space-y-4">
           <div>
-            <FieldLabel>Deep Tendon Reflexes</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.deepTendonReflexes')}</FieldLabel>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {['biceps', 'triceps', 'brachioradialis', 'knee', 'ankle'].map(reflex => (
+              {['biceps', 'triceps', 'brachioradialis', 'knee', 'ankle'].map(reflex => {
+                const reflexLabels = {
+                  biceps: t('neurologyReport.biceps'),
+                  triceps: t('neurologyReport.triceps'),
+                  brachioradialis: t('neurologyReport.brachioradialis'),
+                  knee: t('neurologyReport.knee'),
+                  ankle: t('neurologyReport.ankle')
+                };
+                return (
                 <div key={reflex}>
-                  <FieldLabel className="capitalize">{reflex}</FieldLabel>
+                  <FieldLabel darkMode={darkMode}>{reflexLabels[reflex] || reflex}</FieldLabel>
                   <div className="flex gap-2">
                     {REFLEX_GRADES.map(grade => (
                       <button
                         key={grade}
                         type="button"
                         onClick={() => updateFormData(`reflexes.${reflex}`, grade)}
-                        className={`px-3 py-1 rounded text-sm ${
+                        className={`px-3 py-1 rounded text-sm border ${
                           formData.reflexes[reflex] === grade
-                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                            : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                            ? darkMode
+                              ? 'bg-emerald-900/50 text-emerald-300 border-emerald-600'
+                              : 'bg-emerald-100 text-emerald-700 border-emerald-300'
+                            : darkMode
+                              ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+                              : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
                         }`}
                       >
                         {grade}
@@ -1664,18 +2090,24 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                     ))}
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Plantar Response</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.plantarResponse')}</FieldLabel>
               <Select
                 name="plantar"
                 value={formData.reflexes.plantar}
                 onChange={(e) => updateFormData('reflexes.plantar', e.target.value)}
-                options={PLANTAR_RESPONSES.map(p => ({ value: p, label: p.charAt(0).toUpperCase() + p.slice(1) }))}
+                options={[
+                  { value: 'flexor', label: t('neurologyReport.flexor') },
+                  { value: 'extensor', label: t('neurologyReport.extensor') }
+                ]}
+                darkMode={darkMode}
+                selectPlaceholder={t('neurologyReport.select')}
               />
             </div>
             <div className="flex flex-wrap gap-4 items-end">
@@ -1684,18 +2116,26 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   type="checkbox"
                   checked={formData.reflexes.hoffman}
                   onChange={(e) => updateFormData('reflexes.hoffman', e.target.checked)}
-                  className="rounded border-slate-300"
+                  className={`rounded ${
+                    darkMode ? 'border-slate-600' : 'border-slate-300'
+                  }`}
                 />
-                <span className="text-sm text-slate-600">Hoffman</span>
+                <span className={`text-sm ${
+                  darkMode ? 'text-slate-300' : 'text-slate-600'
+                }`}>{t('neurologyReport.hoffman')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={formData.reflexes.clonus}
                   onChange={(e) => updateFormData('reflexes.clonus', e.target.checked)}
-                  className="rounded border-slate-300"
+                  className={`rounded ${
+                    darkMode ? 'border-slate-600' : 'border-slate-300'
+                  }`}
                 />
-                <span className="text-sm text-slate-600">Clonus</span>
+                <span className={`text-sm ${
+                  darkMode ? 'text-slate-300' : 'text-slate-600'
+                }`}>{t('neurologyReport.clonus')}</span>
               </label>
             </div>
           </div>
@@ -1703,67 +2143,73 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Sensory */}
-      <Card title="Sensory Examination" collapsible isOpen={!collapsedSections.sensory} onToggle={() => toggleSection('sensory')}>
+      <Card title={t('neurologyReport.sensoryExamination')} collapsible isOpen={!collapsedSections.sensory} onToggle={() => toggleSection('sensory')} darkMode={darkMode}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Light Touch</FieldLabel>
+              <FieldLabel darkMode={darkMode}>Light Touch</FieldLabel>
               <TextArea
                 name="light_touch"
                 placeholder="Intact throughout, decreased R arm..."
                 value={formData.sensory.light_touch}
                 onChange={(e) => updateFormData('sensory.light_touch', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Pinprick</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.pinprick')}</FieldLabel>
               <TextArea
                 name="pinprick"
-                placeholder="Intact throughout, decreased R arm..."
+                placeholder={t('neurologyReport.intactThroughout')}
                 value={formData.sensory.pinprick}
                 onChange={(e) => updateFormData('sensory.pinprick', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Temperature</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.temperature')}</FieldLabel>
               <TextArea
                 name="temperature"
-                placeholder="Intact throughout..."
+                placeholder={t('neurologyReport.intactThroughout')}
                 value={formData.sensory.temperature}
                 onChange={(e) => updateFormData('sensory.temperature', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Vibration</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.vibration')}</FieldLabel>
               <TextArea
                 name="vibration"
-                placeholder="Normal at 128 Hz..."
+                placeholder={t('neurologyReport.normalAt128Hz')}
                 value={formData.sensory.vibration}
                 onChange={(e) => updateFormData('sensory.vibration', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Proprioception</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.proprioception')}</FieldLabel>
               <TextArea
                 name="proprioception"
-                placeholder="Intact finger/toe position sense..."
+                placeholder={t('neurologyReport.intactFingerToe')}
                 value={formData.sensory.proprioception}
                 onChange={(e) => updateFormData('sensory.proprioception', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Dermatomes Note</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.dermatomesNote')}</FieldLabel>
               <TextArea
                 name="dermatomes_note"
-                placeholder="Dermatomal pattern, level..."
+                placeholder={t('neurologyReport.dermatomalPattern')}
                 value={formData.sensory.dermatomes_note}
                 onChange={(e) => updateFormData('sensory.dermatomes_note', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
           </div>
@@ -1771,95 +2217,118 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Cerebellar */}
-      <Card title="Cerebellar & Gait" collapsible isOpen={!collapsedSections.cerebellar} onToggle={() => toggleSection('cerebellar')}>
+      <Card title={t('neurologyReport.cerebellarGait')} collapsible isOpen={!collapsedSections.cerebellar} onToggle={() => toggleSection('cerebellar')} darkMode={darkMode}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Finger-to-Nose</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.fingerToNose')}</FieldLabel>
               <Input
                 name="fnf"
-                placeholder="Smooth, accurate bilaterally..."
+                placeholder={t('neurologyReport.smoothAccurate')}
                 value={formData.cerebellar.fnf}
                 onChange={(e) => updateFormData('cerebellar.fnf', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Heel-to-Shin</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.heelToShin')}</FieldLabel>
               <Input
                 name="hks"
-                placeholder="Smooth, accurate bilaterally..."
+                placeholder={t('neurologyReport.smoothAccurate')}
                 value={formData.cerebellar.hks}
                 onChange={(e) => updateFormData('cerebellar.hks', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Diadochokinesis</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.diadochokinesis')}</FieldLabel>
               <Input
                 name="diadochokinesis"
-                placeholder="Rapid alternating movements..."
+                placeholder={t('neurologyReport.rapidAlternating')}
                 value={formData.cerebellar.diadochokinesis}
                 onChange={(e) => updateFormData('cerebellar.diadochokinesis', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Romberg</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.romberg')}</FieldLabel>
               <Select
                 name="romberg"
                 value={formData.cerebellar.romberg}
                 onChange={(e) => updateFormData('cerebellar.romberg', e.target.value)}
-                options={ROMBERG_RESULTS.map(r => ({ value: r, label: r.charAt(0).toUpperCase() + r.slice(1) }))}
+                options={[
+                  { value: 'positive', label: t('neurologyReport.positive') },
+                  { value: 'negative', label: t('neurologyReport.negative') }
+                ]}
+                darkMode={darkMode}
+                selectPlaceholder={t('neurologyReport.select')}
               />
             </div>
           </div>
           
           <div>
-            <FieldLabel>Gait</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.gait')}</FieldLabel>
             <div className="flex flex-wrap gap-4">
-              {Object.keys(formData.cerebellar.gait).map(type => (
+              {Object.keys(formData.cerebellar.gait).map(type => {
+                const gaitLabels = {
+                  normal: t('neurologyReport.normal') || 'Normal',
+                  tandem: t('neurologyReport.tandem') || 'Tandem',
+                  heels: t('neurologyReport.heels') || 'Heels',
+                  toes: t('neurologyReport.toes') || 'Toes'
+                };
+                return (
                 <label key={type} className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={formData.cerebellar.gait[type]}
                     onChange={(e) => updateFormData(`cerebellar.gait.${type}`, e.target.checked)}
-                    className="rounded border-slate-300"
+                    className={`rounded ${
+                      darkMode ? 'border-slate-600' : 'border-slate-300'
+                    }`}
                   />
-                  <span className="text-sm text-slate-600 capitalize">{type}</span>
+                    <span className={`text-sm ${
+                    darkMode ? 'text-slate-300' : 'text-slate-600'
+                    }`}>{gaitLabels[type] || type.charAt(0).toUpperCase() + type.slice(1)}</span>
                 </label>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
       </Card>
 
       {/* Autonomic */}
-      <Card title="Autonomic Function" collapsible isOpen={!collapsedSections.autonomic} onToggle={() => toggleSection('autonomic')}>
+      <Card title={t('neurologyReport.autonomicFunction')} collapsible isOpen={!collapsedSections.autonomic} onToggle={() => toggleSection('autonomic')} darkMode={darkMode}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>Orthostatic BP</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.orthostaticBP')}</FieldLabel>
               <Input
                 name="orthostasis_bp"
-                placeholder="Supine/standing BP..."
+                placeholder={t('neurologyReport.supineStandingBP')}
                 value={formData.autonomic.orthostasis_bp}
                 onChange={(e) => updateFormData('autonomic.orthostasis_bp', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Bowel & Bladder</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.bowelBladder')}</FieldLabel>
               <Input
                 name="bowel_bladder"
-                placeholder="Normal incontinence..."
+                placeholder={t('neurologyReport.normalIncontinence')}
                 value={formData.autonomic.bowel_bladder}
                 onChange={(e) => updateFormData('autonomic.bowel_bladder', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Sweating</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.sweating')}</FieldLabel>
               <Input
                 name="sweating"
-                placeholder="Normal, anhidrosis..."
+                placeholder={t('neurologyReport.normalAnhidrosis')}
                 value={formData.autonomic.sweating}
                 onChange={(e) => updateFormData('autonomic.sweating', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
@@ -1867,62 +2336,76 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Meningeal */}
-      <Card title="Meningeal Signs" collapsible isOpen={!collapsedSections.meningeal} onToggle={() => toggleSection('meningeal')}>
+      <Card title={t('neurologyReport.meningealSigns')} collapsible isOpen={!collapsedSections.meningeal} onToggle={() => toggleSection('meningeal')} darkMode={darkMode}>
         <div className="flex flex-wrap gap-4">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={formData.meningeal.nuchal_rigidity}
               onChange={(e) => updateFormData('meningeal.nuchal_rigidity', e.target.checked)}
-              className="rounded border-slate-300"
+              className={`rounded ${
+                darkMode ? 'border-slate-600' : 'border-slate-300'
+              }`}
             />
-            <span className="text-sm text-slate-600">Nuchal Rigidity</span>
+            <span className={`text-sm ${
+              darkMode ? 'text-slate-300' : 'text-slate-600'
+            }`}>{t('neurologyReport.nuchalRigidity')}</span>
           </label>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={formData.meningeal.kernig}
               onChange={(e) => updateFormData('meningeal.kernig', e.target.checked)}
-              className="rounded border-slate-300"
+              className={`rounded ${
+                darkMode ? 'border-slate-600' : 'border-slate-300'
+              }`}
             />
-            <span className="text-sm text-slate-600">Kernig</span>
+            <span className={`text-sm ${
+              darkMode ? 'text-slate-300' : 'text-slate-600'
+            }`}>{t('neurologyReport.kernig')}</span>
           </label>
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={formData.meningeal.brudzinski}
               onChange={(e) => updateFormData('meningeal.brudzinski', e.target.checked)}
-              className="rounded border-slate-300"
+              className={`rounded ${
+                darkMode ? 'border-slate-600' : 'border-slate-300'
+              }`}
             />
-            <span className="text-sm text-slate-600">Brudzinski</span>
+            <span className={`text-sm ${
+              darkMode ? 'text-slate-300' : 'text-slate-600'
+            }`}>{t('neurologyReport.brudzinski')}</span>
           </label>
         </div>
       </Card>
 
       {/* Pain/Headache */}
-      <Card title="Pain/Headache" collapsible isOpen={!collapsedSections.painHeadache} onToggle={() => toggleSection('painHeadache')}>
+      <Card title={t('neurologyReport.painHeadache')} collapsible isOpen={!collapsedSections.painHeadache} onToggle={() => toggleSection('painHeadache')} darkMode={darkMode}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Site</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.site')}</FieldLabel>
               <Input
                 name="site"
-                placeholder="Frontal, temporal, occipital..."
+                placeholder={t('neurologyReport.frontalTemporal')}
                 value={formData.pain_headache.site}
                 onChange={(e) => updateFormData('pain_headache.site', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Quality</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.quality')}</FieldLabel>
               <Input
                 name="quality"
-                placeholder="Throbbing, sharp, pressure..."
+                placeholder={t('neurologyReport.throbbingSharp')}
                 value={formData.pain_headache.quality}
                 onChange={(e) => updateFormData('pain_headache.quality', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Severity (VAS 0-10)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.severity')}</FieldLabel>
               <Input
                 type="number"
                 name="severity_vas"
@@ -1931,117 +2414,143 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                 max="10"
                 value={formData.pain_headache.severity_vas}
                 onChange={(e) => updateFormData('pain_headache.severity_vas', e.target.value)}
+                darkMode={darkMode}
               />
               {errors.vas && <p className="text-red-500 text-sm mt-1">{errors.vas}</p>}
             </div>
             <div>
-              <FieldLabel>Triggers</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.triggers')}</FieldLabel>
               <Input
                 name="triggers"
-                placeholder="Light, sound, movement..."
+                placeholder={t('neurologyReport.lightSoundMovement')}
                 value={formData.pain_headache.triggers}
                 onChange={(e) => updateFormData('pain_headache.triggers', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
           <div>
-            <FieldLabel>SNOOP Red Flags</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.snoopRedFlags')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
-              {SNOOP_RED_FLAGS.map(flag => (
+              {[
+                { value: 'Systemic symptoms', label: t('neurologyReport.systemicSymptoms') },
+                { value: 'Neurologic deficit', label: t('neurologyReport.neurologicDeficit') },
+                { value: 'Onset after age 50', label: t('neurologyReport.onsetAfterAge50') },
+                { value: 'Pattern change', label: t('neurologyReport.patternChange') },
+                { value: 'Papilledema', label: t('neurologyReport.papilledema') }
+              ].map(flag => (
                 <button
-                  key={flag}
+                  key={flag.value}
                   type="button"
                   onClick={() => {
-                    if (formData.pain_headache.red_flags.includes(flag)) {
-                      removeFromArray('pain_headache.red_flags', formData.pain_headache.red_flags.indexOf(flag));
+                    if (formData.pain_headache.red_flags.includes(flag.value)) {
+                      removeFromArray('pain_headache.red_flags', formData.pain_headache.red_flags.indexOf(flag.value));
                     } else {
-                      addToArray('pain_headache.red_flags', flag);
+                      addToArray('pain_headache.red_flags', flag.value);
                     }
                   }}
-                  className={`px-3 py-1 rounded-lg text-sm ${
-                    formData.pain_headache.red_flags.includes(flag)
-                      ? 'bg-red-100 text-red-700 border border-red-300'
-                      : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                  className={`px-3 py-1 rounded-lg text-sm border ${
+                    formData.pain_headache.red_flags.includes(flag.value)
+                      ? darkMode
+                        ? 'bg-red-900/50 text-red-300 border-red-600'
+                        : 'bg-red-100 text-red-700 border-red-300'
+                      : darkMode
+                        ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+                        : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
                   }`}
                 >
-                  {flag}
+                  {flag.label}
                 </button>
               ))}
             </div>
             <div className="flex flex-wrap gap-2">
-              {formData.pain_headache.red_flags.map((flag, idx) => (
-                <Chip key={idx} onRemove={() => removeFromArray('pain_headache.red_flags', idx)}>
-                  {flag}
+              {formData.pain_headache.red_flags.map((flag, idx) => {
+                const flagLabels = {
+                  'Systemic symptoms': t('neurologyReport.systemicSymptoms'),
+                  'Neurologic deficit': t('neurologyReport.neurologicDeficit'),
+                  'Onset after age 50': t('neurologyReport.onsetAfterAge50'),
+                  'Pattern change': t('neurologyReport.patternChange'),
+                  'Papilledema': t('neurologyReport.papilledema')
+                };
+                return (
+                <Chip key={idx} onRemove={() => removeFromArray('pain_headache.red_flags', idx)} darkMode={darkMode}>
+                    {flagLabels[flag] || flag}
                 </Chip>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
       </Card>
 
       {/* Seizure */}
-      <Card title="Seizure" collapsible isOpen={!collapsedSections.seizure} onToggle={() => toggleSection('seizure')}>
+      <Card title={t('neurologyReport.seizure')} collapsible isOpen={!collapsedSections.seizure} onToggle={() => toggleSection('seizure')} darkMode={darkMode}>
         <div className="space-y-4">
           <div>
-            <FieldLabel>Semiology</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.semiology')}</FieldLabel>
             <TextArea
               name="semiology"
-              placeholder="Aura, ictal phase, postictal state..."
+              placeholder={t('neurologyReport.auraIctalPhase')}
               value={formData.seizure.semiology}
               onChange={(e) => updateFormData('seizure.semiology', e.target.value)}
               rows={2}
+              darkMode={darkMode}
             />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Frequency</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.frequency')}</FieldLabel>
               <Input
                 name="frequency"
-                placeholder="Daily, weekly, monthly..."
+                placeholder={t('neurologyReport.dailyWeeklyMonthly')}
                 value={formData.seizure.frequency}
                 onChange={(e) => updateFormData('seizure.frequency', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Triggers</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.triggers')}</FieldLabel>
               <Input
                 name="triggers"
-                placeholder="Sleep deprivation, stress..."
+                placeholder={t('neurologyReport.sleepDeprivation')}
                 value={formData.seizure.triggers}
                 onChange={(e) => updateFormData('seizure.triggers', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Postictal</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.postictal')}</FieldLabel>
               <Input
                 name="postictal"
-                placeholder="Confusion, aphasia, Todd's paralysis..."
+                placeholder={t('neurologyReport.confusionAphasia')}
                 value={formData.seizure.postictal}
                 onChange={(e) => updateFormData('seizure.postictal', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Adherence</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.adherence')}</FieldLabel>
               <Input
                 name="adherence"
-                placeholder="Good, poor, missed doses..."
+                placeholder={t('neurologyReport.goodPoorMissed')}
                 value={formData.seizure.adherence}
                 onChange={(e) => updateFormData('seizure.adherence', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
           <div>
-            <FieldLabel>Antiepileptic Drugs (AEDs)</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.antiepilepticDrugs')}</FieldLabel>
             <div className="flex flex-wrap gap-2">
               {formData.seizure.aeds.map((aed, idx) => (
-                <Chip key={idx} onRemove={() => removeFromArray('seizure.aeds', idx)}>
+                <Chip key={idx} onRemove={() => removeFromArray('seizure.aeds', idx)} darkMode={darkMode}>
                   {aed}
                 </Chip>
               ))}
             </div>
             <Input
               name="new_aed"
-              placeholder="Add AED..."
+              placeholder={t('neurologyReport.addAED')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && e.target.value.trim()) {
                   e.preventDefault();
@@ -2050,37 +2559,49 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                 }
               }}
               className="mt-2"
+              darkMode={darkMode}
             />
           </div>
         </div>
       </Card>
 
       {/* Stroke */}
-      <Card title="Stroke Assessment" collapsible isOpen={!collapsedSections.stroke} onToggle={() => toggleSection('stroke')}>
+      <Card 
+        title={t('neurologyReport.strokeAssessment')} 
+        subtitle={t('neurologyReport.strokeOptional') || 'Stroke cases (optional)'}
+        collapsible 
+        isOpen={!collapsedSections.stroke} 
+        onToggle={() => toggleSection('stroke')}
+        darkMode={darkMode}
+      >
         <div className="space-y-4">
           {isWithinTPAWindow() && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-              <p className="text-amber-800 font-medium">⚠️ Candidate for IV tPA? Complete checklist below.</p>
+              <p className="text-amber-800 font-medium">{t('neurologyReport.candidateForIVtPA')}</p>
             </div>
           )}
           
           <div>
-            <FieldLabel>Last Known Well (LKW)</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.lastKnownWell')}</FieldLabel>
             <Input
               type="datetime-local"
               name="lkw_time"
               value={formData.stroke.lkw_time}
               onChange={(e) => updateFormData('stroke.lkw_time', e.target.value)}
+              darkMode={darkMode}
             />
           </div>
 
           <div>
-            <FieldLabel>NIHSS Score</FieldLabel>
-            <Card title="NIHSS Items" className="mt-2">
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.nihssScore')}</FieldLabel>
+            <Card title={t('neurologyReport.nihssItems')} className="mt-2" darkMode={darkMode}>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {NIHSS_ITEMS.map(item => (
+                {NIHSS_ITEMS.map(item => {
+                  const itemKey = item.replace(/_/g, '').toLowerCase();
+                  const itemLabel = t(`neurologyReport.nihss${itemKey}`) || item.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
+                  return (
                   <div key={item}>
-                    <FieldLabel className="text-xs">{item.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</FieldLabel>
+                    <FieldLabel darkMode={darkMode} className="text-xs">{itemLabel}</FieldLabel>
                     <Input
                       type="number"
                       min="0"
@@ -2091,17 +2612,22 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                         newItems[item] = e.target.value;
                         updateFormData('stroke.nihss.items', newItems);
                       }}
+                      darkMode={darkMode}
                     />
                   </div>
-                ))}
+                  );
+                })}
               </div>
               <div className="mt-4">
-                <FieldLabel>Total NIHSS</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('neurologyReport.totalNIHSS')}</FieldLabel>
                 <Input
                   name="nihss_total"
                   value={formData.stroke.nihss.total}
                   readOnly
-                  className="bg-slate-100 font-semibold"
+                  className={`font-semibold ${
+                    darkMode ? 'bg-slate-700' : 'bg-slate-100'
+                  }`}
+                  darkMode={darkMode}
                 />
                 {errors.nihss_total && <p className="text-red-500 text-sm mt-1">{errors.nihss_total}</p>}
               </div>
@@ -2110,27 +2636,29 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Modified Rankin Scale (Pre-stroke)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.modifiedRankinScalePreStroke')}</FieldLabel>
               <Input
                 name="mrs_pre"
                 placeholder="0-6"
                 value={formData.stroke.mrs_pre}
                 onChange={(e) => updateFormData('stroke.mrs_pre', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Modified Rankin Scale (Current)</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.modifiedRankinScaleCurrent')}</FieldLabel>
               <Input
                 name="mrs_current"
                 placeholder="0-6"
                 value={formData.stroke.mrs_current}
                 onChange={(e) => updateFormData('stroke.mrs_current', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
           </div>
 
           <div>
-            <FieldLabel>tPA Eligibility Checklist</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.tpaEligibilityChecklist')}</FieldLabel>
             <div className="space-y-2">
               <div className="flex gap-4">
                 <label className="flex items-center gap-2">
@@ -2139,9 +2667,13 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                     name="tpa_eligible"
                     checked={formData.stroke.tpa_checklist.eligible === true}
                     onChange={() => updateFormData('stroke.tpa_checklist.eligible', true)}
-                    className="rounded border-slate-300"
+                    className={`rounded ${
+                      darkMode ? 'border-slate-600' : 'border-slate-300'
+                    }`}
                   />
-                  <span className="text-sm text-slate-600">Eligible</span>
+                  <span className={`text-sm ${
+                    darkMode ? 'text-slate-300' : 'text-slate-600'
+                  }`}>{t('neurologyReport.eligible')}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -2149,33 +2681,52 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                     name="tpa_eligible"
                     checked={formData.stroke.tpa_checklist.eligible === false}
                     onChange={() => updateFormData('stroke.tpa_checklist.eligible', false)}
-                    className="rounded border-slate-300"
+                    className={`rounded ${
+                      darkMode ? 'border-slate-600' : 'border-slate-300'
+                    }`}
                   />
-                  <span className="text-sm text-slate-600">Not Eligible</span>
+                  <span className={`text-sm ${
+                    darkMode ? 'text-slate-300' : 'text-slate-600'
+                  }`}>{t('neurologyReport.notEligible')}</span>
                 </label>
               </div>
               <div>
-                <FieldLabel className="text-xs">Contraindications</FieldLabel>
+                <FieldLabel darkMode={darkMode} className="text-xs">{t('neurologyReport.contraindications')}</FieldLabel>
                 <div className="flex flex-wrap gap-2 mt-2">
-                  {TPA_CONTRAINDICATIONS.map(contra => (
+                  {[
+                    { value: 'Age >80', label: t('neurologyReport.ageOver80') },
+                    { value: 'NIHSS >25', label: t('neurologyReport.nihssOver25') },
+                    { value: 'INR >1.7', label: t('neurologyReport.inrOver17') },
+                    { value: 'Platelets <100k', label: t('neurologyReport.plateletsUnder100k') },
+                    { value: 'Glucose <50 or >400', label: t('neurologyReport.glucoseUnder50OrOver400') },
+                    { value: 'SBP >185 or DBP >110', label: t('neurologyReport.sbpOver185OrDbpOver110') },
+                    { value: 'Anticoagulant use', label: t('neurologyReport.anticoagulantUse') },
+                    { value: 'Recent surgery', label: t('neurologyReport.recentSurgery') },
+                    { value: 'GI bleed', label: t('neurologyReport.giBleed') },
+                    { value: 'Pregnancy', label: t('neurologyReport.pregnancy') }
+                  ].map(contra => (
                     <button
-                      key={contra}
+                      key={contra.value}
                       type="button"
                       onClick={() => {
                         const contraList = formData.stroke.tpa_checklist.contraindications;
-                        if (contraList.includes(contra)) {
-                          removeFromArray('stroke.tpa_checklist.contraindications', contraList.indexOf(contra));
+                        if (contraList.includes(contra.value)) {
+                          removeFromArray('stroke.tpa_checklist.contraindications', contraList.indexOf(contra.value));
                         } else {
-                          addToArray('stroke.tpa_checklist.contraindications', contra);
+                          addToArray('stroke.tpa_checklist.contraindications', contra.value);
                         }
                       }}
-                      className={`px-3 py-1 rounded-lg text-sm ${
-                        formData.stroke.tpa_checklist.contraindications.includes(contra)
-                          ? 'bg-red-100 text-red-700 border border-red-300'
-                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                      className={`px-3 py-1 rounded-lg text-sm border ${
+                        formData.stroke.tpa_checklist.contraindications.includes(contra.value)
+                          ? darkMode
+                            ? 'bg-red-900/50 text-red-300 border-red-600'
+                            : 'bg-red-100 text-red-700 border-red-300'
+                          : darkMode
+                            ? 'bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600'
+                            : 'bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-200'
                       }`}
                     >
-                      {contra}
+                      {contra.label}
                     </button>
                   ))}
                 </div>
@@ -2189,60 +2740,92 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                 type="checkbox"
                 checked={formData.stroke.thrombectomy_consider}
                 onChange={(e) => updateFormData('stroke.thrombectomy_consider', e.target.checked)}
-                className="rounded border-slate-300"
+                className={`rounded ${
+                  darkMode ? 'border-slate-600' : 'border-slate-300'
+                }`}
               />
-              <span className="text-sm text-slate-600">Consider Thrombectomy</span>
+              <span className={`text-sm ${
+                darkMode ? 'text-slate-300' : 'text-slate-600'
+              }`}>{t('neurologyReport.considerThrombectomy')}</span>
             </label>
           </div>
         </div>
       </Card>
 
       {/* Localization Hypothesis */}
-      <Card title="Localization Hypothesis" collapsible isOpen={!collapsedSections.localization} onToggle={() => toggleSection('localization')}>
+      <Card title={t('neurologyReport.localizationHypothesis')} collapsible isOpen={!collapsedSections.localization} onToggle={() => toggleSection('localization')} darkMode={darkMode}>
         <div className="space-y-4">
           <div>
-            <FieldLabel>Lesion Site</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.lesionSite')}</FieldLabel>
             <Select
               name="lesion_site"
               value={formData.localization_hypothesis.lesion_site}
               onChange={(e) => updateFormData('localization_hypothesis.lesion_site', e.target.value)}
-              options={LESION_SITES.map(s => ({ value: s, label: s.charAt(0).toUpperCase() + s.slice(1) }))}
+              options={[
+                { value: 'cortex', label: t('neurologyReport.cortex') },
+                { value: 'subcortex', label: t('neurologyReport.subcortex') },
+                { value: 'brainstem', label: t('neurologyReport.brainstem') },
+                { value: 'cerebellum', label: t('neurologyReport.cerebellum') },
+                { value: 'spinal', label: t('neurologyReport.spinal') },
+                { value: 'peripheral', label: t('neurologyReport.peripheral') },
+                { value: 'nmj', label: t('neurologyReport.nmj') },
+                { value: 'muscle', label: t('neurologyReport.muscle') }
+              ]}
+              darkMode={darkMode}
+              selectPlaceholder={t('neurologyReport.select')}
             />
           </div>
           <div>
-            <FieldLabel>Rationale</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.rationale')}</FieldLabel>
             <TextArea
               name="rationale"
-              placeholder="Explain localization based on exam findings..."
+              placeholder={t('neurologyReport.explainLocalization')}
               value={formData.localization_hypothesis.rationale}
               onChange={(e) => updateFormData('localization_hypothesis.rationale', e.target.value)}
               rows={3}
+              darkMode={darkMode}
             />
           </div>
         </div>
       </Card>
 
       {/* Tests */}
-      <Card title="Tests & Diagnostics" collapsible isOpen={!collapsedSections.tests} onToggle={() => toggleSection('tests')}>
+      <Card title={t('neurologyReport.testsDiagnostics')} collapsible isOpen={!collapsedSections.tests} onToggle={() => toggleSection('tests')} darkMode={darkMode}>
         <div className="space-y-4">
           <div>
-            <FieldLabel>Imaging Studies</FieldLabel>
+            <FieldLabel darkMode={darkMode}>Imaging Studies</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {IMAGING_PRESETS.map(preset => (
                 <button
                   key={preset}
                   type="button"
                   onClick={() => addToArray('tests.imaging', preset)}
-                  className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+                  className={`px-3 py-1 rounded-lg text-sm ${
+                    darkMode 
+                      ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
                 >
                   + {preset}
                 </button>
               ))}
             </div>
             <div className="space-y-2">
-              {formData.tests.imaging.map((img, idx) => (
-                <div key={idx} className="flex items-center justify-between p-2 bg-slate-50 rounded">
-                  <span className="text-sm">{img}</span>
+              {formData.tests.imaging.map((img, idx) => {
+                const imagingLabels = {
+                  'CT head non-contrast': t('neurologyReport.ctHeadNonContrast'),
+                  'CT-angiography': t('neurologyReport.ctAngiography'),
+                  'MR DWI/FLAIR': t('neurologyReport.mrDwiFlair'),
+                  'MRA head/neck': t('neurologyReport.mraHeadNeck'),
+                  'Carotid Doppler': t('neurologyReport.carotidDoppler')
+                };
+                return (
+                <div key={idx} className={`flex items-center justify-between p-2 rounded ${
+                  darkMode ? 'bg-slate-700' : 'bg-slate-50'
+                }`}>
+                  <span className={`text-sm ${
+                    darkMode ? 'text-slate-300' : 'text-slate-700'
+                  }`}>{imagingLabels[img] || img}</span>
                   <button
                     type="button"
                     onClick={() => removeFromArray('tests.imaging', idx)}
@@ -2251,160 +2834,180 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                     ×
                   </button>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>EEG</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.eeg')}</FieldLabel>
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   type="date"
                   name="eeg_date"
                   value={formData.tests.eeg.date}
                   onChange={(e) => updateFormData('tests.eeg.date', e.target.value)}
+                  darkMode={darkMode}
                 />
                 <TextArea
                   name="eeg_summary"
-                  placeholder="Summary..."
+                  placeholder={t('neurologyReport.summary')}
                   value={formData.tests.eeg.summary}
                   onChange={(e) => updateFormData('tests.eeg.summary', e.target.value)}
                   rows={2}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
             <div>
-              <FieldLabel>EMG/NCS</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.emgNcs')}</FieldLabel>
               <div className="grid grid-cols-2 gap-2">
                 <Input
                   type="date"
                   name="emg_ncs_date"
                   value={formData.tests.emg_ncs.date}
                   onChange={(e) => updateFormData('tests.emg_ncs.date', e.target.value)}
+                  darkMode={darkMode}
                 />
                 <TextArea
                   name="emg_ncs_summary"
-                  placeholder="Summary..."
+                  placeholder={t('neurologyReport.summary')}
                   value={formData.tests.emg_ncs.summary}
                   onChange={(e) => updateFormData('tests.emg_ncs.summary', e.target.value)}
                   rows={2}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
           </div>
 
           <div>
-            <FieldLabel>Laboratory Tests</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.laboratoryTests')}</FieldLabel>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <div>
-                <FieldLabel className="text-xs">B12</FieldLabel>
+                <FieldLabel darkMode={darkMode} className="text-xs">B12</FieldLabel>
                 <Input
                   name="b12"
                   value={formData.tests.labs.b12}
                   onChange={(e) => updateFormData('tests.labs.b12', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
               <div>
-                <FieldLabel className="text-xs">TSH</FieldLabel>
+                <FieldLabel darkMode={darkMode} className="text-xs">TSH</FieldLabel>
                 <Input
                   name="tsh"
                   value={formData.tests.labs.tsh}
                   onChange={(e) => updateFormData('tests.labs.tsh', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
               <div>
-                <FieldLabel className="text-xs">A1C</FieldLabel>
+                <FieldLabel darkMode={darkMode} className="text-xs">A1C</FieldLabel>
                 <Input
                   name="a1c"
                   value={formData.tests.labs.a1c}
                   onChange={(e) => updateFormData('tests.labs.a1c', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
               <div>
-                <FieldLabel className="text-xs">CK</FieldLabel>
+                <FieldLabel darkMode={darkMode} className="text-xs">CK</FieldLabel>
                 <Input
                   name="ck"
                   value={formData.tests.labs.ck}
                   onChange={(e) => updateFormData('tests.labs.ck', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
               <div>
-                <FieldLabel className="text-xs">ESR/CRP</FieldLabel>
+                <FieldLabel darkMode={darkMode} className="text-xs">ESR/CRP</FieldLabel>
                 <Input
                   name="esr_crp"
                   value={formData.tests.labs.esr_crp}
                   onChange={(e) => updateFormData('tests.labs.esr_crp', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
             <div className="mt-2">
-              <FieldLabel className="text-xs">Other Labs</FieldLabel>
+              <FieldLabel darkMode={darkMode} className="text-xs">{t('neurologyReport.otherLabs')}</FieldLabel>
               <TextArea
                 name="others"
                 value={formData.tests.labs.others}
                 onChange={(e) => updateFormData('tests.labs.others', e.target.value)}
                 rows={2}
+                darkMode={darkMode}
               />
             </div>
           </div>
 
           <div>
-            <FieldLabel>Lumbar Puncture</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.lumbarPuncture')}</FieldLabel>
             <div className="space-y-2">
               <label className="flex items-center gap-2">
                 <input
                   type="checkbox"
                   checked={formData.tests.lp.performed}
                   onChange={(e) => updateFormData('tests.lp.performed', e.target.checked)}
-                  className="rounded border-slate-300"
+                  className={`rounded ${
+                    darkMode ? 'border-slate-600' : 'border-slate-300'
+                  }`}
                 />
-                <span className="text-sm text-slate-600">Performed</span>
+                <span className={`text-sm ${
+                  darkMode ? 'text-slate-300' : 'text-slate-600'
+                }`}>{t('neurologyReport.performed')}</span>
               </label>
               {formData.tests.lp.performed && (
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pl-6">
                   <div>
-                    <FieldLabel className="text-xs">Opening Pressure</FieldLabel>
+                    <FieldLabel darkMode={darkMode} className="text-xs">{t('neurologyReport.openingPressure')}</FieldLabel>
                     <Input
                       name="opening_pressure"
                       value={formData.tests.lp.opening_pressure}
                       onChange={(e) => updateFormData('tests.lp.opening_pressure', e.target.value)}
+                      darkMode={darkMode}
                     />
                     {errors.lp_opening_pressure && <p className="text-red-500 text-xs mt-1">{errors.lp_opening_pressure}</p>}
                   </div>
                   <div>
-                    <FieldLabel className="text-xs">Cells</FieldLabel>
+                    <FieldLabel darkMode={darkMode} className="text-xs">{t('neurologyReport.cells')}</FieldLabel>
                     <Input
                       name="cells"
                       value={formData.tests.lp.cells}
                       onChange={(e) => updateFormData('tests.lp.cells', e.target.value)}
+                      darkMode={darkMode}
                     />
                     {errors.lp_cells && <p className="text-red-500 text-xs mt-1">{errors.lp_cells}</p>}
                   </div>
                   <div>
-                    <FieldLabel className="text-xs">Protein</FieldLabel>
+                    <FieldLabel darkMode={darkMode} className="text-xs">{t('neurologyReport.protein')}</FieldLabel>
                     <Input
                       name="protein"
                       value={formData.tests.lp.protein}
                       onChange={(e) => updateFormData('tests.lp.protein', e.target.value)}
+                      darkMode={darkMode}
                     />
                     {errors.lp_protein && <p className="text-red-500 text-xs mt-1">{errors.lp_protein}</p>}
                   </div>
                   <div>
-                    <FieldLabel className="text-xs">Glucose</FieldLabel>
+                    <FieldLabel darkMode={darkMode} className="text-xs">{t('neurologyReport.glucose')}</FieldLabel>
                     <Input
                       name="glucose"
                       value={formData.tests.lp.glucose}
                       onChange={(e) => updateFormData('tests.lp.glucose', e.target.value)}
+                      darkMode={darkMode}
                     />
                     {errors.lp_glucose && <p className="text-red-500 text-xs mt-1">{errors.lp_glucose}</p>}
                   </div>
                   <div className="col-span-2">
-                    <FieldLabel className="text-xs">Microbiology</FieldLabel>
+                    <FieldLabel darkMode={darkMode} className="text-xs">{t('neurologyReport.microbiology')}</FieldLabel>
                     <Input
                       name="microbiology"
                       value={formData.tests.lp.microbiology}
                       onChange={(e) => updateFormData('tests.lp.microbiology', e.target.value)}
+                      darkMode={darkMode}
                     />
                   </div>
                 </div>
@@ -2415,83 +3018,90 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Diagnosis */}
-      <Card title="Diagnosis" collapsible isOpen={!collapsedSections.diagnosis} onToggle={() => toggleSection('diagnosis')}>
+      <Card title={t('neurologyReport.diagnosis')} collapsible isOpen={!collapsedSections.diagnosis} onToggle={() => toggleSection('diagnosis')} darkMode={darkMode}>
         <div className="space-y-4">
           <div>
-            <FieldLabel required>Main Diagnosis</FieldLabel>
+            <FieldLabel required darkMode={darkMode}>{t('neurologyReport.mainDiagnosis')}</FieldLabel>
             <div className="space-y-2">
               {formData.diagnosis.main && typeof formData.diagnosis.main === 'object' && (formData.diagnosis.main.code || formData.diagnosis.main.term) ? (
                 <div className="flex gap-2 items-start">
                   <div className="flex gap-2 items-start flex-1">
                     <Input
-                      placeholder="ICD-11 code"
+                      placeholder={t('neurologyReport.icd11Code')}
                       value={formData.diagnosis.main.code || ''}
                       onChange={(e) => {
                         const current = typeof formData.diagnosis.main === 'object' ? formData.diagnosis.main : { code: '', term: '' };
                         updateFormData('diagnosis.main', { ...current, code: e.target.value });
                       }}
                       className="w-40"
+                      darkMode={darkMode}
                     />
                     <Input
-                      placeholder="Diagnosis term"
+                      placeholder={t('neurologyReport.diagnosisTerm')}
                       value={formData.diagnosis.main.term || ''}
                       onChange={(e) => {
                         const current = typeof formData.diagnosis.main === 'object' ? formData.diagnosis.main : { code: '', term: '' };
                         updateFormData('diagnosis.main', { ...current, term: e.target.value });
                       }}
                       className="flex-1"
+                      darkMode={darkMode}
                     />
                   </div>
                   <button
                     type="button"
                     onClick={() => updateFormData('diagnosis.main', '')}
-                    className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                    className={`px-3 py-2 rounded transition-colors ${
+                      darkMode 
+                        ? 'bg-red-900/50 text-red-300 hover:bg-red-800/50' 
+                        : 'bg-red-100 text-red-700 hover:bg-red-200'
+                    }`}
                   >
-                    Clear
+                    {t('neurologyReport.clear')}
                   </button>
                 </div>
               ) : null}
               <IcdCodeSearchInput
-                placeholder="Search ICD-11 code or diagnosis..."
+                placeholder={t('neurologyReport.searchIcd11Code')}
                 onSelect={(selected) => {
                   updateFormData('diagnosis.main', selected);
                 }}
+                darkMode={darkMode}
               />
             </div>
             {errors.diagnosis_main && <p className="text-red-500 text-sm mt-1">{errors.diagnosis_main}</p>}
           </div>
           
           <div>
-            <FieldLabel>Secondary Diagnoses</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.secondaryDiagnoses')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.diagnosis.secondary.map((diag, idx) => (
-                <Chip key={idx} onRemove={() => removeFromArray('diagnosis.secondary', idx)}>
-                  {diag}
+                <Chip key={idx} onRemove={() => removeFromArray('diagnosis.secondary', idx)} darkMode={darkMode}>
+                  {typeof diag === 'object' ? `${diag.code || ''} ${diag.term || ''}`.trim() : diag}
                 </Chip>
               ))}
             </div>
-            <Input
-              name="secondary_diagnosis"
-              placeholder="Add secondary diagnosis..."
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.target.value.trim()) {
-                  e.preventDefault();
-                  addToArray('diagnosis.secondary', e.target.value.trim());
-                  e.target.value = '';
-                }
+            <IcdCodeSearchInput
+              placeholder={t('neurologyReport.searchIcd11Code') || 'Search ICD-11 code...'}
+              onSelect={(selected) => {
+                addToArray('diagnosis.secondary', selected);
               }}
+              darkMode={darkMode}
             />
           </div>
 
           <div>
-            <FieldLabel>Diagnosis Codes</FieldLabel>
+            <FieldLabel darkMode={darkMode}>{t('neurologyReport.diagnosisCodes')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {DIAGNOSIS_CODE_PRESETS.map(preset => (
                 <button
                   key={preset.code}
                   type="button"
                   onClick={() => addToArray('diagnosis.codes', preset)}
-                  className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+                  className={`px-3 py-1 rounded-lg text-sm ${
+                    darkMode 
+                      ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
                 >
                   + {preset.code}
                 </button>
@@ -2499,13 +3109,13 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.diagnosis.codes.map((code, idx) => (
-                <Chip key={idx} onRemove={() => removeFromArray('diagnosis.codes', idx)}>
+                <Chip key={idx} onRemove={() => removeFromArray('diagnosis.codes', idx)} darkMode={darkMode}>
                   {code.system} {code.code}: {code.term}
                 </Chip>
               ))}
             </div>
             <IcdCodeSearchInput
-              placeholder="Search ICD-11 code to add..."
+              placeholder={t('neurologyReport.searchIcd11CodeToAdd')}
               onSelect={(selected) => {
                 addToArray('diagnosis.codes', {
                   system: 'ICD11',
@@ -2513,6 +3123,7 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   term: selected.term
                 });
               }}
+              darkMode={darkMode}
             />
           </div>
         </div>
@@ -2520,17 +3131,17 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Plan & Treatment - Initial Mode Only */}
       {mode === 'initial' && (
-        <Card title="Plan & Treatment" collapsible isOpen={!collapsedSections.plan} onToggle={() => toggleSection('plan')}>
+        <Card title={t('neurologyReport.planTreatment')} collapsible isOpen={!collapsedSections.plan} onToggle={() => toggleSection('plan')} darkMode={darkMode}>
           <div className="space-y-4">
             <div>
-              <FieldLabel>Medications</FieldLabel>
-              <FieldLabel className="text-xs">({formData.plan.meds.length})</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.medications')}</FieldLabel>
+              <FieldLabel darkMode={darkMode} className="text-xs">({formData.plan.meds.length})</FieldLabel>
               {formData.plan.meds.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {formData.plan.meds.map((med, idx) => {
                     const label = `${med.med} ${med.dose} ${med.route} ${med.freq} ${med.duration}`;
                     return (
-                      <Chip key={idx} onEdit={() => openMedEditor(med, idx)} onRemove={() => removeMed(idx)}>
+                      <Chip key={idx} onEdit={() => openMedEditor(med, idx)} onRemove={() => removeMed(idx)} darkMode={darkMode}>
                         {label}
                       </Chip>
                     );
@@ -2539,10 +3150,14 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
               )}
               
               {editingMed && (
-                <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
+                <div className={`mt-3 grid grid-cols-12 gap-4 p-4 rounded-lg border ${
+                  darkMode 
+                    ? 'bg-slate-800 border-slate-700' 
+                    : 'bg-white border-slate-200'
+                }`}>
                   <div className="col-span-12">
                     <MedicationSearchInput
-                      placeholder="Search medication..."
+                      placeholder={t('neurologyReport.searchMedication')}
                       value={editingMed.med}
                       onChange={(e) => setEditingMed(s => ({ ...s, med: e.target.value }))}
                       onSelect={(selected) => {
@@ -2552,47 +3167,57 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                           dose: selected.strength || s.dose
                         }));
                       }}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input 
-                      placeholder="Dose" 
+                      placeholder={t('neurologyReport.dose')} 
                       value={editingMed.dose} 
                       onChange={(e) => setEditingMed(s => ({...s, dose: e.target.value}))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input 
-                      placeholder="Route (PO, IV, IM...)" 
+                      placeholder={t('neurologyReport.route')} 
                       value={editingMed.route} 
                       onChange={(e) => setEditingMed(s => ({...s, route: e.target.value}))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input 
-                      placeholder="Frequency" 
+                      placeholder={t('neurologyReport.frequencyLabel')} 
                       value={editingMed.freq} 
                       onChange={(e) => setEditingMed(s => ({...s, freq: e.target.value}))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input 
-                      placeholder="Duration" 
+                      placeholder={t('neurologyReport.duration')} 
                       value={editingMed.duration} 
                       onChange={(e) => setEditingMed(s => ({...s, duration: e.target.value}))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <TextArea 
-                      placeholder="Instructions" 
+                      placeholder={t('neurologyReport.instructions')} 
                       value={editingMed.instructions} 
                       onChange={(e) => setEditingMed(s => ({...s, instructions: e.target.value}))}
                       rows={2}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12 flex gap-2">
-                    <button type="button" onClick={saveMed} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">Save</button>
-                    <button type="button" onClick={() => { setEditingMed(null); setEditingMedIdx(null); }} className="px-4 py-2 border border-slate-300 rounded-lg">Cancel</button>
+                    <button type="button" onClick={saveMed} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">{t('neurologyReport.save')}</button>
+                    <button type="button" onClick={() => { setEditingMed(null); setEditingMedIdx(null); }} className={`px-4 py-2 border rounded-lg ${
+                      darkMode 
+                        ? 'border-slate-600 hover:bg-slate-700 text-slate-300' 
+                        : 'border-slate-300 hover:bg-slate-50'
+                    }`}>{t('neurologyReport.cancel')}</button>
                   </div>
                 </div>
               )}
@@ -2601,120 +3226,195 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                 <button
                   type="button"
                   onClick={() => openMedEditor()}
-                  className="mt-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+                  className={`mt-2 px-4 py-2 rounded-lg text-sm ${
+                    darkMode 
+                      ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                      : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
                 >
-                  + Add Medication
+                  {t('neurologyReport.addMedication')}
                 </button>
               )}
             </div>
 
             <div>
-              <FieldLabel>Planned Procedures</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.plannedProcedures')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {PROCEDURE_PRESETS.map(preset => (
+                {[
+                  { value: 'LP', label: t('neurologyReport.lp') },
+                  { value: 'EMG/NCS', label: t('neurologyReport.emgNcs') },
+                  { value: 'EEG', label: t('neurologyReport.eeg') },
+                  { value: 'Carotid Ultrasound', label: t('neurologyReport.carotidUltrasound') },
+                  { value: 'Evoked Potentials', label: t('neurologyReport.evokedPotentials') },
+                  { value: 'Other', label: t('neurologyReport.other') }
+                ].map(preset => (
                   <button
-                    key={preset}
+                    key={preset.value}
                     type="button"
-                    onClick={() => addToArray('plan.procedures_planned', preset)}
-                    className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+                    onClick={() => addToArray('plan.procedures_planned', preset.value)}
+                    className={`px-3 py-1 rounded-lg text-sm ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
                   >
-                    + {preset}
+                    + {preset.label}
                   </button>
                 ))}
               </div>
               <div className="flex flex-wrap gap-2">
-                {formData.plan.procedures_planned.map((proc, idx) => (
-                  <Chip key={idx} onRemove={() => removeFromArray('plan.procedures_planned', idx)}>
-                    {proc}
+                {formData.plan.procedures_planned.map((proc, idx) => {
+                  const procLabels = {
+                    'LP': t('neurologyReport.lp'),
+                    'EMG/NCS': t('neurologyReport.emgNcs'),
+                    'EEG': t('neurologyReport.eeg'),
+                    'Carotid Ultrasound': t('neurologyReport.carotidUltrasound'),
+                    'Evoked Potentials': t('neurologyReport.evokedPotentials'),
+                    'Other': t('neurologyReport.other')
+                  };
+                  return (
+                  <Chip key={idx} onRemove={() => removeFromArray('plan.procedures_planned', idx)} darkMode={darkMode}>
+                      {procLabels[proc] || proc}
                   </Chip>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             <div>
-              <FieldLabel>Counseling</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.counseling')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {COUNSELING_PRESETS.map(preset => (
+                {[
+                  { value: 'Medication compliance', label: t('neurologyReport.medicationCompliance') },
+                  { value: 'Side-effects explained', label: t('neurologyReport.sideEffectsExplained') },
+                  { value: 'Driving restrictions', label: t('neurologyReport.drivingRestrictions') },
+                  { value: 'Seizure precautions', label: t('neurologyReport.seizurePrecautions') },
+                  { value: 'Fall prevention', label: t('neurologyReport.fallPrevention') },
+                  { value: 'Return precautions', label: t('neurologyReport.returnPrecautions') }
+                ].map(preset => (
                   <button
-                    key={preset}
+                    key={preset.value}
                     type="button"
-                    onClick={() => addToArray('plan.counseling', preset)}
-                    className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+                    onClick={() => addToArray('plan.counseling', preset.value)}
+                    className={`px-3 py-1 rounded-lg text-sm ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
                   >
-                    + {preset}
+                    + {preset.label}
                   </button>
                 ))}
               </div>
               <div className="flex flex-wrap gap-2">
-                {formData.plan.counseling.map((counsel, idx) => (
-                  <Chip key={idx} onRemove={() => removeFromArray('plan.counseling', idx)}>
-                    {counsel}
+                {formData.plan.counseling.map((counsel, idx) => {
+                  const counselLabels = {
+                    'Medication compliance': t('neurologyReport.medicationCompliance'),
+                    'Side-effects explained': t('neurologyReport.sideEffectsExplained'),
+                    'Driving restrictions': t('neurologyReport.drivingRestrictions'),
+                    'Seizure precautions': t('neurologyReport.seizurePrecautions'),
+                    'Fall prevention': t('neurologyReport.fallPrevention'),
+                    'Return precautions': t('neurologyReport.returnPrecautions')
+                  };
+                  return (
+                  <Chip key={idx} onRemove={() => removeFromArray('plan.counseling', idx)} darkMode={darkMode}>
+                      {counselLabels[counsel] || counsel}
                   </Chip>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             <div>
-              <FieldLabel>Rehabilitation Referrals</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.rehabReferrals')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {REHAB_REFERRALS.map(ref => (
+                {[
+                  { value: 'Physical Therapy', label: t('neurologyReport.physicalTherapy') },
+                  { value: 'Occupational Therapy', label: t('neurologyReport.occupationalTherapy') },
+                  { value: 'Speech Therapy', label: t('neurologyReport.speechTherapy') },
+                  { value: 'Neuropsychology', label: t('neurologyReport.neuropsychology') },
+                  { value: 'Cognitive Rehabilitation', label: t('neurologyReport.cognitiveRehabilitation') }
+                ].map(ref => (
                   <button
-                    key={ref}
+                    key={ref.value}
                     type="button"
-                    onClick={() => addToArray('plan.rehab_referrals', ref)}
-                    className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+                    onClick={() => addToArray('plan.rehab_referrals', ref.value)}
+                    className={`px-3 py-1 rounded-lg text-sm ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                        : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
                   >
-                    + {ref}
+                    + {ref.label}
                   </button>
                 ))}
               </div>
               <div className="flex flex-wrap gap-2">
-                {formData.plan.rehab_referrals.map((ref, idx) => (
-                  <Chip key={idx} onRemove={() => removeFromArray('plan.rehab_referrals', idx)}>
-                    {ref}
+                {formData.plan.rehab_referrals.map((ref, idx) => {
+                  const refLabels = {
+                    'Physical Therapy': t('neurologyReport.physicalTherapy'),
+                    'Occupational Therapy': t('neurologyReport.occupationalTherapy'),
+                    'Speech Therapy': t('neurologyReport.speechTherapy'),
+                    'Neuropsychology': t('neurologyReport.neuropsychology'),
+                    'Cognitive Rehabilitation': t('neurologyReport.cognitiveRehabilitation')
+                  };
+                  return (
+                  <Chip key={idx} onRemove={() => removeFromArray('plan.rehab_referrals', idx)} darkMode={darkMode}>
+                      {refLabels[ref] || ref}
                   </Chip>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
             <div>
-              <FieldLabel>Safety</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.safety') || 'Safety'}</FieldLabel>
               <div className="flex flex-wrap gap-4">
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={formData.plan.safety.falls}
                     onChange={(e) => updateFormData('plan.safety.falls', e.target.checked)}
-                    className="rounded border-slate-300"
+                    className={`rounded ${
+                      darkMode ? 'border-slate-600' : 'border-slate-300'
+                    }`}
                   />
-                  <span className="text-sm text-slate-600">Falls Risk</span>
+                  <span className={`text-sm ${
+                    darkMode ? 'text-slate-300' : 'text-slate-600'
+                  }`}>{t('neurologyReport.fallsRisk') || 'Falls Risk'}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
                     type="checkbox"
                     checked={formData.plan.safety.driving_restriction}
                     onChange={(e) => updateFormData('plan.safety.driving_restriction', e.target.checked)}
-                    className="rounded border-slate-300"
+                    className={`rounded ${
+                      darkMode ? 'border-slate-600' : 'border-slate-300'
+                    }`}
                   />
-                  <span className="text-sm text-slate-600">Driving Restriction</span>
+                  <span className={`text-sm ${
+                    darkMode ? 'text-slate-300' : 'text-slate-600'
+                  }`}>{t('neurologyReport.drivingRestriction')}</span>
                 </label>
               </div>
             </div>
 
             <div>
-              <FieldLabel>Follow-up</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('neurologyReport.followUp')}</FieldLabel>
               <Select
                 name="follow_up"
                 value={formData.plan.follow_up}
                 onChange={(e) => updateFormData('plan.follow_up', e.target.value)}
                 options={[
-                  { value: '24h', label: '24 hours' },
-                  { value: '3d', label: '3 days' },
-                  { value: '1w', label: '1 week' },
-                  { value: '1m', label: '1 month' },
-                  { value: 'date', label: 'Specific date' },
-                  { value: 'prn', label: 'PRN' }
+                  { value: '24h', label: t('neurologyReport.hours24') },
+                  { value: '3d', label: t('neurologyReport.days3') },
+                  { value: '1w', label: t('neurologyReport.week1') },
+                  { value: '1m', label: t('neurologyReport.month1') },
+                  { value: 'date', label: t('neurologyReport.specificDate') },
+                  { value: 'prn', label: t('neurologyReport.prn') }
                 ]}
+                darkMode={darkMode}
+                selectPlaceholder={t('neurologyReport.select')}
               />
               {formData.plan.follow_up === 'date' && (
                 <div className="mt-2">
@@ -2723,6 +3423,7 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                     name="follow_up_date"
                     value={formData.plan.follow_up_date}
                     onChange={(e) => updateFormData('plan.follow_up_date', e.target.value)}
+                    darkMode={darkMode}
                   />
                   {errors.follow_up_date && <p className="text-red-500 text-sm mt-1">{errors.follow_up_date}</p>}
                 </div>
@@ -2733,22 +3434,34 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       )}
 
       {/* Procedures Done */}
-      <Card title="Procedures Done" collapsible isOpen={!collapsedSections.procedures} onToggle={() => toggleSection('procedures')} counter={formData.procedures_done.length}>
+      <Card title={t('neurologyReport.proceduresDone')} collapsible isOpen={!collapsedSections.procedures} onToggle={() => toggleSection('procedures')} counter={formData.procedures_done.length} darkMode={darkMode}>
         <div className="space-y-4">
           {formData.procedures_done.length > 0 && (
             <div className="space-y-2">
               {formData.procedures_done.map((proc, idx) => (
-                <div key={idx} className="p-3 bg-slate-50 rounded-lg">
+                <div key={idx} className={`p-3 rounded-lg ${
+                  darkMode ? 'bg-slate-700' : 'bg-slate-50'
+                }`}>
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-medium">{proc.name} - {proc.date}</p>
-                      {proc.side && <p className="text-sm text-slate-600">Side: {proc.side}</p>}
-                      {proc.technique && <p className="text-sm text-slate-600">Technique: {proc.technique}</p>}
-                      {proc.findings && <p className="text-sm text-slate-600">Findings: {proc.findings}</p>}
+                      <p className={`font-medium ${
+                        darkMode ? 'text-slate-200' : 'text-slate-800'
+                      }`}>{proc.name} - {proc.date}</p>
+                      {proc.side && <p className={`text-sm ${
+                        darkMode ? 'text-slate-400' : 'text-slate-600'
+                      }`}>Side: {proc.side}</p>}
+                      {proc.technique && <p className={`text-sm ${
+                        darkMode ? 'text-slate-400' : 'text-slate-600'
+                      }`}>Technique: {proc.technique}</p>}
+                      {proc.findings && <p className={`text-sm ${
+                        darkMode ? 'text-slate-400' : 'text-slate-600'
+                      }`}>Findings: {proc.findings}</p>}
                       {proc.complications && <p className="text-sm text-red-600">Complications: {proc.complications}</p>}
                     </div>
                     <div className="flex gap-2">
-                      <button type="button" onClick={() => openProcedureEditor(proc, idx)} className="text-slate-600 hover:text-slate-800">✎</button>
+                      <button type="button" onClick={() => openProcedureEditor(proc, idx)} className={`${
+                        darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-600 hover:text-slate-800'
+                      }`}>✎</button>
                       <button type="button" onClick={() => removeProcedure(idx)} className="text-red-500 hover:text-red-700">×</button>
                     </div>
                   </div>
@@ -2758,12 +3471,17 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
           )}
           
           {editingProcedure && (
-            <div className="grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
+            <div className={`grid grid-cols-12 gap-4 p-4 rounded-lg border ${
+              darkMode 
+                ? 'bg-slate-800 border-slate-700' 
+                : 'bg-white border-slate-200'
+            }`}>
               <div className="col-span-12">
                 <Input 
                   placeholder="Procedure name" 
                   value={editingProcedure.name} 
                   onChange={(e) => setEditingProcedure(s => ({...s, name: e.target.value}))}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
@@ -2772,6 +3490,7 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   placeholder="Date" 
                   value={editingProcedure.date} 
                   onChange={(e) => setEditingProcedure(s => ({...s, date: e.target.value}))}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
@@ -2779,6 +3498,7 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   placeholder="Side (R/L/Both)" 
                   value={editingProcedure.side} 
                   onChange={(e) => setEditingProcedure(s => ({...s, side: e.target.value}))}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
@@ -2786,6 +3506,7 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   placeholder="Anesthesia" 
                   value={editingProcedure.anesthesia} 
                   onChange={(e) => setEditingProcedure(s => ({...s, anesthesia: e.target.value}))}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
@@ -2794,6 +3515,7 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   value={editingProcedure.technique} 
                   onChange={(e) => setEditingProcedure(s => ({...s, technique: e.target.value}))}
                   rows={2}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
@@ -2802,6 +3524,7 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   value={editingProcedure.findings} 
                   onChange={(e) => setEditingProcedure(s => ({...s, findings: e.target.value}))}
                   rows={2}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12">
@@ -2810,10 +3533,12 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   value={editingProcedure.result} 
                   onChange={(e) => setEditingProcedure(s => ({...s, result: e.target.value}))}
                   options={[
-                    {value:'successful',label:'Successful'},
-                    {value:'partial',label:'Partial'},
-                    {value:'failed',label:'Failed'}
+                    {value:'successful',label:t('neurologyReport.successful')},
+                    {value:'partial',label:t('neurologyReport.partial')},
+                    {value:'failed',label:t('neurologyReport.failed')}
                   ]} 
+                  darkMode={darkMode}
+                  selectPlaceholder={t('neurologyReport.select')}
                 />
               </div>
               <div className="col-span-12">
@@ -2822,11 +3547,16 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                   value={editingProcedure.complications} 
                   onChange={(e) => setEditingProcedure(s => ({...s, complications: e.target.value}))}
                   rows={2}
+                  darkMode={darkMode}
                 />
               </div>
               <div className="col-span-12 flex gap-2">
                 <button type="button" onClick={saveProcedure} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">Save</button>
-                <button type="button" onClick={() => { setEditingProcedure(null); setEditingProcedureIdx(null); }} className="px-4 py-2 border border-slate-300 rounded-lg">Cancel</button>
+                <button type="button" onClick={() => { setEditingProcedure(null); setEditingProcedureIdx(null); }} className={`px-4 py-2 border rounded-lg ${
+                  darkMode 
+                    ? 'border-slate-600 hover:bg-slate-700 text-slate-300' 
+                    : 'border-slate-300 hover:bg-slate-50'
+                }`}>Cancel</button>
               </div>
             </div>
           )}
@@ -2835,7 +3565,11 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
             <button
               type="button"
               onClick={() => openProcedureEditor()}
-              className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+              className={`px-4 py-2 rounded-lg text-sm ${
+                darkMode 
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
             >
               + Add Procedure
             </button>
@@ -2845,29 +3579,31 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Outcome & Recommendations - Discharge Mode Only */}
       {mode === 'discharge' && (
-        <Card title="Outcome & Recommendations" collapsible isOpen={!collapsedSections.outcome} onToggle={() => toggleSection('outcome')}>
+        <Card title={t('neurologyReport.outcomeRecommendations')} collapsible isOpen={!collapsedSections.outcome} onToggle={() => toggleSection('outcome')} darkMode={darkMode}>
           <div className="space-y-4">
             <div>
-              <FieldLabel>Condition at Discharge</FieldLabel>
+              <FieldLabel darkMode={darkMode}>Condition at Discharge</FieldLabel>
               <Input
                 name="condition"
                 placeholder="Stable, improved, unchanged..."
                 value={formData.outcome.condition}
                 onChange={(e) => updateFormData('outcome.condition', e.target.value)}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel>Hospital Course</FieldLabel>
+              <FieldLabel darkMode={darkMode}>Hospital Course</FieldLabel>
               <TextArea
                 name="course"
                 placeholder="Summarize hospital stay, treatments, response..."
                 value={formData.outcome.course}
                 onChange={(e) => updateFormData('outcome.course', e.target.value)}
                 rows={4}
+                darkMode={darkMode}
               />
             </div>
             <div>
-              <FieldLabel required>Recommendations</FieldLabel>
+              <FieldLabel required darkMode={darkMode}>Recommendations</FieldLabel>
               <div className="space-y-2">
                 {formData.recommendations.map((rec, index) => (
                   <div key={index} className="flex items-center gap-2">
@@ -2878,6 +3614,7 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                         newRecs[index] = e.target.value;
                         updateFormData('recommendations', newRecs);
                       }}
+                      darkMode={darkMode}
                     />
                     <button
                       type="button"
@@ -2890,7 +3627,11 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
                 ))}
                 <button
                   type="button"
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50"
+                  className={`px-3 py-2 border rounded-lg text-sm ${
+                    darkMode 
+                      ? 'border-slate-600 hover:bg-slate-700 text-slate-300' 
+                      : 'border-slate-300 hover:bg-slate-50'
+                  }`}
                   onClick={() => addToArray('recommendations', '')}
                 >
                   + Add Recommendation
@@ -2911,14 +3652,27 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
         isOpen={!collapsedSections.attachments}
         onToggle={() => toggleSection('attachments')}
         counter={formData.attachments.length}
+        darkMode={darkMode}
       >
         <div className="space-y-4">
-          <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
-            <p className="text-slate-500 mb-2">Drop files here or click to upload</p>
-            <p className="text-xs text-slate-400 mb-2">Include imaging reports, EEG tracings, etc.</p>
+          <div className={`border-2 border-dashed rounded-lg p-6 text-center ${
+            darkMode 
+              ? 'border-slate-600' 
+              : 'border-slate-300'
+          }`}>
+            <p className={`mb-2 ${
+              darkMode ? 'text-slate-400' : 'text-slate-500'
+            }`}>Drop files here or click to upload</p>
+            <p className={`text-xs mb-2 ${
+              darkMode ? 'text-slate-500' : 'text-slate-400'
+            }`}>Include imaging reports, EEG tracings, etc.</p>
             <button
               type="button"
-              className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200"
+              className={`px-4 py-2 rounded-lg ${
+                darkMode 
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
             >
               Choose Files
             </button>
@@ -2926,9 +3680,15 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
           
           <div className="space-y-2">
             {formData.attachments.map((attachment, index) => (
-              <div key={index} className="flex items-center justify-between p-2 bg-slate-50 rounded">
-                <span className="text-sm">{attachment.label || attachment.id}</span>
-                <span className="text-xs text-slate-500">{attachment.type}</span>
+              <div key={index} className={`flex items-center justify-between p-2 rounded ${
+                darkMode ? 'bg-slate-700' : 'bg-slate-50'
+              }`}>
+                <span className={`text-sm ${
+                  darkMode ? 'text-slate-300' : 'text-slate-700'
+                }`}>{attachment.label || attachment.id}</span>
+                <span className={`text-xs ${
+                  darkMode ? 'text-slate-400' : 'text-slate-500'
+                }`}>{attachment.type}</span>
                 <button
                   type="button"
                   onClick={() => removeFromArray('attachments', index)}
@@ -2943,23 +3703,37 @@ const NeurologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Sticky Footer */}
-      <div className="sticky bottom-0 bg-white border-t border-slate-200 p-4 shadow-lg">
+      <div className={`sticky bottom-0 border-t p-4 shadow-lg ${
+        darkMode 
+          ? 'bg-slate-800 border-slate-700' 
+          : 'bg-white border-slate-200'
+      }`}>
         <div className="flex justify-between items-center">
-          <div className="text-sm text-slate-500">
+          <div className={`text-sm ${
+            darkMode ? 'text-slate-400' : 'text-slate-500'
+          }`}>
             {lastSaved && `Last saved: ${lastSaved.toLocaleTimeString()}`}
           </div>
           <div className="flex gap-3">
             <button
               type="button"
               onClick={handleSaveDraft}
-              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+              className={`px-4 py-2 border rounded-lg ${
+                darkMode 
+                  ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                  : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
             >
               Save Draft
             </button>
             <button
               type="button"
               onClick={handlePreview}
-              className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+              className={`px-4 py-2 border rounded-lg ${
+                darkMode 
+                  ? 'border-slate-600 text-slate-300 hover:bg-slate-700' 
+                  : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+              }`}
             >
               Preview
             </button>

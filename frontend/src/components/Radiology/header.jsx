@@ -1,16 +1,92 @@
 import React, { useState, useRef, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { Search, Monitor, Bell, User } from 'lucide-react'
+import { Search, Monitor, Bell } from 'lucide-react'
+import i18n from '../../i18n'
 
 export const RadiologyHeader = () => {
+  const { t } = useTranslation()
   const location = useLocation()
   const navigate = useNavigate()
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme')
+    if (saved) return saved === 'dark'
+    return document.documentElement.classList.contains('dark')
+  })
+
+  // Current language
+  const [currentLanguage, setCurrentLanguage] = useState(i18n.language || 'en')
+
+  // Apply theme on mount and when darkMode changes
+  useEffect(() => {
+    const root = document.documentElement
+    if (darkMode) {
+      root.classList.add('dark')
+      localStorage.setItem('theme', 'dark')
+    } else {
+      root.classList.remove('dark')
+      localStorage.setItem('theme', 'light')
+    }
+    // Dispatch custom event for theme change
+    window.dispatchEvent(new Event('themechange'))
+  }, [darkMode])
+
+  // Toggle dark mode
+  const toggleDarkMode = () => {
+    setDarkMode(prev => !prev)
+  }
+
+  // Handle language change
+  const handleLanguageChange = async (lang) => {
+    try {
+      // Ensure language is normalized (remove any region codes)
+      const normalizedLang = lang.split('-')[0]
+      
+      // Save to localStorage first
+      localStorage.setItem('i18nextLng', normalizedLang)
+      
+      // Change language and wait for it to complete
+      await i18n.changeLanguage(normalizedLang)
+      
+      // Update state
+      setCurrentLanguage(normalizedLang)
+      setLanguageDropdownOpen(false)
+      
+      // Double-check localStorage was saved
+      if (localStorage.getItem('i18nextLng') !== normalizedLang) {
+        localStorage.setItem('i18nextLng', normalizedLang)
+      }
+    } catch (error) {
+      console.error('Error changing language:', error)
+      // Fallback: still try to set it
+      localStorage.setItem('i18nextLng', lang)
+      i18n.changeLanguage(lang)
+      setCurrentLanguage(lang)
+    }
+  }
+
+  // Available languages
+  const languages = [
+    { code: 'en', name: 'English', flag: '🇬🇧' },
+    { code: 'uz', name: "O'zbek", flag: '🇺🇿' },
+    { code: 'ru', name: 'Русский', flag: '🇷🇺' }
+  ]
+  
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [languageDropdownOpen, setLanguageDropdownOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
   const [notificationCount, setNotificationCount] = useState(3)
   const dropdownRef = useRef(null)
+  const languageDropdownRef = useRef(null)
 
-  const isActive = (path) => location.pathname === path ? "border-b-2 border-white" : ""
+  const isActive = (path) => {
+    if (location.pathname === path) {
+      return darkMode ? "border-b-2 border-[#79CAC2]" : "border-b-2 border-white"
+    }
+    return ""
+  }
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -18,37 +94,51 @@ export const RadiologyHeader = () => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false)
       }
+      if (languageDropdownRef.current && !languageDropdownRef.current.contains(event.target)) {
+        setLanguageDropdownOpen(false)
+      }
     }
     document.addEventListener("mousedown", handleClickOutside)
     return () => document.removeEventListener("mousedown", handleClickOutside)
   }, [])
 
   return (
-    <header className="bg-gradient-to-r from-teal-500 to-blue-500 text-white shadow-lg sticky top-0 z-50">
+    <header className={`shadow-lg sticky top-0 z-50 transition-colors duration-500 ${
+      darkMode
+        ? 'bg-[#0D2026] text-[#F5FEFF] border-b border-[#133037]'
+        : 'bg-[#5ACCC3] text-white'
+    }`}>
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
         <div className="font-bold text-2xl tracking-wider">
-          <Link to="/radiology/dashboard" className="text-white no-underline hover:text-opacity-90 transition-all flex items-center">
-            <div className="bg-white text-teal-500 p-2 rounded-lg mr-3">
-              <Monitor className="w-6 h-6" />
-            </div>
-            <span className="mr-1">RADIOLOGY PORTAL</span>
+          <Link 
+            to="/radiology/dashboard" 
+            className={`no-underline transition-all flex items-center ${
+              darkMode
+                ? 'text-[#F5FEFF] hover:text-[#79CAC2]'
+                : 'text-white hover:text-opacity-90'
+            }`}
+          >
+            <span className="mr-1">{t('radiologyPortal')}</span>
           </Link>
         </div>
 
         {/* Navigation */}
         <nav className="flex space-x-8">
           {[
-            { name: "STUDIES", path: "/radiology/studies" },
-            { name: "WORKLIST", path: "/radiology/worklist" },
-            { name: "REPORTS", path: "/radiology/reports" },
-            { name: "PACS", path: "/radiology/pacs" },
-            { name: "TEMPLATES", path: "/radiology/templates" }
+            { name: t('studies'), path: "/radiology/studies" },
+            { name: t('worklist'), path: "/radiology/worklist" },
+            { name: t('reports'), path: "/radiology/reports" },
+            { name: t('pacs'), path: "/radiology/pacs" }
           ].map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`text-white font-medium py-1 hover:border-b-2 hover:border-white transition-all ${isActive(item.path)}`}
+              className={`font-medium py-1 transition-all ${
+                darkMode
+                  ? `hover:border-b-2 hover:border-[#79CAC2] ${isActive(item.path)}`
+                  : `text-white hover:border-b-2 hover:border-white ${isActive(item.path)}`
+              }`}
             >
               {item.name}
             </Link>
@@ -58,34 +148,126 @@ export const RadiologyHeader = () => {
         {/* Actions */}
         <div className="flex items-center space-x-5 relative">
           {/* Search Bar */}
-          <div className="flex items-center bg-white rounded-full px-4 py-1.5 shadow-inner transition-all hover:shadow-md focus-within:ring-2 focus-within:ring-white focus-within:ring-opacity-50">
+          <div className={`flex items-center rounded-full px-4 py-1.5 shadow-inner transition-all hover:shadow-md focus-within:ring-2 ${
+            darkMode
+              ? 'bg-[#07181D] focus-within:ring-[#79CAC2] focus-within:ring-opacity-50'
+              : 'bg-white focus-within:ring-white focus-within:ring-opacity-50'
+          }`}>
             <input
               type="text"
-              placeholder="Search patients, studies, accession #..."
+              placeholder={t('search')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-transparent border-none outline-none text-gray-800 text-sm w-56 placeholder-gray-400"
+              className={`bg-transparent border-none outline-none text-sm w-28 ${
+                darkMode
+                  ? 'text-[#F5FEFF] placeholder-[#8AA2A7]'
+                  : 'text-gray-800 placeholder-gray-400'
+              }`}
             />
-            <button className="text-gray-600 hover:text-gray-800 transition-colors">
+            <button className={`transition-colors ${
+              darkMode
+                ? 'text-[#8AA2A7] hover:text-[#C1D9DD]'
+                : 'text-gray-600 hover:text-gray-800'
+            }`}>
               <Search className="h-4 w-4" />
             </button>
           </div>
+
+          {/* Language Selector */}
+          <div className="relative" ref={languageDropdownRef}>
+            <button
+              onClick={() => setLanguageDropdownOpen(!languageDropdownOpen)}
+              className={`flex items-center space-x-1 px-2 py-1.5 rounded-lg transition-colors ${
+                darkMode
+                  ? 'hover:bg-[#133037] text-[#F5FEFF]'
+                  : 'hover:bg-white hover:bg-opacity-20 text-white'
+              }`}
+              aria-label="Select language"
+            >
+              <span className="text-sm sm:text-base">
+                {languages.find(lang => lang.code === currentLanguage)?.flag || '🌐'}
+              </span>
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {languageDropdownOpen && (
+              <div className={`absolute right-0 mt-2 w-40 rounded-lg shadow-lg z-50 border transition-colors ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037]'
+                  : 'bg-white border-gray-200'
+              }`}>
+                {languages.map((lang) => (
+                  <button
+                    key={lang.code}
+                    onClick={() => handleLanguageChange(lang.code)}
+                    className={`w-full text-left px-4 py-2 text-sm transition-colors flex items-center space-x-2 ${
+                      currentLanguage === lang.code
+                        ? darkMode
+                          ? 'bg-[#133037] text-[#79CAC2]'
+                          : 'bg-gray-100 text-gray-900'
+                        : darkMode
+                        ? 'text-[#F5FEFF] hover:bg-[#133037]'
+                        : 'text-gray-700 hover:bg-gray-100'
+                    }`}
+                  >
+                    <span>{lang.flag}</span>
+                    <span>{lang.name}</span>
+                    {currentLanguage === lang.code && (
+                      <span className="ml-auto">✓</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Dark Mode Toggle */}
+          <button
+            onClick={toggleDarkMode}
+            className={`p-2 rounded-lg transition-colors ${
+              darkMode
+                ? 'hover:bg-[#133037] text-[#F5FEFF]'
+                : 'hover:bg-white hover:bg-opacity-20 text-white'
+            }`}
+            aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+          >
+            {darkMode ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
 
           {/* Quick Access Icons */}
           <div className="flex items-center space-x-3">
             {/* PACS Viewer Quick Access */}
             <button 
-              className="p-2 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30 transition-all"
-              title="PACS Viewer"
+              className={`p-2 rounded-lg transition-colors ${
+                darkMode
+                  ? 'bg-[#133037] hover:bg-[#07181D]'
+                  : 'bg-gray-700 hover:bg-gray-600'
+              }`}
+              title={t('pacsViewer')}
             >
               <Monitor className="w-5 h-5" />
             </button>
 
             {/* Notifications */}
-            <button className="relative p-2 bg-white bg-opacity-20 rounded-lg hover:bg-opacity-30 transition-all">
+            <button className={`relative p-2 rounded-lg transition-colors ${
+              darkMode
+                ? 'bg-[#133037] hover:bg-[#07181D]'
+                : 'bg-gray-700 hover:bg-gray-600'
+            }`}>
               <Bell className="w-5 h-5" />
               {notificationCount > 0 && (
-                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">
+                <span className={`absolute -top-1 -right-1 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold ${
+                  darkMode ? 'bg-red-500' : 'bg-red-500'
+                }`}>
                   {notificationCount}
                 </span>
               )}
@@ -96,88 +278,64 @@ export const RadiologyHeader = () => {
           <div className="relative" ref={dropdownRef}>
             <div
               onClick={() => setDropdownOpen((prev) => !prev)}
-              className="w-10 h-10 rounded-full bg-white bg-opacity-20 flex items-center justify-center text-white font-bold text-sm shadow-md hover:bg-opacity-30 transition-all cursor-pointer border-2 border-white border-opacity-30"
+              className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm shadow-md transition-colors cursor-pointer ${
+                darkMode
+                  ? 'bg-[#133037] text-[#F5FEFF] hover:bg-[#07181D]'
+                  : 'bg-gray-700 text-white hover:bg-gray-600'
+              }`}
             >
-              <User className="w-5 h-5" />
+              RT
             </div>
 
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-teal-50 to-blue-50">
-                  <p className="text-sm font-medium text-gray-900">Dr. Radiologist</p>
-                  <p className="text-xs text-gray-600">Diagnostic Radiologist</p>
-                  <p className="text-xs text-teal-600">Department of Radiology</p>
-                </div>
-                
+              <div className={`absolute right-0 mt-2 w-48 rounded-lg shadow-lg z-50 ${
+                darkMode
+                  ? 'bg-[#0D2026] border border-[#133037]'
+                  : 'bg-white border border-gray-200'
+              }`}>
                 <Link
                   to="/radiology/profile"
-                  className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
+                  className={`block px-4 py-3 text-sm transition-colors ${
+                    darkMode
+                      ? 'text-[#C1D9DD] hover:bg-[#133037]'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
                 >
-                  My Profile
+                  👤 {t('myProfile')}
                 </Link>
-                
-                <Link
-                  to="/radiology/schedule"
-                  className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  My Schedule
-                </Link>
-                
-                <Link
-                  to="/radiology/reading-room"
-                  className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  Reading Room
-                </Link>
-                
-                <Link
-                  to="/radiology/worklist"
-                  className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  My Worklist
-                </Link>
-                
-                <Link
-                  to="/radiology/templates"
-                  className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  Report Templates
-                </Link>
-                
-                <div className="border-t border-gray-200"></div>
-                
-                <Link
-                  to="/radiology/preferences"
-                  className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
-                >
-                  Preferences
-                </Link>
-                
                 <Link
                   to="/radiology/settings"
-                  className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
+                  className={`block px-4 py-3 text-sm transition-colors ${
+                    darkMode
+                      ? 'text-[#C1D9DD] hover:bg-[#133037]'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
                 >
-                  Settings
+                  ⚙️ {t('settings')}
                 </Link>
-                
                 <Link
-                  to="/radiology/help"
-                  className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-100"
+                  to="/radiology/change-password"
+                  className={`block px-4 py-3 text-sm transition-colors ${
+                    darkMode
+                      ? 'text-[#C1D9DD] hover:bg-[#133037]'
+                      : 'text-gray-700 hover:bg-gray-100'
+                  }`}
                 >
-                  Help & Support
+                  🔐 {t('changePassword')}
                 </Link>
-                
-                <div className="border-t border-gray-200"></div>
-                
                 <button
                   onClick={() => {
                     localStorage.removeItem('token')
                     localStorage.removeItem('user')
                     navigate('/signin')
                   }}
-                  className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50"
+                  className={`w-full text-left px-4 py-3 text-sm transition-colors ${
+                    darkMode
+                      ? 'text-red-400 hover:bg-red-900 hover:bg-opacity-30'
+                      : 'text-red-600 hover:bg-red-50'
+                  }`}
                 >
-                  Logout
+                  🚪 {t('logout')}
                 </button>
               </div>
             )}

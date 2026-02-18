@@ -1,24 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Navbar from './Navbar';
-import { ArrowLeft, Printer, Download, FileText, Calendar, User, Building2 } from 'lucide-react';
+import { ArrowLeft, Printer, Download, FileText, Calendar, User, Building2, Monitor, Eye } from 'lucide-react';
 import { patientRecordsAPI, patientPrescriptionsAPI } from '../../services/apiService';
 import SpecialtyReportView from './SpecialtyReportView';
 
 // Reusable Section Component
-const Section = ({ title, content, italic = false }) => {
+const Section = ({ title, content, italic = false, darkMode = false, t }) => {
   if (!content) return null;
   return (
-    <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-      <h3 className="text-md font-bold text-emerald-400 mb-2">{title}</h3>
-      <p className={`text-gray-800 whitespace-pre-line ${italic ? 'italic' : ''}`}>
-        {content || 'No data available'}
+    <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+      <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{title}</h3>
+      <p className={`${darkMode ? 'text-gray-200' : 'text-gray-800'} whitespace-pre-line ${italic ? 'italic' : ''}`}>
+        {content || (t ? t('recordSummary.noDataAvailable') : 'No data available')}
       </p>
     </div>
   );
 };
 
 const RecordSummary = () => {
+  const { t } = useTranslation();
   const { recordId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -26,6 +28,25 @@ const RecordSummary = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [medications, setMedications] = useState([]);
+
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount and when darkMode changes
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
 
   useEffect(() => {
     const fetchRecord = async () => {
@@ -77,7 +98,7 @@ const RecordSummary = () => {
         }
       } catch (err) {
         console.error('Error fetching record:', err);
-        setError('Unable to load record');
+        setError(t('recordSummary.errorLoadFailed'));
       } finally {
         setLoading(false);
       }
@@ -86,10 +107,10 @@ const RecordSummary = () => {
     if (recordId) {
       fetchRecord();
     } else {
-      setError('No record ID provided');
+      setError(t('recordSummary.errorNoRecordId'));
       setLoading(false);
     }
-  }, [recordId, location.state]);
+  }, [recordId, location.state, t]);
 
   const handlePrint = () => {
     window.print();
@@ -100,17 +121,17 @@ const RecordSummary = () => {
       await patientRecordsAPI.download(recordId);
     } catch (err) {
       console.error('Error downloading record:', err);
-      alert('Failed to download record. Please try again.');
+      alert(t('recordSummary.errorDownloadFailed'));
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
+      <div className={`min-h-screen bg-gradient-to-br ${darkMode ? 'from-gray-900 to-gray-800' : 'from-emerald-50 to-teal-50'}`}>
         <Navbar />
         <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-            <div className="text-gray-500">Loading record...</div>
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-8 text-center`}>
+            <div className={darkMode ? 'text-gray-400' : 'text-gray-500'}>{t('recordSummary.loadingRecord')}</div>
           </div>
         </div>
       </div>
@@ -119,16 +140,20 @@ const RecordSummary = () => {
 
   if (error || !record) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
+      <div className={`min-h-screen bg-gradient-to-br ${darkMode ? 'from-gray-900 to-gray-800' : 'from-emerald-50 to-teal-50'}`}>
         <Navbar />
         <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-            <div className="text-red-500 mb-4">{error || 'Record not found'}</div>
+          <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} rounded-xl shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} p-8 text-center`}>
+            <div className={`mb-4 ${darkMode ? 'text-red-400' : 'text-red-500'}`}>{error || t('recordSummary.recordNotFound')}</div>
             <button
               onClick={() => navigate('/patient/records')}
-              className="px-4 py-2 bg-emerald-400 text-white rounded-md hover:bg-emerald-500 transition-colors"
+              className={`px-4 py-2 rounded-md transition-colors ${
+                darkMode 
+                  ? 'bg-emerald-600 hover:bg-emerald-700' 
+                  : 'bg-emerald-400 hover:bg-emerald-500'
+              } text-white`}
             >
-              Back to Records
+              {t('recordSummary.backToRecords')}
             </button>
           </div>
         </div>
@@ -165,11 +190,11 @@ const RecordSummary = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-50 to-teal-50">
+    <div className={`min-h-screen bg-gradient-to-br ${darkMode ? 'from-gray-900 to-gray-800' : 'from-emerald-50 to-teal-50'}`}>
       <Navbar />
       
       {/* Header */}
-      <div className="bg-emerald-400 text-white shadow-md print:hidden">
+      <div className={`${darkMode ? 'bg-emerald-700' : 'bg-emerald-400'} text-white shadow-md print:hidden`}>
         <div className="max-w-7xl mx-auto px-4 py-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center">
             <button
@@ -177,23 +202,50 @@ const RecordSummary = () => {
               className="text-white hover:text-gray-100 flex items-center transition-colors"
             >
               <ArrowLeft className="h-5 w-5 mr-2" />
-              Back to Records
+              {t('recordSummary.backToRecords')}
             </button>
-            <h1 className="text-xl font-bold text-white">Record Summary</h1>
+            <h1 className="text-xl font-bold text-white">{t('recordSummary.recordSummary')}</h1>
             <div className="flex items-center space-x-2">
+              {/* View in PACS button - only show for imaging records */}
+              {(() => {
+                // Check if this is an imaging record with study data
+                const attachments = record?.attachments || [];
+                const radiologyStudy = attachments.find(att => att.type === 'radiology_study');
+                const studyInstanceUID = radiologyStudy?.studyInstanceUID;
+                
+                if (studyInstanceUID) {
+                  return (
+                    <button
+                      onClick={() => {
+                        navigate('/patient/pacs', {
+                          state: {
+                            studyInstanceUID: studyInstanceUID,
+                            orthancStudyId: radiologyStudy?.orthancStudyId
+                          }
+                        });
+                      }}
+                      className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'} text-emerald-400 px-4 py-2 rounded-md transition-colors flex items-center`}
+                    >
+                      <Monitor className="h-5 w-5 mr-2" />
+                      {t('recordSummary.viewInPACS')}
+                    </button>
+                  );
+                }
+                return null;
+              })()}
               <button
                 onClick={handleDownload}
-                className="bg-white text-emerald-400 px-4 py-2 rounded-md hover:bg-gray-100 transition-colors flex items-center"
+                className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'} text-emerald-400 px-4 py-2 rounded-md transition-colors flex items-center`}
               >
                 <Download className="h-5 w-5 mr-2" />
-                Download
+                {t('recordSummary.download')}
               </button>
               <button
                 onClick={handlePrint}
-                className="bg-white text-emerald-400 px-4 py-2 rounded-md hover:bg-gray-100 transition-colors flex items-center"
+                className={`${darkMode ? 'bg-gray-800 hover:bg-gray-700' : 'bg-white hover:bg-gray-100'} text-emerald-400 px-4 py-2 rounded-md transition-colors flex items-center`}
               >
                 <Printer className="h-5 w-5 mr-2" />
-                Print
+                {t('recordSummary.print')}
               </button>
             </div>
           </div>
@@ -202,28 +254,28 @@ const RecordSummary = () => {
 
       {/* Record Content */}
       <div className="max-w-4xl mx-auto px-4 py-8 sm:px-6 lg:px-8 print:px-0 print:py-0 print:max-w-none">
-        <div className="bg-white shadow-lg rounded-lg overflow-hidden print:shadow-none print:rounded-none">
+        <div className={`${darkMode ? 'bg-gray-800' : 'bg-white'} shadow-lg ${darkMode ? 'shadow-gray-900/50' : ''} rounded-lg overflow-hidden print:shadow-none print:rounded-none`}>
           {/* Record Header */}
-          <div className="bg-gradient-to-r from-emerald-400/10 to-emerald-400/20 border-b-2 border-emerald-400 px-6 py-6">
+          <div className={`bg-gradient-to-r ${darkMode ? 'from-emerald-600/20 to-emerald-600/30' : 'from-emerald-400/10 to-emerald-400/20'} border-b-2 ${darkMode ? 'border-emerald-500' : 'border-emerald-400'} px-6 py-6`}>
             <div className="flex flex-col md:flex-row justify-between items-start">
               <div>
-                <h2 className="text-xl font-bold text-gray-900 flex items-center">
-                  <FileText className="h-6 w-6 mr-2 text-emerald-400" />
-                  {record.title || record.recordType || 'Medical Record'}
+                <h2 className={`text-xl font-bold flex items-center ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>
+                  <FileText className={`h-6 w-6 mr-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`} />
+                  {record.title || record.recordType || t('recordSummary.medicalRecord')}
                 </h2>
-                <p className="text-md text-gray-700 mt-2 flex items-center">
+                <p className={`text-md mt-2 flex items-center ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   <Calendar className="h-4 w-4 mr-2" />
-                  Date: {record.date}
+                  {t('recordSummary.date')}: {record.date}
                 </p>
               </div>
-              <div className="mt-4 md:mt-0 text-right bg-white p-4 rounded-lg shadow-sm border border-emerald-400/20">
-                <p className="font-bold text-emerald-400 flex items-center justify-end">
+              <div className={`mt-4 md:mt-0 text-right p-4 rounded-lg shadow-sm border ${darkMode ? 'bg-gray-700 border-emerald-500/30' : 'bg-white border-emerald-400/20'}`}>
+                <p className={`font-bold flex items-center justify-end ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>
                   <User className="h-4 w-4 mr-2" />
-                  {record.doctor || 'Unknown Doctor'}
+                  {record.doctor || t('recordSummary.unknownDoctor')}
                 </p>
-                <p className="text-md text-gray-700 mt-1 flex items-center justify-end">
+                <p className={`text-md mt-1 flex items-center justify-end ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                   <Building2 className="h-4 w-4 mr-2" />
-                  {record.hospital || 'General Clinic'}
+                  {record.hospital || t('recordSummary.generalClinic')}
                 </p>
               </div>
             </div>
@@ -242,18 +294,18 @@ const RecordSummary = () => {
               if (!hasVitals) return null;
               
               return (
-                <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                  <h3 className="text-md font-bold text-emerald-400 mb-2">Vitals</h3>
-                  <div className="text-gray-800 grid grid-cols-2 md:grid-cols-3 gap-3">
-                    {vitals.bp_right && <p><strong>BP Right:</strong> {vitals.bp_right}</p>}
-                    {vitals.bp_left && <p><strong>BP Left:</strong> {vitals.bp_left}</p>}
-                    {vitals.hr && <p><strong>Heart Rate:</strong> {vitals.hr} bpm</p>}
-                    {vitals.temp && <p><strong>Temperature:</strong> {vitals.temp}°C</p>}
-                    {vitals.spo2 && <p><strong>SpO2:</strong> {vitals.spo2}%</p>}
-                    {vitals.respiratory_rate && <p><strong>Respiratory Rate:</strong> {vitals.respiratory_rate} /min</p>}
-                    {vitals.weight && <p><strong>Weight:</strong> {vitals.weight} kg</p>}
-                    {vitals.height && <p><strong>Height:</strong> {vitals.height} cm</p>}
-                    {vitals.bmi && <p><strong>BMI:</strong> {vitals.bmi}</p>}
+                <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                  <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.vitals')}</h3>
+                  <div className={`grid grid-cols-2 md:grid-cols-3 gap-3 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                    {vitals.bp_right && <p><strong>{t('recordSummary.bpRight')}:</strong> {vitals.bp_right}</p>}
+                    {vitals.bp_left && <p><strong>{t('recordSummary.bpLeft')}:</strong> {vitals.bp_left}</p>}
+                    {vitals.hr && <p><strong>{t('recordSummary.heartRate')}:</strong> {vitals.hr} {t('recordSummary.bpm')}</p>}
+                    {vitals.temp && <p><strong>{t('recordSummary.temperature')}:</strong> {vitals.temp}°C</p>}
+                    {vitals.spo2 && <p><strong>{t('recordSummary.spo2')}:</strong> {vitals.spo2}%</p>}
+                    {vitals.respiratory_rate && <p><strong>{t('recordSummary.respiratoryRate')}:</strong> {vitals.respiratory_rate} {t('recordSummary.perMin')}</p>}
+                    {vitals.weight && <p><strong>{t('recordSummary.weight')}:</strong> {vitals.weight} {t('recordSummary.kg')}</p>}
+                    {vitals.height && <p><strong>{t('recordSummary.height')}:</strong> {vitals.height} {t('recordSummary.cm')}</p>}
+                    {vitals.bmi && <p><strong>{t('recordSummary.bmi')}:</strong> {vitals.bmi}</p>}
                   </div>
                 </div>
               );
@@ -261,12 +313,12 @@ const RecordSummary = () => {
             
             {/* Report Metadata */}
             {(detailedNotes.report_code || detailedNotes.report_type || detailedNotes.status) && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">Report Information</h3>
-                <div className="text-gray-800 space-y-1">
-                  {detailedNotes.report_code && <p><strong>Report Code:</strong> {detailedNotes.report_code}</p>}
-                  {detailedNotes.report_type && <p><strong>Report Type:</strong> {detailedNotes.report_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>}
-                  {detailedNotes.status && <p><strong>Status:</strong> {detailedNotes.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>}
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.reportInformation')}</h3>
+                <div className={`space-y-1 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                  {detailedNotes.report_code && <p><strong>{t('recordSummary.reportCode')}:</strong> {detailedNotes.report_code}</p>}
+                  {detailedNotes.report_type && <p><strong>{t('recordSummary.reportType')}:</strong> {detailedNotes.report_type.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>}
+                  {detailedNotes.status && <p><strong>{t('recordSummary.status')}:</strong> {detailedNotes.status.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}</p>}
                 </div>
               </div>
             )}
@@ -283,29 +335,29 @@ const RecordSummary = () => {
               <>
                 {/* Chief Complaint */}
                 {detailedNotes.chief_complaint && (
-                  <Section title="Chief Complaint" content={detailedNotes.chief_complaint} />
+                  <Section title={t('recordSummary.chiefComplaint')} content={detailedNotes.chief_complaint} darkMode={darkMode} t={t} />
                 )}
 
             {/* History of Present Illness (HPI) */}
             {(detailedNotes.hpi || detailedNotes.hpi_free_text) && (
-              <Section title="History of Present Illness" content={detailedNotes.hpi || detailedNotes.hpi_free_text || 'No data available'} />
+              <Section title={t('recordSummary.historyOfPresentIllness')} content={detailedNotes.hpi || detailedNotes.hpi_free_text || t('recordSummary.noDataAvailable')} darkMode={darkMode} t={t} />
             )}
 
             {/* HPI Details (if available) */}
             {(detailedNotes.hpi_onset || detailedNotes.hpi_duration || detailedNotes.hpi_course || detailedNotes.onset_time || detailedNotes.info_source || detailedNotes.hpi_modifiers || detailedNotes.hpi_associated_symptoms) && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">History of Present Illness Details</h3>
-                <div className="text-gray-800 space-y-2">
-                  {detailedNotes.onset_time && <p><strong>Onset Time:</strong> {detailedNotes.onset_time}</p>}
-                  {detailedNotes.info_source && <p><strong>Information Source:</strong> {detailedNotes.info_source}</p>}
-                  {detailedNotes.hpi_onset && <p><strong>Onset:</strong> {detailedNotes.hpi_onset}</p>}
-                  {detailedNotes.hpi_duration && <p><strong>Duration:</strong> {detailedNotes.hpi_duration}</p>}
-                  {detailedNotes.hpi_course && <p><strong>Course:</strong> {detailedNotes.hpi_course}</p>}
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.hpiDetails')}</h3>
+                <div className={`space-y-2 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
+                  {detailedNotes.onset_time && <p><strong>{t('recordSummary.onsetTime')}:</strong> {detailedNotes.onset_time}</p>}
+                  {detailedNotes.info_source && <p><strong>{t('recordSummary.informationSource')}:</strong> {detailedNotes.info_source}</p>}
+                  {detailedNotes.hpi_onset && <p><strong>{t('recordSummary.onset')}:</strong> {detailedNotes.hpi_onset}</p>}
+                  {detailedNotes.hpi_duration && <p><strong>{t('recordSummary.duration')}:</strong> {detailedNotes.hpi_duration}</p>}
+                  {detailedNotes.hpi_course && <p><strong>{t('recordSummary.course')}:</strong> {detailedNotes.hpi_course}</p>}
                   {detailedNotes.hpi_modifiers && Array.isArray(detailedNotes.hpi_modifiers) && detailedNotes.hpi_modifiers.length > 0 && (
-                    <p><strong>Modifiers:</strong> {detailedNotes.hpi_modifiers.join(', ')}</p>
+                    <p><strong>{t('recordSummary.modifiers')}:</strong> {detailedNotes.hpi_modifiers.join(', ')}</p>
                   )}
                   {detailedNotes.hpi_associated_symptoms && Array.isArray(detailedNotes.hpi_associated_symptoms) && detailedNotes.hpi_associated_symptoms.length > 0 && (
-                    <p><strong>Associated Symptoms:</strong> {detailedNotes.hpi_associated_symptoms.join(', ')}</p>
+                    <p><strong>{t('recordSummary.associatedSymptoms')}:</strong> {detailedNotes.hpi_associated_symptoms.join(', ')}</p>
                   )}
                 </div>
               </div>
@@ -313,18 +365,18 @@ const RecordSummary = () => {
             
             {/* Past Medical History */}
             {(detailedNotes.past_medical_history || detailedNotes.pmh_conditions || detailedNotes.pmh_surgeries) && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">Past Medical History</h3>
-                <div className="text-gray-800 whitespace-pre-line">
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.pastMedicalHistory')}</h3>
+                <div className={`whitespace-pre-line ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                   {detailedNotes.past_medical_history ? (
                     <p>{detailedNotes.past_medical_history}</p>
                   ) : (
                     <>
                       {detailedNotes.pmh_conditions && (
-                        <p><strong>Conditions:</strong> {Array.isArray(detailedNotes.pmh_conditions) ? detailedNotes.pmh_conditions.join(', ') : detailedNotes.pmh_conditions}</p>
+                        <p><strong>{t('recordSummary.conditions')}:</strong> {Array.isArray(detailedNotes.pmh_conditions) ? detailedNotes.pmh_conditions.join(', ') : detailedNotes.pmh_conditions}</p>
                       )}
                       {detailedNotes.pmh_surgeries && (
-                        <p><strong>Surgeries:</strong> {detailedNotes.pmh_surgeries}</p>
+                        <p><strong>{t('recordSummary.surgeries')}:</strong> {detailedNotes.pmh_surgeries}</p>
                       )}
                     </>
                   )}
@@ -334,17 +386,17 @@ const RecordSummary = () => {
             
             {/* Family History */}
             {(detailedNotes.family_history || detailedNotes.fh_cardio || detailedNotes.fh_diabetes || detailedNotes.fh_cancer || detailedNotes.fh_notes) && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">Family History</h3>
-                <div className="text-gray-800 whitespace-pre-line">
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.familyHistory')}</h3>
+                <div className={`whitespace-pre-line ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                   {detailedNotes.family_history ? (
                     <p>{detailedNotes.family_history}</p>
                   ) : (
                     <div className="space-y-1">
-                      {detailedNotes.fh_cardio && <p><strong>Cardiovascular:</strong> {detailedNotes.fh_cardio}</p>}
-                      {detailedNotes.fh_diabetes && <p><strong>Diabetes:</strong> {detailedNotes.fh_diabetes}</p>}
-                      {detailedNotes.fh_cancer && <p><strong>Cancer:</strong> {detailedNotes.fh_cancer}</p>}
-                      {detailedNotes.fh_notes && <p><strong>Notes:</strong> {detailedNotes.fh_notes}</p>}
+                      {detailedNotes.fh_cardio && <p><strong>{t('recordSummary.cardiovascular')}:</strong> {detailedNotes.fh_cardio}</p>}
+                      {detailedNotes.fh_diabetes && <p><strong>{t('recordSummary.diabetes')}:</strong> {detailedNotes.fh_diabetes}</p>}
+                      {detailedNotes.fh_cancer && <p><strong>{t('recordSummary.cancer')}:</strong> {detailedNotes.fh_cancer}</p>}
+                      {detailedNotes.fh_notes && <p><strong>{t('recordSummary.notes')}:</strong> {detailedNotes.fh_notes}</p>}
                     </div>
                   )}
                 </div>
@@ -353,18 +405,18 @@ const RecordSummary = () => {
             
             {/* Social History */}
             {(detailedNotes.social_history || detailedNotes.social_smoking || detailedNotes.social_audit_c !== undefined || detailedNotes.social_exercise) && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">Social History</h3>
-                <div className="text-gray-800">
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.socialHistory')}</h3>
+                <div className={darkMode ? 'text-gray-200' : 'text-gray-800'}>
                   {detailedNotes.social_history ? (
                     <p className="whitespace-pre-line">{detailedNotes.social_history}</p>
                   ) : (
                     <div className="space-y-1">
-                      {detailedNotes.social_smoking && <p><strong>Smoking:</strong> {detailedNotes.social_smoking}</p>}
+                      {detailedNotes.social_smoking && <p><strong>{t('recordSummary.smoking')}:</strong> {detailedNotes.social_smoking}</p>}
                       {detailedNotes.social_audit_c !== undefined && detailedNotes.social_audit_c !== null && (
-                        <p><strong>AUDIT-C Score:</strong> {detailedNotes.social_audit_c}</p>
+                        <p><strong>{t('recordSummary.auditCScore')}:</strong> {detailedNotes.social_audit_c}</p>
                       )}
-                      {detailedNotes.social_exercise && <p><strong>Exercise:</strong> {detailedNotes.social_exercise}</p>}
+                      {detailedNotes.social_exercise && <p><strong>{t('recordSummary.exercise')}:</strong> {detailedNotes.social_exercise}</p>}
                     </div>
                   )}
                 </div>
@@ -375,14 +427,14 @@ const RecordSummary = () => {
             {isSOAPNote && (
               <>
                 {detailedNotes.subjective && (
-                  <Section title="Subjective" content={detailedNotes.subjective} />
+                  <Section title={t('recordSummary.subjective')} content={detailedNotes.subjective} darkMode={darkMode} t={t} />
                 )}
                 {detailedNotes.objective && (
-                  <Section title="Objective" content={detailedNotes.objective} />
+                  <Section title={t('recordSummary.objective')} content={detailedNotes.objective} darkMode={darkMode} t={t} />
                 )}
                 {detailedNotes.assessment && (
                   <Section 
-                    title="Assessment" 
+                    title={t('recordSummary.assessment')} 
                     content={typeof detailedNotes.assessment === 'string' && detailedNotes.assessment.trim().startsWith('{') 
                       ? (() => {
                           try {
@@ -394,45 +446,49 @@ const RecordSummary = () => {
                               const ddx = parsed.ddx && Array.isArray(parsed.ddx) ? parsed.ddx.map(d => 
                                 typeof d === 'object' ? `${d.code || ''} ${d.term || ''}`.trim() : String(d)
                               ).filter(d => d).join(', ') : '';
-                              return `Working Diagnosis: ${working || 'None'}\n${ddx ? `Differential Diagnoses: ${ddx}` : ''}`.trim();
+                              return `${t('recordSummary.workingDiagnosis')}: ${working || t('recordSummary.none')}\n${ddx ? `${t('recordSummary.differentialDiagnoses')}: ${ddx}` : ''}`.trim();
                             }
                             return detailedNotes.assessment;
                           } catch {
                             return detailedNotes.assessment;
                           }
                         })()
-                      : detailedNotes.assessment} 
+                      : detailedNotes.assessment}
+                    darkMode={darkMode}
+                    t={t}
                   />
                 )}
                 {detailedNotes.plan && (
                   <Section 
-                    title="Plan" 
+                    title={t('recordSummary.plan')} 
                     content={typeof detailedNotes.plan === 'string' && detailedNotes.plan.trim().startsWith('{')
                       ? (() => {
                           try {
                             const parsed = JSON.parse(detailedNotes.plan);
                             const parts = [];
                             if (parsed.tests && Array.isArray(parsed.tests) && parsed.tests.length > 0) {
-                              parts.push(`Tests: ${parsed.tests.map(t => typeof t === 'object' ? (t.name || t.label || JSON.stringify(t)) : t).join(', ')}`);
+                              parts.push(`${t('recordSummary.tests')}: ${parsed.tests.map(test => typeof test === 'object' ? (test.name || test.label || JSON.stringify(test)) : test).join(', ')}`);
                             }
                             if (parsed.referrals && Array.isArray(parsed.referrals) && parsed.referrals.length > 0) {
-                              parts.push(`Referrals: ${parsed.referrals.map(r => typeof r === 'object' ? (r.specialty || r.name || JSON.stringify(r)) : r).join(', ')}`);
+                              parts.push(`${t('recordSummary.referrals')}: ${parsed.referrals.map(r => typeof r === 'object' ? (r.specialty || r.name || JSON.stringify(r)) : r).join(', ')}`);
                             }
                             if (parsed.med_changes && Array.isArray(parsed.med_changes) && parsed.med_changes.length > 0) {
-                              parts.push(`Medication Changes: ${parsed.med_changes.map(m => typeof m === 'object' ? (m.med || m.name || JSON.stringify(m)) : m).join(', ')}`);
+                              parts.push(`${t('recordSummary.medicationChanges')}: ${parsed.med_changes.map(m => typeof m === 'object' ? (m.med || m.name || JSON.stringify(m)) : m).join(', ')}`);
                             }
                             if (parsed.lifestyle && Array.isArray(parsed.lifestyle) && parsed.lifestyle.length > 0) {
-                              parts.push(`Lifestyle: ${parsed.lifestyle.map(l => typeof l === 'object' ? (l.recommendation || l.name || JSON.stringify(l)) : l).join(', ')}`);
+                              parts.push(`${t('recordSummary.lifestyle')}: ${parsed.lifestyle.map(l => typeof l === 'object' ? (l.recommendation || l.name || JSON.stringify(l)) : l).join(', ')}`);
                             }
                             if (parsed.follow_up) {
-                              parts.push(`Follow-up: ${parsed.follow_up}`);
+                              parts.push(`${t('recordSummary.followUp')}: ${parsed.follow_up}`);
                             }
-                            return parts.length > 0 ? parts.join('\n') : 'No plan specified';
+                            return parts.length > 0 ? parts.join('\n') : t('recordSummary.noPlanSpecified');
                           } catch {
                             return detailedNotes.plan;
                           }
                         })()
-                      : detailedNotes.plan} 
+                      : detailedNotes.plan}
+                    darkMode={darkMode}
+                    t={t}
                   />
                 )}
               </>
@@ -440,21 +496,21 @@ const RecordSummary = () => {
 
             {/* Physical Examination */}
             {(detailedNotes.physical_examination || detailedNotes.pe_notes || detailedNotes.pe_general || detailedNotes.pe_lungs || detailedNotes.pe_heart || detailedNotes.pe_abdomen || detailedNotes.pe_neuro || detailedNotes.pe_extremities) && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">Physical Examination</h3>
-                <div className="text-gray-800">
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.physicalExamination')}</h3>
+                <div className={darkMode ? 'text-gray-200' : 'text-gray-800'}>
                   {detailedNotes.physical_examination ? (
                     <p className="whitespace-pre-line">{detailedNotes.physical_examination}</p>
                   ) : (
                     <div className="space-y-2">
                       {(detailedNotes.pe_general || detailedNotes.pe_lungs || detailedNotes.pe_heart || detailedNotes.pe_abdomen || detailedNotes.pe_neuro || detailedNotes.pe_extremities) && (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          {detailedNotes.pe_general && <p><strong>General:</strong> {detailedNotes.pe_general}</p>}
-                          {detailedNotes.pe_lungs && <p><strong>Lungs:</strong> {detailedNotes.pe_lungs}</p>}
-                          {detailedNotes.pe_heart && <p><strong>Heart:</strong> {detailedNotes.pe_heart}</p>}
-                          {detailedNotes.pe_abdomen && <p><strong>Abdomen:</strong> {detailedNotes.pe_abdomen}</p>}
-                          {detailedNotes.pe_neuro && <p><strong>Neurological:</strong> {detailedNotes.pe_neuro}</p>}
-                          {detailedNotes.pe_extremities && <p><strong>Extremities:</strong> {detailedNotes.pe_extremities}</p>}
+                          {detailedNotes.pe_general && <p><strong>{t('recordSummary.general')}:</strong> {detailedNotes.pe_general}</p>}
+                          {detailedNotes.pe_lungs && <p><strong>{t('recordSummary.lungs')}:</strong> {detailedNotes.pe_lungs}</p>}
+                          {detailedNotes.pe_heart && <p><strong>{t('recordSummary.heart')}:</strong> {detailedNotes.pe_heart}</p>}
+                          {detailedNotes.pe_abdomen && <p><strong>{t('recordSummary.abdomen')}:</strong> {detailedNotes.pe_abdomen}</p>}
+                          {detailedNotes.pe_neuro && <p><strong>{t('recordSummary.neurological')}:</strong> {detailedNotes.pe_neuro}</p>}
+                          {detailedNotes.pe_extremities && <p><strong>{t('recordSummary.extremities')}:</strong> {detailedNotes.pe_extremities}</p>}
                         </div>
                       )}
                       {detailedNotes.pe_notes && (
@@ -478,9 +534,9 @@ const RecordSummary = () => {
 
             {/* Review of Systems */}
             {(detailedNotes.review_of_systems || detailedNotes.ros_notes || detailedNotes.ros_respiratory || detailedNotes.ros_cardio || detailedNotes.ros_gi || detailedNotes.ros_neuro || detailedNotes.ros_gu || detailedNotes.ros_derm || detailedNotes.ros_ent || detailedNotes.ros_msk) && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">Review of Systems</h3>
-                <div className="text-gray-800 space-y-2">
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.reviewOfSystems')}</h3>
+                <div className={`space-y-2 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                   {detailedNotes.review_of_systems ? (
                     <p className="whitespace-pre-line">{detailedNotes.review_of_systems}</p>
                   ) : typeof detailedNotes.ros_notes === 'object' ? (
@@ -494,28 +550,28 @@ const RecordSummary = () => {
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                       {detailedNotes.ros_respiratory && detailedNotes.ros_respiratory !== 'normal' && (
-                        <p><strong>Respiratory:</strong> {detailedNotes.ros_respiratory}</p>
+                        <p><strong>{t('recordSummary.respiratory')}:</strong> {detailedNotes.ros_respiratory}</p>
                       )}
                       {detailedNotes.ros_cardio && detailedNotes.ros_cardio !== 'normal' && (
-                        <p><strong>Cardiovascular:</strong> {detailedNotes.ros_cardio}</p>
+                        <p><strong>{t('recordSummary.cardiovascular')}:</strong> {detailedNotes.ros_cardio}</p>
                       )}
                       {detailedNotes.ros_gi && detailedNotes.ros_gi !== 'normal' && (
-                        <p><strong>Gastrointestinal:</strong> {detailedNotes.ros_gi}</p>
+                        <p><strong>{t('recordSummary.gastrointestinal')}:</strong> {detailedNotes.ros_gi}</p>
                       )}
                       {detailedNotes.ros_neuro && detailedNotes.ros_neuro !== 'normal' && (
-                        <p><strong>Neurological:</strong> {detailedNotes.ros_neuro}</p>
+                        <p><strong>{t('recordSummary.neurological')}:</strong> {detailedNotes.ros_neuro}</p>
                       )}
                       {detailedNotes.ros_gu && detailedNotes.ros_gu !== 'normal' && (
-                        <p><strong>Genitourinary:</strong> {detailedNotes.ros_gu}</p>
+                        <p><strong>{t('recordSummary.genitourinary')}:</strong> {detailedNotes.ros_gu}</p>
                       )}
                       {detailedNotes.ros_derm && detailedNotes.ros_derm !== 'normal' && (
-                        <p><strong>Dermatological:</strong> {detailedNotes.ros_derm}</p>
+                        <p><strong>{t('recordSummary.dermatological')}:</strong> {detailedNotes.ros_derm}</p>
                       )}
                       {detailedNotes.ros_ent && detailedNotes.ros_ent !== 'normal' && (
-                        <p><strong>ENT:</strong> {detailedNotes.ros_ent}</p>
+                        <p><strong>{t('recordSummary.ent')}:</strong> {detailedNotes.ros_ent}</p>
                       )}
                       {detailedNotes.ros_msk && detailedNotes.ros_msk !== 'normal' && (
-                        <p><strong>Musculoskeletal:</strong> {detailedNotes.ros_msk}</p>
+                        <p><strong>{t('recordSummary.musculoskeletal')}:</strong> {detailedNotes.ros_msk}</p>
                       )}
                     </div>
                   )}
@@ -525,9 +581,9 @@ const RecordSummary = () => {
 
             {/* Diagnosis */}
             {(detailedNotes.diagnosis || detailedNotes.working_diagnoses) && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">Diagnosis</h3>
-                <div className="text-gray-800 whitespace-pre-line">
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.diagnosis')}</h3>
+                <div className={`whitespace-pre-line ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                   {detailedNotes.diagnosis ? (
                     <p>{detailedNotes.diagnosis}</p>
                   ) : Array.isArray(detailedNotes.working_diagnoses) ? (
@@ -547,7 +603,7 @@ const RecordSummary = () => {
                       ))}
                     </ul>
                   ) : (
-                    <p>{String(detailedNotes.working_diagnoses || 'No diagnosis available')}</p>
+                    <p>{String(detailedNotes.working_diagnoses || t('recordSummary.noDiagnosisAvailable'))}</p>
                   )}
                 </div>
               </div>
@@ -555,9 +611,9 @@ const RecordSummary = () => {
 
             {/* Differential Diagnoses */}
             {detailedNotes.differential_diagnoses && Array.isArray(detailedNotes.differential_diagnoses) && detailedNotes.differential_diagnoses.length > 0 && (
-              <div className="bg-white p-4 border-l-4 border-blue-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-blue-400 mb-2">Differential Diagnoses</h3>
-                <ul className="list-disc list-inside space-y-1 text-gray-800">
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-blue-500' : 'border-blue-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-blue-400' : 'text-blue-400'}`}>{t('recordSummary.differentialDiagnoses')}</h3>
+                <ul className={`list-disc list-inside space-y-1 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                   {detailedNotes.differential_diagnoses.map((diag, index) => (
                     <li key={index}>
                       {typeof diag === 'object' ? (
@@ -577,16 +633,16 @@ const RecordSummary = () => {
 
             {/* Treatment Plan (only show if not already shown in Plan section for SOAP notes) */}
             {!isSOAPNote && (detailedNotes.treatment_plan || detailedNotes.plan_tests || detailedNotes.plan_referrals || detailedNotes.plan_med_changes || detailedNotes.plan_lifestyle || detailedNotes.plan_follow_up) && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">Treatment Plan</h3>
-                <div className="text-gray-800">
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.treatmentPlan')}</h3>
+                <div className={darkMode ? 'text-gray-200' : 'text-gray-800'}>
                   {detailedNotes.treatment_plan ? (
                     <p className="whitespace-pre-line">{detailedNotes.treatment_plan}</p>
                   ) : (
                     <div className="space-y-3">
                       {detailedNotes.plan_tests && Array.isArray(detailedNotes.plan_tests) && detailedNotes.plan_tests.length > 0 && (
                         <div>
-                          <strong>Tests Ordered:</strong>
+                          <strong>{t('recordSummary.testsOrdered')}:</strong>
                           <ul className="list-disc list-inside mt-1">
                             {detailedNotes.plan_tests.map((test, index) => (
                               <li key={index}>{typeof test === 'object' ? test.name || JSON.stringify(test) : test}</li>
@@ -596,7 +652,7 @@ const RecordSummary = () => {
                       )}
                       {detailedNotes.plan_referrals && Array.isArray(detailedNotes.plan_referrals) && detailedNotes.plan_referrals.length > 0 && (
                         <div>
-                          <strong>Referrals:</strong>
+                          <strong>{t('recordSummary.referrals')}:</strong>
                           <ul className="list-disc list-inside mt-1">
                             {detailedNotes.plan_referrals.map((ref, index) => (
                               <li key={index}>{typeof ref === 'object' ? ref.specialty || JSON.stringify(ref) : ref}</li>
@@ -606,7 +662,7 @@ const RecordSummary = () => {
                       )}
                       {detailedNotes.plan_med_changes && Array.isArray(detailedNotes.plan_med_changes) && detailedNotes.plan_med_changes.length > 0 && (
                         <div>
-                          <strong>Medication Changes:</strong>
+                          <strong>{t('recordSummary.medicationChanges')}:</strong>
                           <ul className="list-disc list-inside mt-1">
                             {detailedNotes.plan_med_changes.map((med, index) => (
                               <li key={index}>{typeof med === 'object' ? med.name || JSON.stringify(med) : med}</li>
@@ -616,7 +672,7 @@ const RecordSummary = () => {
                       )}
                       {detailedNotes.plan_lifestyle && Array.isArray(detailedNotes.plan_lifestyle) && detailedNotes.plan_lifestyle.length > 0 && (
                         <div>
-                          <strong>Lifestyle Recommendations:</strong>
+                          <strong>{t('recordSummary.lifestyleRecommendations')}:</strong>
                           <ul className="list-disc list-inside mt-1">
                             {detailedNotes.plan_lifestyle.map((rec, index) => (
                               <li key={index}>{typeof rec === 'object' ? rec.recommendation || JSON.stringify(rec) : rec}</li>
@@ -626,7 +682,7 @@ const RecordSummary = () => {
                       )}
                       {detailedNotes.plan_follow_up && (
                         <div>
-                          <strong>Follow-up:</strong> {detailedNotes.plan_follow_up}
+                          <strong>{t('recordSummary.followUp')}:</strong> {detailedNotes.plan_follow_up}
                         </div>
                       )}
                     </div>
@@ -637,33 +693,33 @@ const RecordSummary = () => {
 
             {/* Visit Summary */}
             {detailedNotes.visit_summary && (
-              <Section title="Visit Summary" content={detailedNotes.visit_summary} />
+              <Section title={t('recordSummary.visitSummary')} content={detailedNotes.visit_summary} darkMode={darkMode} />
             )}
 
             {/* Prescribed Medications - Display at the end */}
             {medications && medications.length > 0 && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/60 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-3">Prescribed Medications</h3>
-                <div className="text-gray-800 space-y-4">
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/60'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-3 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.prescribedMedications')}</h3>
+                <div className={`space-y-4 ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>
                   {medications.map((med, index) => (
-                    <div key={med.id || index} className="border-b border-gray-200 pb-3 last:border-b-0 last:pb-0">
+                    <div key={med.id || index} className={`border-b ${darkMode ? 'border-gray-600' : 'border-gray-200'} pb-3 last:border-b-0 last:pb-0`}>
                       <div className="flex flex-col md:flex-row md:justify-between md:items-start gap-2">
                         <div className="flex-1">
-                          <p className="font-semibold text-gray-900">{med.medicineName || med.knownAs || 'Unknown Medication'}</p>
+                          <p className={`font-semibold ${darkMode ? 'text-gray-100' : 'text-gray-900'}`}>{med.medicineName || med.knownAs || t('recordSummary.unknownMedication')}</p>
                           {med.knownAs && med.knownAs !== med.medicineName && (
-                            <p className="text-sm text-gray-600 italic">({med.knownAs})</p>
+                            <p className={`text-sm italic ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>({med.knownAs})</p>
                           )}
                           {med.purpose && (
-                            <p className="text-sm text-gray-600 mt-1">{med.purpose}</p>
+                            <p className={`text-sm mt-1 ${darkMode ? 'text-gray-400' : 'text-gray-600'}`}>{med.purpose}</p>
                           )}
                         </div>
-                        <div className="text-sm text-gray-700 space-y-1">
-                          {med.dosage && <p><strong>Dosage:</strong> {med.dosage}</p>}
-                          {med.frequency && <p><strong>Frequency:</strong> {med.frequency}</p>}
-                          {med.prescribedDate && <p><strong>Prescribed:</strong> {med.prescribedDate}</p>}
-                          {med.endDate && <p><strong>End Date:</strong> {med.endDate}</p>}
+                        <div className={`text-sm space-y-1 ${darkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                          {med.dosage && <p><strong>{t('recordSummary.dosage')}:</strong> {med.dosage}</p>}
+                          {med.frequency && <p><strong>{t('recordSummary.frequency')}:</strong> {med.frequency}</p>}
+                          {med.prescribedDate && <p><strong>{t('recordSummary.prescribed')}:</strong> {med.prescribedDate}</p>}
+                          {med.endDate && <p><strong>{t('recordSummary.endDate')}:</strong> {med.endDate}</p>}
                           {med.remainingRefills !== undefined && med.remainingRefills > 0 && (
-                            <p><strong>Remaining Refills:</strong> {med.remainingRefills}</p>
+                            <p><strong>{t('recordSummary.remainingRefills')}:</strong> {med.remainingRefills}</p>
                           )}
                         </div>
                       </div>
@@ -675,35 +731,39 @@ const RecordSummary = () => {
 
             {/* Follow-up */}
             {detailedNotes.plan_follow_up && (
-              <div className="bg-white p-4 border-l-4 border-emerald-400/80 shadow-sm">
-                <h3 className="text-md font-bold text-emerald-400 mb-2">Follow-up</h3>
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-emerald-400/10 p-3 rounded-md">
-                  <p className="text-gray-800 font-medium">{detailedNotes.plan_follow_up || 'No follow-up reason specified'}</p>
+              <div className={`${darkMode ? 'bg-gray-700/50' : 'bg-white'} p-4 border-l-4 ${darkMode ? 'border-emerald-500' : 'border-emerald-400/80'} shadow-sm`}>
+                <h3 className={`text-md font-bold mb-2 ${darkMode ? 'text-emerald-400' : 'text-emerald-400'}`}>{t('recordSummary.followUp')}</h3>
+                <div className={`flex flex-col md:flex-row justify-between items-start md:items-center ${darkMode ? 'bg-emerald-600/20' : 'bg-emerald-400/10'} p-3 rounded-md`}>
+                  <p className={`font-medium ${darkMode ? 'text-gray-200' : 'text-gray-800'}`}>{detailedNotes.plan_follow_up || t('recordSummary.noFollowUpReason')}</p>
                 </div>
               </div>
             )}
 
             {/* General Summary/Description (fallback) */}
             {record.summary && !detailedNotes.chief_complaint && !detailedNotes.subjective && (
-              <Section title="Summary" content={record.summary} />
+              <Section title={t('recordSummary.summary')} content={record.summary} darkMode={darkMode} />
             )}
 
             {/* Additional Notes */}
             {record.notes && !detailedNotes && (
-              <Section title="Additional Notes" content={record.notes} italic />
+              <Section title={t('recordSummary.additionalNotes')} content={record.notes} italic darkMode={darkMode} />
             )}
               </>
             )}
           </div>
 
           {/* Footer */}
-          <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 print:hidden">
+          <div className={`px-6 py-4 border-t print:hidden ${darkMode ? 'bg-gray-800 border-gray-700' : 'bg-gray-50 border-gray-200'}`}>
             <div className="flex justify-end">
               <button
                 onClick={() => navigate('/patient/records')}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-md hover:bg-gray-300 transition-colors"
+                className={`px-4 py-2 rounded-md transition-colors ${
+                  darkMode 
+                    ? 'bg-gray-700 text-gray-200 hover:bg-gray-600' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                }`}
               >
-                Back to Records
+                {t('recordSummary.backToRecords')}
               </button>
             </div>
           </div>

@@ -2,11 +2,9 @@
 // Unified API service for Medical Dashboard - FastAPI Backend Integration
 
 import { useState } from 'react';
+import { API_BASE_URL, API_VERSION, API_BASE, getWebSocketUrl } from '../config/api.js';
 
 // Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-const API_VERSION = '/api/v1';
-const API_BASE = API_BASE_URL.endsWith(API_VERSION) ? API_BASE_URL : `${API_BASE_URL}${API_VERSION}`;
 
 // Utility functions
 const getAuthHeaders = () => {
@@ -1017,6 +1015,14 @@ export const doctorPatientsAPI = {
     return apiRequest('/doctor/patients');
   },
 
+  // Search patients
+  search: async (query, limit = 10) => {
+    const params = new URLSearchParams({ q: query, limit: limit.toString() }).toString();
+    const res = await apiRequest(`/doctor/patients/search?${params}`);
+    // Handle both {data: [...]} and direct array responses
+    return res?.data || res || [];
+  },
+
   // Get patient by ID
   getById: async (patientId) => {
     return apiRequest(`/doctor/patients/${patientId}`);
@@ -1586,6 +1592,88 @@ export const patientPrescriptionsAPI = {
 };
 
 // Patient Doctor Search API
+// Doctor Imaging API - Medical imaging (OHIF/DICOM) for doctors
+export const doctorImagingAPI = {
+  // Get OHIF viewer URL for a specific study
+  getViewerUrl: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.study_id) queryParams.append('study_id', params.study_id);
+      if (params.study_instance_uid) queryParams.append('study_instance_uid', params.study_instance_uid);
+      if (params.patient_id) queryParams.append('patient_id', params.patient_id);
+      
+      const response = await apiRequest(`/doctor/imaging/viewer?${queryParams.toString()}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Doctor imaging get viewer URL error:', error);
+      throw error;
+    }
+  },
+
+  // Get study details
+  getStudyDetails: async (studyId) => {
+    try {
+      const response = await apiRequest(`/doctor/imaging/studies/${studyId}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Doctor imaging get study details error:', error);
+      throw error;
+    }
+  },
+
+  // List studies (optional patient filter)
+  listStudies: async (patientId = null) => {
+    try {
+      const queryParams = patientId ? `?patient_id=${patientId}` : '';
+      const response = await apiRequest(`/doctor/imaging/studies${queryParams}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Doctor imaging list studies error:', error);
+      throw error;
+    }
+  },
+};
+
+// Patient Imaging API - Medical imaging (OHIF/DICOM) for patients
+export const patientImagingAPI = {
+  // Get OHIF viewer URL for a specific study
+  getViewerUrl: async (params = {}) => {
+    try {
+      const queryParams = new URLSearchParams();
+      if (params.study_id) queryParams.append('study_id', params.study_id);
+      if (params.study_instance_uid) queryParams.append('study_instance_uid', params.study_instance_uid);
+      
+      const response = await apiRequest(`/patient/imaging/viewer?${queryParams.toString()}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Patient imaging get viewer URL error:', error);
+      throw error;
+    }
+  },
+
+  // Get study details
+  getStudyDetails: async (studyId) => {
+    try {
+      const response = await apiRequest(`/patient/imaging/studies/${studyId}`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Patient imaging get study details error:', error);
+      throw error;
+    }
+  },
+
+  // List patient's studies
+  listStudies: async () => {
+    try {
+      const response = await apiRequest(`/patient/imaging/studies`);
+      return response?.data || response;
+    } catch (error) {
+      console.error('Patient imaging list studies error:', error);
+      throw error;
+    }
+  },
+};
+
 export const patientDoctorSearchAPI = {
   // Search doctors (backend doctorsearch_enhanced router)
   search: async ({ q = '', specialty = '', hospital = '', page = 1, size = 20 } = {}) => {
@@ -1769,7 +1857,7 @@ export const patientRecordsAPI = {
   // Download record as PDF or text
   download: async (recordId) => {
     const token = localStorage.getItem('token');
-    const baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+    const baseUrl = API_BASE;
     const url = `${baseUrl}/patient/records/${recordId}/download`;
     
     const response = await fetch(url, {
@@ -2257,6 +2345,57 @@ export const adminAPI = {
     }
   },
 
+  // Create clinic staff
+  createStaff: async (clinicId, staffData) => {
+    try {
+      return await apiRequest(`/admin/clinics/${clinicId}/staff`, {
+        method: 'POST',
+        body: JSON.stringify(staffData),
+      });
+    } catch (error) {
+      console.error('Admin create staff error:', error);
+      throw error;
+    }
+  },
+
+  // Update clinic staff
+  updateStaff: async (clinicId, staffId, staffData) => {
+    try {
+      return await apiRequest(`/admin/clinics/${clinicId}/staff/${staffId}`, {
+        method: 'PUT',
+        body: JSON.stringify(staffData),
+      });
+    } catch (error) {
+      console.error('Admin update staff error:', error);
+      throw error;
+    }
+  },
+
+  // Delete clinic staff
+  deleteStaff: async (clinicId, staffId) => {
+    try {
+      return await apiRequest(`/admin/clinics/${clinicId}/staff/${staffId}`, {
+        method: 'DELETE',
+      });
+    } catch (error) {
+      console.error('Admin delete staff error:', error);
+      throw error;
+    }
+  },
+
+  // Update staff permissions
+  updatePermissions: async (clinicId, staffId, permissions) => {
+    try {
+      return await apiRequest(`/admin/clinics/${clinicId}/staff/${staffId}/permissions`, {
+        method: 'POST',
+        body: JSON.stringify({ permissions }),
+      });
+    } catch (error) {
+      console.error('Admin update permissions error:', error);
+      throw error;
+    }
+  },
+
   // Delete clinic
   deleteClinic: async (clinicId) => {
     try {
@@ -2478,8 +2617,7 @@ const formatDateRange = (date) => {
 export const checkBackendHealth = async () => {
   try {
     // Use the correct health endpoint URL (without /api/v1)
-    const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-    const healthUrl = baseUrl.includes('/api/v1') ? baseUrl.replace('/api/v1', '') + '/health' : `${baseUrl}/health`;
+    const healthUrl = `${API_BASE_URL}/health`;
     console.log('[HEALTH CHECK] Checking backend health at:', healthUrl);
     const response = await fetch(healthUrl);
     console.log('[HEALTH CHECK] Response status:', response.status);
@@ -2503,7 +2641,7 @@ export const checkDatabaseHealth = async () => {
 // WebSocket connection for real-time updates
 export const connectWebSocket = (onMessage) => {
   const token = localStorage.getItem('token');
-  const wsUrl = `ws://localhost:8000/ws?token=${token}`;
+  const wsUrl = getWebSocketUrl(token);
   
   const ws = new WebSocket(wsUrl);
   

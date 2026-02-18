@@ -1,15 +1,16 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { icdCodesAPI, medicationsAPI } from '../../../services/apiService';
 
 // Sub-components moved outside to prevent recreation
-const FieldLabel = ({ children, required = false }) => (
-  <label className="block text-slate-600 text-sm font-medium mb-2">
+const FieldLabel = ({ children, required = false, darkMode = false }) => (
+  <label className={`block text-sm font-medium mb-2 ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>
     {children}
     {required && <span className="text-red-500 ml-1">*</span>}
   </label>
 );
 
-const Input = React.memo(({ name, type = 'text', placeholder, value, onChange, onKeyDown, className = '' }) => {
+const Input = React.memo(({ name, type = 'text', placeholder, value, onChange, onKeyDown, className = '', darkMode = false }) => {
   const handleChange = useCallback((e) => {
     onChange(e);
   }, [onChange]);
@@ -40,13 +41,17 @@ const Input = React.memo(({ name, type = 'text', placeholder, value, onChange, o
         onKeyDown={handleKeyDown}
         onFocus={handleFocus}
         onBlur={handleBlur}
-        className={`w-full px-4 py-4 border rounded-lg text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 border-slate-200 text-base ${className}`}
+        className={`w-full px-4 py-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-base ${
+          darkMode 
+            ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+            : 'text-slate-600 border-slate-200 bg-white'
+        } ${className}`}
       />
     </div>
   );
 });
 
-const Select = React.memo(({ name, value, onChange, options, placeholder, className = '' }) => {
+const Select = React.memo(({ name, value, onChange, options, placeholder, className = '', darkMode = false }) => {
   const handleChange = useCallback((e) => {
     onChange(e);
   }, [onChange]);
@@ -58,18 +63,22 @@ const Select = React.memo(({ name, value, onChange, options, placeholder, classN
         name={name}
         value={value}
         onChange={handleChange}
-        className={`w-full px-4 py-4 border rounded-lg text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 border-slate-200 text-base ${className}`}
+        className={`w-full px-4 py-4 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-base ${
+          darkMode 
+            ? 'bg-slate-700 border-slate-600 text-slate-200' 
+            : 'text-slate-600 border-slate-200 bg-white'
+        } ${className}`}
       >
-        <option value="">{placeholder}</option>
+        <option value="" className={darkMode ? 'bg-slate-800' : ''}>{placeholder}</option>
         {options.map(option => (
-          <option key={option.value} value={option.value}>{option.label}</option>
+          <option key={option.value} value={option.value} className={darkMode ? 'bg-slate-800' : ''}>{option.label}</option>
         ))}
       </select>
     </div>
   );
 });
 
-const TextArea = React.memo(({ name, placeholder, value, onChange, rows = 3, className = '' }) => {
+const TextArea = React.memo(({ name, placeholder, value, onChange, rows = 3, className = '', darkMode = false }) => {
   const handleChange = useCallback((e) => {
     onChange(e);
   }, [onChange]);
@@ -93,14 +102,18 @@ const TextArea = React.memo(({ name, placeholder, value, onChange, rows = 3, cla
         onFocus={handleFocus}
         onBlur={handleBlur}
         rows={rows}
-        className={`w-full px-3 py-2 border rounded-lg text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none border-slate-200 ${className}`}
+        className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 resize-none ${
+          darkMode 
+            ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+            : 'text-slate-600 border-slate-200 bg-white'
+        } ${className}`}
       />
     </div>
   );
 });
 
 // ICD Code Search Component
-const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search ICD code or description..." }) => {
+const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search ICD code or description...", darkMode = false }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -195,7 +208,11 @@ const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search I
           onFocus={() => searchQuery.trim().length >= 2 && setShowResults(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full px-4 py-2 border rounded-lg text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 border-slate-200"
+          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+            darkMode 
+              ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+              : 'text-slate-600 border-slate-200 bg-white'
+          }`}
         />
         {isSearching && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -205,21 +222,35 @@ const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search I
       </div>
       
       {showResults && searchResults.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className={`absolute z-50 w-full mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto ${
+          darkMode 
+            ? 'bg-slate-800 border-slate-700' 
+            : 'bg-white border-slate-200'
+        }`}>
           {searchResults.map((result, index) => (
             <button
               key={result.id || result.code}
               type="button"
               onClick={() => handleSelect(result)}
-              className={`w-full text-left px-4 py-2 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none ${
-                index === selectedIndex ? 'bg-emerald-50' : ''
+              className={`w-full text-left px-4 py-2 focus:outline-none ${
+                darkMode
+                  ? index === selectedIndex 
+                    ? 'bg-emerald-900/50' 
+                    : 'hover:bg-slate-700'
+                  : index === selectedIndex 
+                    ? 'bg-emerald-50' 
+                    : 'hover:bg-emerald-50'
               }`}
             >
               <div className="flex items-start gap-2">
-                <span className="font-mono text-sm text-emerald-600 font-medium min-w-[100px]">
+                <span className={`font-mono text-sm font-medium min-w-[100px] ${
+                  darkMode ? 'text-emerald-400' : 'text-emerald-600'
+                }`}>
                   {result.code}
                 </span>
-                <span className="text-sm text-slate-700 flex-1">
+                <span className={`text-sm flex-1 ${
+                  darkMode ? 'text-slate-300' : 'text-slate-700'
+                }`}>
                   {result.description_en || result.description_ru || result.description_uz || result.description || result.name || 'No description'}
                 </span>
               </div>
@@ -232,7 +263,7 @@ const IcdCodeSearchInput = ({ value, onChange, onSelect, placeholder = "Search I
 };
 
 // Medication Search Component
-const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Search medication..." }) => {
+const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Search medication...", darkMode = false }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -340,7 +371,11 @@ const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Searc
           onFocus={() => searchQuery.trim().length >= 2 && setShowResults(true)}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full px-4 py-2 border rounded-lg text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 border-slate-200"
+          className={`w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${
+            darkMode 
+              ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+              : 'text-slate-600 border-slate-200 bg-white'
+          }`}
         />
         {isSearching && (
           <div className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -350,33 +385,51 @@ const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Searc
       </div>
       
       {showResults && searchResults.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+        <div className={`absolute z-50 w-full mt-1 border rounded-lg shadow-lg max-h-60 overflow-y-auto ${
+          darkMode 
+            ? 'bg-slate-800 border-slate-700' 
+            : 'bg-white border-slate-200'
+        }`}>
           {searchResults.map((result, index) => (
             <button
               key={result.id || index}
               type="button"
               onClick={() => handleSelect(result)}
-              className={`w-full text-left px-4 py-2 hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none ${
-                index === selectedIndex ? 'bg-emerald-50' : ''
+              className={`w-full text-left px-4 py-2 focus:outline-none ${
+                darkMode
+                  ? index === selectedIndex 
+                    ? 'bg-emerald-900/50' 
+                    : 'hover:bg-slate-700'
+                  : index === selectedIndex 
+                    ? 'bg-emerald-50' 
+                    : 'hover:bg-emerald-50'
               }`}
             >
               <div className="flex items-start gap-2">
-                <span className="font-medium text-sm text-emerald-700 flex-1">
+                <span className={`font-medium text-sm flex-1 ${
+                  darkMode ? 'text-emerald-400' : 'text-emerald-700'
+                }`}>
                   {result.brand_name || result.name || 'Unknown'}
                 </span>
                 {result.strength && (
-                  <span className="text-xs text-slate-500">
+                  <span className={`text-xs ${
+                    darkMode ? 'text-slate-400' : 'text-slate-500'
+                  }`}>
                     {result.strength} {result.strength_unit?.name || ''}
                   </span>
                 )}
               </div>
               {result.mnn?.name && (
-                <div className="text-xs text-slate-500 mt-1">
+                <div className={`text-xs mt-1 ${
+                  darkMode ? 'text-slate-400' : 'text-slate-500'
+                }`}>
                   MNN: {result.mnn.name}
                 </div>
               )}
               {result.dosage_form?.name && (
-                <div className="text-xs text-slate-500">
+                <div className={`text-xs ${
+                  darkMode ? 'text-slate-400' : 'text-slate-500'
+                }`}>
                   Form: {result.dosage_form.name}
                 </div>
               )}
@@ -388,14 +441,22 @@ const MedicationSearchInput = ({ value, onChange, onSelect, placeholder = "Searc
   );
 };
 
-const Chip = ({ children, onRemove, className = '' }) => (
-  <span className={`inline-flex items-center gap-1 px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full text-sm ${className}`}>
+const Chip = ({ children, onRemove, className = '', darkMode = false }) => (
+  <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm ${
+    darkMode 
+      ? 'bg-emerald-900/30 text-emerald-300' 
+      : 'bg-emerald-50 text-emerald-700'
+  } ${className}`}>
     {children}
     {onRemove && (
       <button
         type="button"
         onClick={onRemove}
-        className="text-emerald-500 hover:text-emerald-700 ml-1"
+        className={`ml-1 ${
+          darkMode 
+            ? 'text-emerald-400 hover:text-emerald-200' 
+            : 'text-emerald-500 hover:text-emerald-700'
+        }`}
       >
         ×
       </button>
@@ -403,42 +464,58 @@ const Chip = ({ children, onRemove, className = '' }) => (
   </span>
 );
 
-const ToggleMatrix = ({ items, values, onChange, notes = {}, onNoteChange }) => (
+const ToggleMatrix = ({ items, values, onChange, notes = {}, onNoteChange, darkMode = false, t }) => (
   <div className="grid grid-cols-2 gap-4">
     {items.map(({key, label}) => (
-      <div key={key} className="flex items-center justify-between p-3 border border-slate-200 rounded-lg">
-        <span className="text-slate-600 font-medium">{label}</span>
+      <div key={key} className={`flex items-center justify-between p-3 border rounded-lg ${
+        darkMode 
+          ? 'border-slate-700 bg-slate-800/50' 
+          : 'border-slate-200 bg-white'
+      }`}>
+        <span className={`font-medium ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{label}</span>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => onChange(key, 'normal')}
             className={`px-3 py-1 rounded text-sm ${
               values[key] === 'normal' 
-                ? 'bg-emerald-100 text-emerald-700' 
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? darkMode
+                  ? 'bg-emerald-900/50 text-emerald-300'
+                  : 'bg-emerald-100 text-emerald-700'
+                : darkMode
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Normal
+            {t('generalVisitReport.normal')}
           </button>
           <button
             type="button"
             onClick={() => onChange(key, 'abnormal')}
             className={`px-3 py-1 rounded text-sm ${
               values[key] === 'abnormal' 
-                ? 'bg-red-100 text-red-700' 
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                ? darkMode
+                  ? 'bg-red-900/50 text-red-300'
+                  : 'bg-red-100 text-red-700'
+                : darkMode
+                  ? 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Abnormal
+            {t('generalVisitReport.abnormal')}
           </button>
           {values[key] === 'abnormal' && (
             <input
               key={`note-${key}`}
               type="text"
-              placeholder="Note"
+              placeholder={t('generalVisitReport.note')}
               value={notes[key] || ''}
               onChange={(e) => onNoteChange(key, e.target.value)}
-              className="w-24 px-2 py-1 text-xs border border-slate-200 rounded focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              className={`w-24 px-2 py-1 text-xs border rounded focus:outline-none focus:ring-1 focus:ring-emerald-500 ${
+                darkMode 
+                  ? 'bg-slate-700 border-slate-600 text-slate-200 placeholder-slate-400' 
+                  : 'border-slate-200 bg-white'
+              }`}
             />
           )}
         </div>
@@ -447,20 +524,32 @@ const ToggleMatrix = ({ items, values, onChange, notes = {}, onNoteChange }) => 
   </div>
 );
 
-const Card = ({ title, children, actions, className = '' }) => {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+const Card = ({ title, children, actions, className = '', defaultCollapsed = false, darkMode = false }) => {
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
   
   return (
-    <div className={`bg-white rounded-2xl border border-slate-100 shadow-sm ${className}`}>
-      <div className="p-4 border-b border-slate-100">
+    <div className={`rounded-2xl border shadow-sm ${
+      darkMode 
+        ? 'bg-slate-800 border-slate-700' 
+        : 'bg-white border-slate-100'
+    } ${className}`}>
+      <div className={`p-4 border-b ${
+        darkMode ? 'border-slate-700' : 'border-slate-100'
+      }`}>
         <div className="flex items-center justify-between">
-          <h3 className="text-slate-800 font-semibold text-lg">{title}</h3>
+          <h3 className={`font-semibold text-lg ${
+            darkMode ? 'text-slate-200' : 'text-slate-800'
+          }`}>{title}</h3>
           <div className="flex items-center gap-2">
             {actions}
             <button
               type="button"
               onClick={() => setIsCollapsed(!isCollapsed)}
-              className="text-slate-400 hover:text-slate-600 transition-colors"
+              className={`transition-colors ${
+                darkMode 
+                  ? 'text-slate-400 hover:text-slate-200' 
+                  : 'text-slate-400 hover:text-slate-600'
+              }`}
             >
               <svg className={`w-5 h-5 transform transition-transform ${isCollapsed ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" />
@@ -479,6 +568,80 @@ const Card = ({ title, children, actions, className = '' }) => {
 };
 
 const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalSetFormData, patient, onSave }) => {
+  const { t } = useTranslation();
+
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount and when darkMode changes
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      root.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  }, [darkMode]);
+
+  // Listen for storage events and periodically check for theme changes
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'theme') {
+        const saved = localStorage.getItem('theme');
+        const newDarkMode = saved === 'dark';
+        setDarkMode(prev => {
+          if (prev !== newDarkMode) {
+            return newDarkMode;
+          }
+          return prev;
+        });
+      }
+    };
+
+    // Listen for custom theme change events (for same-tab changes)
+    const handleThemeChange = () => {
+      const saved = localStorage.getItem('theme');
+      const newDarkMode = saved === 'dark';
+      setDarkMode(prev => {
+        if (prev !== newDarkMode) {
+          return newDarkMode;
+        }
+        return prev;
+      });
+    };
+
+    // Periodic check to ensure sync (catches changes from same tab)
+    const checkTheme = () => {
+      const saved = localStorage.getItem('theme');
+      const newDarkMode = saved === 'dark';
+      const hasDarkClass = document.documentElement.classList.contains('dark');
+      
+      // Sync if there's a mismatch
+      if (newDarkMode !== hasDarkClass) {
+        setDarkMode(newDarkMode);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('themechange', handleThemeChange);
+    
+    // Check immediately and then periodically
+    checkTheme();
+    const interval = setInterval(checkTheme, 500);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('themechange', handleThemeChange);
+      clearInterval(interval);
+    };
+  }, []);
+
   // Use external formData if provided, otherwise use internal state
   const [internalFormData, setInternalFormData] = useState({
     meta: {
@@ -497,7 +660,10 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
       course: '',
       modifiers: [],
       associated_symptoms: [],
-      free: ''
+      free: '',
+      pregnancy_status: 'not_pregnant',
+      pregnancy_trimester: '',
+      breastfeeding: 'unknown'
     },
     pmh_fh_sh: {
       pmh: [],
@@ -509,6 +675,7 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
         notes: ''
       },
       smoking: 'never',
+      alcohol_use: 'none',
       audit_c: 0,
       exercise: 'low'
     },
@@ -541,7 +708,12 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
       referrals: [],
       med_changes: [],
       lifestyle: [],
-      follow_up: ''
+      follow_up: '',
+      work_capacity: 'fit_for_work',
+      sick_leave_days: '',
+      hospitalization: 'not_required',
+      destination_hospital_ward: '',
+      vitals_allergies_reviewed: false
     },
     summary: ''
   });
@@ -580,7 +752,10 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
             course: prev?.hpi?.course || '',
             modifiers: prev?.hpi?.modifiers || [],
             associated_symptoms: prev?.hpi?.associated_symptoms || [],
-            free: prev?.hpi?.free || ''
+            free: prev?.hpi?.free || '',
+            pregnancy_status: prev?.hpi?.pregnancy_status || 'not_pregnant',
+            pregnancy_trimester: prev?.hpi?.pregnancy_trimester || '',
+            breastfeeding: prev?.hpi?.breastfeeding || 'unknown'
           },
           pmh_fh_sh: {
             pmh: prev?.pmh_fh_sh?.pmh || [],
@@ -592,6 +767,7 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
               notes: prev?.pmh_fh_sh?.fh?.notes || ''
             },
             smoking: prev?.pmh_fh_sh?.smoking || 'never',
+            alcohol_use: prev?.pmh_fh_sh?.alcohol_use || 'none',
             audit_c: prev?.pmh_fh_sh?.audit_c || 0,
             exercise: prev?.pmh_fh_sh?.exercise || 'low'
           },
@@ -624,7 +800,12 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
             referrals: prev?.plan?.referrals || [],
             med_changes: prev?.plan?.med_changes || [],
             lifestyle: prev?.plan?.lifestyle || [],
-            follow_up: prev?.plan?.follow_up || ''
+            follow_up: prev?.plan?.follow_up || '',
+            work_capacity: prev?.plan?.work_capacity || 'fit_for_work',
+            sick_leave_days: prev?.plan?.sick_leave_days || '',
+            hospitalization: prev?.plan?.hospitalization || 'not_required',
+            destination_hospital_ward: prev?.plan?.destination_hospital_ward || '',
+            vitals_allergies_reviewed: prev?.plan?.vitals_allergies_reviewed || false
           }
         };
       });
@@ -841,49 +1022,60 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
   }, [formData?.plan?.med_changes, updateFormData]);
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className={`min-h-screen p-6 ${darkMode ? 'bg-slate-900' : 'bg-slate-50'}`}>
       <div className="max-w-4xl mx-auto space-y-6">
         {/* Header */}
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-6">
-          <h1 className="text-2xl font-bold text-slate-800 mb-2">General Visit Report (#001)</h1>
-          <p className="text-slate-600">Outpatient visit documentation</p>
+        <div className={`rounded-2xl border shadow-sm p-6 ${
+          darkMode 
+            ? 'bg-slate-800 border-slate-700' 
+            : 'bg-white border-slate-100'
+        }`}>
+          <h1 className={`text-2xl font-bold mb-2 ${darkMode ? 'text-slate-200' : 'text-slate-800'}`}>
+            {t('generalVisitReport.title')}
+          </h1>
+          <p className={darkMode ? 'text-slate-400' : 'text-slate-600'}>
+            {t('generalVisitReport.subtitle')}
+          </p>
         </div>
 
         {/* A. Identification */}
-        <Card title="A. Identification">
+        <Card title={t('generalVisitReport.identification')} darkMode={darkMode}>
           <div className="space-y-4">
             <div>
-              <FieldLabel required>Chief Complaint</FieldLabel>
+              <FieldLabel required darkMode={darkMode}>{t('generalVisitReport.chiefComplaint')}</FieldLabel>
               <Input
                 name="chief_complaint"
-                placeholder="Brief description of the main concern"
+                placeholder={t('generalVisitReport.chiefComplaintPlaceholder')}
                 value={formData?.chief_complaint || ''}
                 onChange={createInputHandler('chief_complaint')}
+                darkMode={darkMode}
               />
             </div>
             
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <FieldLabel>Onset Time</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('generalVisitReport.onsetTime')}</FieldLabel>
                 <Input
                   name="onset_time"
                   type="datetime-local"
                   value={formData?.onset_time || ''}
                   onChange={createInputHandler('onset_time')}
+                  darkMode={darkMode}
                 />
               </div>
               
               <div>
-                <FieldLabel>Information Source</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('generalVisitReport.informationSource')}</FieldLabel>
                 <Select
                   name="info_source"
                   value={formData?.info_source || 'patient'}
                   onChange={createInputHandler('info_source')}
                   options={[
-                    { value: 'patient', label: 'Patient' },
-                    { value: 'relative', label: 'Relative' },
-                    { value: 'record', label: 'Medical Record' }
+                    { value: 'patient', label: t('generalVisitReport.patient') },
+                    { value: 'relative', label: t('generalVisitReport.relative') },
+                    { value: 'record', label: t('generalVisitReport.medicalRecord') }
                   ]}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
@@ -891,60 +1083,64 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
         </Card>
 
         {/* B. HPI */}
-        <Card title="B. History of Present Illness">
+        <Card title={t('generalVisitReport.historyOfPresentIllness')} defaultCollapsed={true} darkMode={darkMode}>
+          <p className={`text-xs mb-4 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{t('generalVisitReport.anamnesisMorbi')}</p>
           <div className="space-y-4">
             <div className="grid grid-cols-3 gap-4">
               <div>
-                <FieldLabel>Onset</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('generalVisitReport.onset')}</FieldLabel>
                 <Select
                   name="hpi.onset"
                   value={formData?.hpi?.onset || ''}
                   onChange={createInputHandler('hpi.onset')}
                   options={[
-                    { value: 'остро', label: 'Остро (Acute)' },
-                    { value: 'постепенно', label: 'Постепенно (Gradual)' },
-                    { value: 'неизвестно', label: 'Неизвестно (Unknown)' }
+                    { value: 'остро', label: t('generalVisitReport.acute') },
+                    { value: 'постепенно', label: t('generalVisitReport.gradual') },
+                    { value: 'неизвестно', label: t('generalVisitReport.unknown') }
                   ]}
+                  darkMode={darkMode}
                 />
               </div>
               
               <div>
-                <FieldLabel>Duration</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('generalVisitReport.duration')}</FieldLabel>
                 <Input
                   name="hpi.duration"
-                  placeholder="e.g., 3 days"
+                  placeholder={t('generalVisitReport.durationPlaceholder')}
                   value={formData?.hpi?.duration || ''}
                   onChange={createInputHandler('hpi.duration')}
+                  darkMode={darkMode}
                 />
               </div>
               
               <div>
-                <FieldLabel>Course</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('generalVisitReport.course')}</FieldLabel>
                 <Select
                   name="hpi.course"
                   value={formData?.hpi?.course || ''}
                   onChange={createInputHandler('hpi.course')}
                   options={[
-                    { value: 'ухудшается', label: 'Ухудшается (Worsening)' },
-                    { value: 'улучшается', label: 'Улучшается (Improving)' },
-                    { value: 'стабильно', label: 'Стабильно (Stable)' }
+                    { value: 'ухудшается', label: t('generalVisitReport.worsening') },
+                    { value: 'улучшается', label: t('generalVisitReport.improving') },
+                    { value: 'стабильно', label: t('generalVisitReport.stable') }
                   ]}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
             
             <div>
-              <FieldLabel>Modifiers</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.modifiers')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
                 {(formData?.hpi?.modifiers || []).map(modifier => (
-                  <Chip key={modifier} onRemove={() => removeFromArray('hpi.modifiers', modifier)}>
+                  <Chip key={modifier} onRemove={() => removeFromArray('hpi.modifiers', modifier)} darkMode={darkMode}>
                     {modifier}
                   </Chip>
                 ))}
               </div>
               <Input
                 name="hpi_modifier_input"
-                placeholder="Add modifier (press Enter)"
+                placeholder={t('generalVisitReport.addModifier')}
                 value={modifierInput}
                 onChange={(e) => setModifierInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -957,21 +1153,22 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                     }
                   }
                 }}
+                darkMode={darkMode}
               />
             </div>
             
             <div>
-              <FieldLabel>Associated Symptoms</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.associatedSymptoms')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
                 {(formData?.hpi?.associated_symptoms || []).map(symptom => (
-                  <Chip key={symptom} onRemove={() => removeFromArray('hpi.associated_symptoms', symptom)}>
+                  <Chip key={symptom} onRemove={() => removeFromArray('hpi.associated_symptoms', symptom)} darkMode={darkMode}>
                     {symptom}
                   </Chip>
                 ))}
               </div>
               <Input
                 name="hpi_symptom_input"
-                placeholder="Add symptom (press Enter)"
+                placeholder={t('generalVisitReport.addSymptom')}
                 value={symptomInput}
                 onChange={(e) => setSymptomInput(e.target.value)}
                 onKeyDown={(e) => {
@@ -984,47 +1181,117 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                     }
                   }
                 }}
+                darkMode={darkMode}
               />
             </div>
             
             <div>
-              <FieldLabel>Free Text</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.freeText')}</FieldLabel>
               <div className="flex gap-2">
                 <TextArea
                   name="hpi.free"
-                  placeholder="Detailed description of the present illness..."
+                  placeholder={t('generalVisitReport.detailedDescription')}
                   value={formData?.hpi?.free || ''}
                   onChange={createInputHandler('hpi.free')}
                   rows={4}
                   className="flex-1"
+                  darkMode={darkMode}
                 />
-                <button type="button" className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 transition-colors">
+                <button type="button" className={`px-4 py-2 rounded-lg transition-colors ${
+                  darkMode 
+                    ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}>
                   🧠 AI Suggest
                 </button>
               </div>
             </div>
+
+            {/* Pregnancy / Breastfeeding Section - Only for women 15-49 */}
+            {(() => {
+              if (!patient) return false;
+              const gender = (patient.gender || patient.sex || '').toString().toLowerCase();
+              const isFemale = gender === 'female' || gender === 'f' || gender === 'ж' || gender === 'женский';
+              const age = patient.age || (patient.date_of_birth ? Math.floor((new Date() - new Date(patient.date_of_birth)) / (365.25 * 24 * 60 * 60 * 1000)) : null);
+              return isFemale && age && age >= 15 && age <= 49;
+            })() && (
+              <div className={`border-t pt-4 mt-4 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+                <FieldLabel darkMode={darkMode}>{t('generalVisitReport.pregnancyBreastfeedingStatus')}</FieldLabel>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <FieldLabel darkMode={darkMode}>{t('generalVisitReport.pregnancyStatus')}</FieldLabel>
+                    <Select
+                      name="hpi.pregnancy_status"
+                      value={formData?.hpi?.pregnancy_status || 'not_pregnant'}
+                      onChange={createInputHandler('hpi.pregnancy_status')}
+                      options={[
+                        { value: 'not_pregnant', label: t('generalVisitReport.notPregnant') },
+                        { value: 'pregnant', label: t('generalVisitReport.pregnant') },
+                        { value: 'unknown', label: t('generalVisitReport.unknown') }
+                      ]}
+                      darkMode={darkMode}
+                    />
+                  </div>
+                  {formData?.hpi?.pregnancy_status === 'pregnant' && (
+                    <div>
+                      <FieldLabel darkMode={darkMode}>{t('generalVisitReport.trimester')}</FieldLabel>
+                      <Select
+                        name="hpi.pregnancy_trimester"
+                        value={formData?.hpi?.pregnancy_trimester || ''}
+                        onChange={createInputHandler('hpi.pregnancy_trimester')}
+                        options={[
+                          { value: 'I', label: 'I' },
+                          { value: 'II', label: 'II' },
+                          { value: 'III', label: 'III' }
+                        ]}
+                        darkMode={darkMode}
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <FieldLabel darkMode={darkMode}>{t('generalVisitReport.breastfeeding')}</FieldLabel>
+                    <Select
+                      name="hpi.breastfeeding"
+                      value={formData?.hpi?.breastfeeding || 'unknown'}
+                      onChange={createInputHandler('hpi.breastfeeding')}
+                      options={[
+                        { value: 'yes', label: t('generalVisitReport.yes') },
+                        { value: 'no', label: t('generalVisitReport.no') },
+                        { value: 'unknown', label: t('generalVisitReport.unknown') }
+                      ]}
+                      darkMode={darkMode}
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </Card>
 
         {/* B. PMH / FH / SH */}
-        <Card title="B. Past Medical History / Family History / Social History">
+        <Card title={t('generalVisitReport.pastMedicalHistory')} defaultCollapsed={true} darkMode={darkMode}>
+          <p className={`text-xs mb-4 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{t('generalVisitReport.anamnesisVitae')}</p>
           <div className="space-y-6">
             <div>
-              <FieldLabel>Past Medical History</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.pastMedicalHistoryItems')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
                 {(formData?.pmh_fh_sh?.pmh || []).map(condition => (
-                  <Chip key={condition} onRemove={() => removeFromArray('pmh_fh_sh.pmh', condition)}>
+                  <Chip key={condition} onRemove={() => removeFromArray('pmh_fh_sh.pmh', condition)} darkMode={darkMode}>
                     {condition}
                   </Chip>
                 ))}
               </div>
               <div className="grid grid-cols-4 gap-2">
-                {['HTN', 'T2DM', 'COPD', 'CAD', 'CKD', 'Depression', 'Anxiety', 'Other'].map(condition => (
+                {['HTN', 'T2DM', 'CAD', 'CKD', 'Depression', 'Tuberculosis', 'Hepatitis B/C', 'Bronchial Asthma', 'Peptic Ulcer', 'Rheumatic Heart Disease', 'Other'].map(condition => (
                   <button
                     key={condition}
                     type="button"
                     onClick={() => addToArray('pmh_fh_sh.pmh', condition)}
-                    className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors text-sm"
+                    className={`px-3 py-1 rounded transition-colors text-sm ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                   >
                     {condition}
                   </button>
@@ -1033,31 +1300,37 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
             </div>
             
             <div>
-              <FieldLabel>Surgeries/Hospitalizations</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.surgeriesHospitalizations')}</FieldLabel>
               <TextArea
                 name="pmh_fh_sh.surgeries"
-                placeholder="List any surgeries or hospitalizations..."
+                placeholder={t('generalVisitReport.surgeriesPlaceholder')}
                 value={formData?.pmh_fh_sh?.surgeries || ''}
                 onChange={(e) => updateFormData('pmh_fh_sh.surgeries', e.target.value)}
                 rows={3}
+                darkMode={darkMode}
               />
             </div>
             
             <div>
-              <FieldLabel>Family History</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.familyHistory')}</FieldLabel>
               <div className="grid grid-cols-3 gap-4">
-                {['cardio', 'diabetes', 'cancer'].map(condition => (
-                  <div key={condition} className="space-y-2">
-                    <label className="text-slate-600 text-sm font-medium capitalize">{condition}</label>
+                {[
+                  { key: 'cardio', label: t('generalVisitReport.cardiovascular') },
+                  { key: 'diabetes', label: t('generalVisitReport.diabetes') },
+                  { key: 'cancer', label: t('generalVisitReport.cancer') }
+                ].map(({ key, label }) => (
+                  <div key={key} className="space-y-2">
+                    <label className={`text-sm font-medium ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{label}</label>
                     <Select
-                      name={`pmh_fh_sh.fh.${condition}`}
-                      value={formData?.pmh_fh_sh?.fh?.[condition] || 'unknown'}
-                      onChange={(e) => updateFormData(`pmh_fh_sh.fh.${condition}`, e.target.value)}
+                      name={`pmh_fh_sh.fh.${key}`}
+                      value={formData?.pmh_fh_sh?.fh?.[key] || 'unknown'}
+                      onChange={(e) => updateFormData(`pmh_fh_sh.fh.${key}`, e.target.value)}
                       options={[
-                        { value: 'yes', label: 'Yes' },
-                        { value: 'no', label: 'No' },
-                        { value: 'unknown', label: 'Unknown' }
+                        { value: 'yes', label: t('generalVisitReport.yes') },
+                        { value: 'no', label: t('generalVisitReport.no') },
+                        { value: 'unknown', label: t('generalVisitReport.unknown') }
                       ]}
+                      darkMode={darkMode}
                     />
                   </div>
                 ))}
@@ -1065,106 +1338,119 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
               <div className="mt-2">
                 <Input
                   name="pmh_fh_sh.fh.notes"
-                  placeholder="Additional family history notes..."
+                  placeholder={t('generalVisitReport.familyHistoryNotes')}
                   value={formData?.pmh_fh_sh?.fh?.notes || ''}
                   onChange={(e) => updateFormData('pmh_fh_sh.fh.notes', e.target.value)}
+                  darkMode={darkMode}
                 />
               </div>
             </div>
             
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <FieldLabel>Smoking</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('generalVisitReport.smoking')}</FieldLabel>
                 <Select
                   name="pmh_fh_sh.smoking"
                   value={formData?.pmh_fh_sh?.smoking || 'never'}
                   onChange={(e) => updateFormData('pmh_fh_sh.smoking', e.target.value)}
                   options={[
-                    { value: 'never', label: 'Never' },
-                    { value: 'former', label: 'Former' },
-                    { value: 'current', label: 'Current' }
+                    { value: 'never', label: t('generalVisitReport.never') },
+                    { value: 'former', label: t('generalVisitReport.former') },
+                    { value: 'current', label: t('generalVisitReport.current') }
                   ]}
+                  darkMode={darkMode}
                 />
               </div>
               
               <div>
-                <FieldLabel>AUDIT-C Score</FieldLabel>
-                <Input
-                  name="pmh_fh_sh.audit_c"
-                  type="number"
-                  min="0"
-                  max="12"
-                  value={formData?.pmh_fh_sh?.audit_c || 0}
-                  onChange={(e) => updateFormData('pmh_fh_sh.audit_c', parseInt(e.target.value) || 0)}
-                />
-              </div>
-              
-              <div>
-                <FieldLabel>Exercise</FieldLabel>
+                <FieldLabel darkMode={darkMode}>{t('generalVisitReport.alcoholUse')}</FieldLabel>
                 <Select
-                  name="pmh_fh_sh.exercise"
-                  value={formData?.pmh_fh_sh?.exercise || 'low'}
-                  onChange={(e) => updateFormData('pmh_fh_sh.exercise', e.target.value)}
+                  name="pmh_fh_sh.alcohol_use"
+                  value={formData?.pmh_fh_sh?.alcohol_use || 'none'}
+                  onChange={(e) => updateFormData('pmh_fh_sh.alcohol_use', e.target.value)}
                   options={[
-                    { value: 'low', label: 'Low' },
-                    { value: 'moderate', label: 'Moderate' },
-                    { value: 'high', label: 'High' }
+                    { value: 'none', label: t('generalVisitReport.none') },
+                    { value: 'occasional', label: t('generalVisitReport.occasional') },
+                    { value: 'regular', label: t('generalVisitReport.regular') }
                   ]}
+                  darkMode={darkMode}
                 />
               </div>
+            </div>
+            
+            <div className="opacity-60">
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.exercise')} <span className={`text-xs ${darkMode ? 'text-slate-400' : 'text-slate-400'}`}>{t('generalVisitReport.optional')}</span></FieldLabel>
+              <Select
+                name="pmh_fh_sh.exercise"
+                value={formData?.pmh_fh_sh?.exercise || 'low'}
+                onChange={(e) => updateFormData('pmh_fh_sh.exercise', e.target.value)}
+                options={[
+                  { value: 'low', label: t('generalVisitReport.low') },
+                  { value: 'moderate', label: t('generalVisitReport.moderate') },
+                  { value: 'high', label: t('generalVisitReport.high') }
+                ]}
+                darkMode={darkMode}
+              />
             </div>
           </div>
         </Card>
 
         {/* B. ROS */}
-        <Card title="B. Review of Systems">
+        <Card title={t('generalVisitReport.reviewOfSystems')} defaultCollapsed={true} darkMode={darkMode}>
           <ToggleMatrix
             items={[
-              { key: 'respiratory', label: 'Respiratory' },
-              { key: 'cardio', label: 'Cardio' },
-              { key: 'gi', label: 'GI' },
-              { key: 'neuro', label: 'Neuro' },
-              { key: 'gu', label: 'GU' },
-              { key: 'derm', label: 'Derm' },
-              { key: 'ent', label: 'ENT' },
-              { key: 'msk', label: 'MSK' }
+              { key: 'respiratory', label: t('generalVisitReport.respiratory') },
+              { key: 'cardio', label: t('generalVisitReport.cardio') },
+              { key: 'gi', label: t('generalVisitReport.gi') },
+              { key: 'neuro', label: t('generalVisitReport.neuro') },
+              { key: 'gu', label: t('generalVisitReport.gu') },
+              { key: 'derm', label: t('generalVisitReport.derm') },
+              { key: 'ent', label: t('generalVisitReport.ent') },
+              { key: 'msk', label: t('generalVisitReport.msk') }
             ]}
             values={formData?.ros || { respiratory: 'normal', cardio: 'normal', gi: 'normal', neuro: 'normal', gu: 'normal', derm: 'normal', ent: 'normal', msk: 'normal', notes: {} }}
             onChange={(key, value) => updateFormData(`ros.${key}`, value)}
             notes={formData?.ros?.notes || {}}
             onNoteChange={(key, value) => updateFormData(`ros.notes.${key}`, value)}
+            darkMode={darkMode}
+            t={t}
           />
         </Card>
 
         {/* B. PE */}
-        <Card title="B. Physical Examination">
+        <Card title={t('generalVisitReport.physicalExamination')} defaultCollapsed={true} darkMode={darkMode}>
+          <p className={`text-xs mb-4 ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>{t('generalVisitReport.objectiveStatus')}</p>
           <ToggleMatrix
             items={[
-              { key: 'general', label: 'General' },
-              { key: 'lungs', label: 'Lungs' },
-              { key: 'heart', label: 'Heart' },
-              { key: 'abdomen', label: 'Abdomen' },
-              { key: 'neuro', label: 'Neuro' },
-              { key: 'extremities', label: 'Extremities' }
+              { key: 'general', label: t('generalVisitReport.general') },
+              { key: 'lungs', label: t('generalVisitReport.lungs') },
+              { key: 'heart', label: t('generalVisitReport.heart') },
+              { key: 'abdomen', label: t('generalVisitReport.abdomen') },
+              { key: 'neuro', label: t('generalVisitReport.neuro') },
+              { key: 'extremities', label: t('generalVisitReport.extremities') }
             ]}
             values={formData?.pe || { general: 'normal', lungs: 'normal', heart: 'normal', abdomen: 'normal', neuro: 'normal', extremities: 'normal', notes: {} }}
             onChange={(key, value) => updateFormData(`pe.${key}`, value)}
             notes={formData?.pe?.notes || {}}
             onNoteChange={(key, value) => updateFormData(`pe.notes.${key}`, value)}
+            darkMode={darkMode}
+            t={t}
           />
         </Card>
 
         {/* B. Assessment */}
-        <Card title="B. Assessment">
+        <Card title={t('generalVisitReport.assessment')} darkMode={darkMode}>
           <div className="space-y-4">
             <div>
-              <FieldLabel required>Working Diagnosis</FieldLabel>
+              <FieldLabel required darkMode={darkMode}>
+                {t('generalVisitReport.workingDiagnosis')} <span className={`text-xs font-normal ${darkMode ? 'text-slate-500' : 'text-slate-400'}`}>({t('generalVisitReport.preliminaryDiagnosis')})</span>
+              </FieldLabel>
               <div className="space-y-2">
                 {(formData?.assessment?.working || []).map((diagnosis, index) => (
                   <div key={index} className="flex gap-2 items-start">
                     <div className="flex gap-2 items-start flex-1">
                       <Input
-                        placeholder="ICD-11 code"
+                        placeholder={t('generalVisitReport.icd11Code')}
                         value={diagnosis.code || ''}
                         onChange={(e) => {
                           const currentWorking = formData?.assessment?.working || [];
@@ -1173,9 +1459,10 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                           updateFormData('assessment.working', newWorking);
                         }}
                         className="w-40"
+                        darkMode={darkMode}
                       />
                       <Input
-                        placeholder="Diagnosis term"
+                        placeholder={t('generalVisitReport.diagnosisTerm')}
                         value={diagnosis.term || ''}
                         onChange={(e) => {
                           const currentWorking = formData?.assessment?.working || [];
@@ -1184,6 +1471,7 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                           updateFormData('assessment.working', newWorking);
                         }}
                         className="flex-1"
+                        darkMode={darkMode}
                       />
                     </div>
                     <button
@@ -1195,13 +1483,14 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                       }}
                       className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
                     >
-                      Remove
+                      {t('generalVisitReport.remove')}
                     </button>
                   </div>
                 ))}
                 <div className="flex gap-2 items-start">
                   <IcdCodeSearchInput
-                    placeholder="Search ICD-11 code or diagnosis..."
+                    placeholder={t('generalVisitReport.searchIcdCode')}
+                    darkMode={darkMode}
                     onSelect={(selected) => {
                       const currentWorking = formData?.assessment?.working || [];
                       const newWorking = [...currentWorking, selected];
@@ -1213,13 +1502,13 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
             </div>
             
             <div>
-              <FieldLabel>Differential Diagnoses</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.differentialDiagnoses')}</FieldLabel>
               <div className="space-y-2">
                 {(formData?.assessment?.ddx || []).map((diagnosis, index) => (
                   <div key={index} className="flex gap-2 items-start">
                     <div className="flex gap-2 items-start flex-1">
                       <Input
-                        placeholder="ICD-11 code"
+                        placeholder={t('generalVisitReport.icd11Code')}
                         value={diagnosis.code || ''}
                         onChange={(e) => {
                           const currentDdx = formData?.assessment?.ddx || [];
@@ -1228,9 +1517,10 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                           updateFormData('assessment.ddx', newDdx);
                         }}
                         className="w-40"
+                        darkMode={darkMode}
                       />
                       <Input
-                        placeholder="Diagnosis term"
+                        placeholder={t('generalVisitReport.diagnosisTerm')}
                         value={diagnosis.term || ''}
                         onChange={(e) => {
                           const currentDdx = formData?.assessment?.ddx || [];
@@ -1239,6 +1529,7 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                           updateFormData('assessment.ddx', newDdx);
                         }}
                         className="flex-1"
+                        darkMode={darkMode}
                       />
                     </div>
                     <button
@@ -1250,13 +1541,14 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                       }}
                       className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
                     >
-                      Remove
+                      {t('generalVisitReport.remove')}
                     </button>
                   </div>
                 ))}
                 <div className="flex gap-2 items-start">
                   <IcdCodeSearchInput
-                    placeholder="Search ICD-11 code or diagnosis..."
+                    placeholder={t('generalVisitReport.searchIcdCode')}
+                    darkMode={darkMode}
                     onSelect={(selected) => {
                       const currentDdx = formData?.assessment?.ddx || [];
                       const newDdx = [...currentDdx, selected];
@@ -1270,11 +1562,13 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
         </Card>
 
         {/* B. Plan */}
-        <Card title="B. Plan">
+        <Card title={t('generalVisitReport.plan')} defaultCollapsed={true} darkMode={darkMode}>
           <div className="space-y-6">
             {/* Tests Section */}
             <div>
-              <FieldLabel>Tests <span className="text-slate-400">({formData?.plan?.tests?.length || 0})</span></FieldLabel>
+              <FieldLabel darkMode={darkMode}>
+                {t('generalVisitReport.tests')} <span className={darkMode ? 'text-slate-500' : 'text-slate-400'}>({formData?.plan?.tests?.length || 0})</span>
+              </FieldLabel>
               
               {/* Test presets */}
               <div className="grid grid-cols-4 gap-2 mb-3">
@@ -1286,7 +1580,11 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                       label: preset,
                       type: preset === 'CXR' || preset === 'ECG' ? 'imaging' : 'lab'
                     })}
-                    className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
+                    className={`px-3 py-1 rounded text-sm ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                   >
                     {preset}
                   </button>
@@ -1299,11 +1597,11 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                   {(formData?.plan?.tests || []).map((t, idx) => {
                     const testObj = convertStringToTest(t);
                     return (
-                      <Chip key={idx} className="bg-emerald-50">
+                      <Chip key={idx} darkMode={darkMode}>
                         <span className="mr-1">{testObj.label}</span>
                         <button
                           type="button"
-                          className="text-slate-500 hover:text-slate-700"
+                          className={darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}
                           onClick={() => openTestEditor(testObj, idx)}
                         >
                           ✎
@@ -1323,56 +1621,68 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
 
               {/* Inline test editor */}
               {editingTest && (
-                <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
+                <div className={`mt-3 grid grid-cols-12 gap-4 p-4 rounded-lg border ${
+                  darkMode 
+                    ? 'bg-slate-800 border-slate-700' 
+                    : 'bg-white border-slate-200'
+                }`}>
                   <div className="col-span-12">
                     <Select
                       name="test.type"
                       value={editingTest.type}
                       onChange={(e) => setEditingTest(s => ({ ...s, type: e.target.value }))}
                       options={[
-                        { value: 'lab', label: 'Lab' },
-                        { value: 'imaging', label: 'Imaging' }
+                        { value: 'lab', label: t('generalVisitReport.lab') },
+                        { value: 'imaging', label: t('generalVisitReport.imaging') }
                       ]}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input
                       name="test.label"
-                      placeholder="Test name"
+                      placeholder={t('generalVisitReport.testName')}
                       value={editingTest.label}
                       onChange={(e) => setEditingTest(s => ({ ...s, label: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input
                       name="test.note"
-                      placeholder="Clinical question / note"
+                      placeholder={t('generalVisitReport.clinicalQuestion')}
                       value={editingTest.note || ''}
                       onChange={(e) => setEditingTest(s => ({ ...s, note: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input
                       name="test.dest"
-                      placeholder="Destination clinic (optional)"
+                      placeholder={t('generalVisitReport.destinationClinic')}
                       value={editingTest.destinationClinicId || ''}
                       onChange={(e) => setEditingTest(s => ({ ...s, destinationClinicId: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12 flex justify-end gap-3 mt-2">
                     <button
                       type="button"
                       onClick={() => { setEditingTest(null); setEditingTestIdx(null); }}
-                      className="px-4 py-2 border rounded-lg hover:bg-slate-50"
+                      className={`px-4 py-2 border rounded-lg ${
+                        darkMode 
+                          ? 'border-slate-600 hover:bg-slate-700 text-slate-300' 
+                          : 'border-slate-200 hover:bg-slate-50'
+                      }`}
                     >
-                      Cancel
+                      {t('generalVisitReport.cancel')}
                     </button>
                     <button
                       type="button"
                       onClick={saveTest}
                       className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
                     >
-                      Save
+                      {t('generalVisitReport.save')}
                     </button>
                   </div>
                 </div>
@@ -1381,7 +1691,9 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
 
             {/* Referrals Section */}
             <div>
-              <FieldLabel>Referrals <span className="text-slate-400">({formData?.plan?.referrals?.length || 0})</span></FieldLabel>
+              <FieldLabel darkMode={darkMode}>
+                {t('generalVisitReport.referrals')} <span className={darkMode ? 'text-slate-500' : 'text-slate-400'}>({formData?.plan?.referrals?.length || 0})</span>
+              </FieldLabel>
               
               {/* Referral presets */}
               <div className="grid grid-cols-4 gap-2 mb-3">
@@ -1390,7 +1702,11 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                     key={sp}
                     type="button"
                     onClick={() => openRefEditor({ specialty: sp })}
-                    className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-sm"
+                    className={`px-3 py-1 rounded text-sm ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                   >
                     {sp}
                   </button>
@@ -1403,11 +1719,11 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                   {(formData?.plan?.referrals || []).map((r, idx) => {
                     const refObj = convertStringToReferral(r);
                     return (
-                      <Chip key={idx}>
+                      <Chip key={idx} darkMode={darkMode}>
                         <span className="mr-1">{refObj.doctorId ? `Dr ${refObj.doctorId}` : refObj.specialty}</span>
                         <button
                           type="button"
-                          className="text-slate-500 hover:text-slate-700"
+                          className={darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}
                           onClick={() => openRefEditor(refObj, idx)}
                         >
                           ✎
@@ -1427,26 +1743,33 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
 
               {/* Inline referral editor */}
               {editingRef && (
-                <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
+                <div className={`mt-3 grid grid-cols-12 gap-4 p-4 rounded-lg border ${
+                  darkMode 
+                    ? 'bg-slate-800 border-slate-700' 
+                    : 'bg-white border-slate-200'
+                }`}>
                   <div className="col-span-12">
                     <Input
-                      placeholder="Specialty"
+                      placeholder={t('generalVisitReport.specialty')}
                       value={editingRef.specialty}
                       onChange={(e) => setEditingRef(s => ({ ...s, specialty: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input
-                      placeholder="Specific doctor (optional)"
+                      placeholder={t('generalVisitReport.specificDoctor')}
                       value={editingRef.doctorId || ''}
                       onChange={(e) => setEditingRef(s => ({ ...s, doctorId: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input
-                      placeholder="Reason / note"
+                      placeholder={t('generalVisitReport.reasonNote')}
                       value={editingRef.reason || ''}
                       onChange={(e) => setEditingRef(s => ({ ...s, reason: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
@@ -1455,33 +1778,39 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                       value={editingRef.urgency || 'routine'}
                       onChange={(e) => setEditingRef(s => ({ ...s, urgency: e.target.value }))}
                       options={[
-                        { value: 'routine', label: 'Routine' },
-                        { value: 'soon', label: 'Soon' },
-                        { value: 'urgent', label: 'Urgent' }
+                        { value: 'routine', label: t('generalVisitReport.routine') },
+                        { value: 'soon', label: t('generalVisitReport.soon') },
+                        { value: 'urgent', label: t('generalVisitReport.urgent') }
                       ]}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input
-                      placeholder="Destination clinic (optional)"
+                      placeholder={t('generalVisitReport.destinationClinic')}
                       value={editingRef.destinationClinicId || ''}
                       onChange={(e) => setEditingRef(s => ({ ...s, destinationClinicId: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12 flex justify-end gap-3 mt-2">
                     <button
                       type="button"
-                      className="px-4 py-2 border rounded-lg hover:bg-slate-50"
+                      className={`px-4 py-2 border rounded-lg ${
+                        darkMode 
+                          ? 'border-slate-600 hover:bg-slate-700 text-slate-300' 
+                          : 'border-slate-200 hover:bg-slate-50'
+                      }`}
                       onClick={() => { setEditingRef(null); setEditingRefIdx(null); }}
                     >
-                      Cancel
+                      {t('generalVisitReport.cancel')}
                     </button>
                     <button
                       type="button"
                       className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
                       onClick={saveRef}
                     >
-                      Save
+                      {t('generalVisitReport.save')}
                     </button>
                   </div>
                 </div>
@@ -1490,15 +1819,21 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
 
             {/* Medications Section */}
             <div>
-              <FieldLabel>Medication Changes <span className="text-slate-400">({formData?.plan?.med_changes?.length || 0})</span></FieldLabel>
+              <FieldLabel darkMode={darkMode}>
+                {t('generalVisitReport.medicationChanges')} <span className={darkMode ? 'text-slate-500' : 'text-slate-400'}>({formData?.plan?.med_changes?.length || 0})</span>
+              </FieldLabel>
               
               {/* Add medication button */}
               <button
                 type="button"
                 onClick={() => openMedEditor()}
-                className="px-4 py-2 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors mb-3"
+                className={`px-4 py-2 rounded transition-colors mb-3 ${
+                  darkMode 
+                    ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
-                Add Medication
+                {t('generalVisitReport.addMedication')}
               </button>
 
               {/* Saved medications list */}
@@ -1507,13 +1842,13 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                   {(formData?.plan?.med_changes || []).map((med, idx) => {
                     const medObj = convertStringToMed(med);
                     return (
-                      <Chip key={idx} className="bg-blue-50">
+                      <Chip key={idx} darkMode={darkMode}>
                         <span className="mr-1">
                           {typeof med === 'string' ? med : `${medObj.med} ${medObj.dose} ${medObj.route} ${medObj.freq}`}
                         </span>
                         <button
                           type="button"
-                          className="text-slate-500 hover:text-slate-700"
+                          className={darkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-700'}
                           onClick={() => openMedEditor(medObj, idx)}
                         >
                           ✎
@@ -1533,10 +1868,15 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
 
               {/* Inline medication editor */}
               {editingMed && (
-                <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
+                <div className={`mt-3 grid grid-cols-12 gap-4 p-4 rounded-lg border ${
+                  darkMode 
+                    ? 'bg-slate-800 border-slate-700' 
+                    : 'bg-white border-slate-200'
+                }`}>
                   <div className="col-span-12">
                     <MedicationSearchInput
-                      placeholder="Search medication..."
+                      placeholder={t('generalVisitReport.searchMedication')}
+                      darkMode={darkMode}
                       value={editingMed.med}
                       onChange={(e) => setEditingMed(s => ({ ...s, med: e.target.value }))}
                       onSelect={(selected) => {
@@ -1550,32 +1890,47 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                   </div>
                   <div className="col-span-12">
                     <Input
-                      placeholder="Dose"
+                      placeholder={t('generalVisitReport.dose')}
                       value={editingMed.dose}
                       onChange={(e) => setEditingMed(s => ({ ...s, dose: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input
-                      placeholder="Route"
+                      placeholder={t('generalVisitReport.route')}
                       value={editingMed.route}
                       onChange={(e) => setEditingMed(s => ({ ...s, route: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input
-                      placeholder="Frequency"
+                      placeholder={t('generalVisitReport.frequency')}
                       value={editingMed.freq}
                       onChange={(e) => setEditingMed(s => ({ ...s, freq: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
                   <div className="col-span-12">
                     <Input
-                      placeholder="Duration"
+                      placeholder={t('generalVisitReport.duration')}
                       value={editingMed.duration}
                       onChange={(e) => setEditingMed(s => ({ ...s, duration: e.target.value }))}
+                      darkMode={darkMode}
                     />
                   </div>
+                  <div className="col-span-12">
+                    <Input
+                      placeholder={t('generalVisitReport.instructions')}
+                      value={editingMed.instructions || ''}
+                      onChange={(e) => setEditingMed(s => ({ ...s, instructions: e.target.value }))}
+                      darkMode={darkMode}
+                    />
+                  </div>
+                  {/* Send to Pharmacy / Pharmacy ID - Hidden by default for Uzbek clinics */}
+                  {/* Uncomment and show conditionally based on clinic settings if pharmacy integration exists */}
+                  {/* 
                   <div className="col-span-12 flex items-center gap-2">
                     <input
                       type="checkbox"
@@ -1583,14 +1938,7 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                       onChange={(e) => setEditingMed(s => ({ ...s, sendToPharmacy: e.target.checked }))}
                       className="rounded w-4 h-4"
                     />
-                    <label className="text-sm text-slate-600">Send to Pharmacy</label>
-                  </div>
-                  <div className="col-span-12">
-                    <Input
-                      placeholder="Instructions (optional)"
-                      value={editingMed.instructions || ''}
-                      onChange={(e) => setEditingMed(s => ({ ...s, instructions: e.target.value }))}
-                    />
+                    <label className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('generalVisitReport.sendToPharmacy')}</label>
                   </div>
                   {editingMed.sendToPharmacy && (
                     <div className="col-span-12">
@@ -1601,20 +1949,25 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
                       />
                     </div>
                   )}
+                  */}
                   <div className="col-span-12 flex justify-end gap-3 mt-2">
                     <button
                       type="button"
-                      className="px-4 py-2 border rounded-lg hover:bg-slate-50"
+                      className={`px-4 py-2 border rounded-lg ${
+                        darkMode 
+                          ? 'border-slate-600 hover:bg-slate-700 text-slate-300' 
+                          : 'border-slate-200 hover:bg-slate-50'
+                      }`}
                       onClick={() => { setEditingMed(null); setEditingMedIdx(null); }}
                     >
-                      Cancel
+                      {t('generalVisitReport.cancel')}
                     </button>
                     <button
                       type="button"
                       className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
                       onClick={saveMed}
                     >
-                      Save
+                      {t('generalVisitReport.save')}
                     </button>
                   </div>
                 </div>
@@ -1622,21 +1975,32 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
             </div>
             
             <div>
-              <FieldLabel>Lifestyle/Education</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.lifestyle')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
                 {(formData?.plan?.lifestyle || []).map(item => (
-                  <Chip key={item} onRemove={() => removeFromArray('plan.lifestyle', item)}>
+                  <Chip key={item} onRemove={() => removeFromArray('plan.lifestyle', item)} darkMode={darkMode}>
                     {item}
                   </Chip>
                 ))}
               </div>
               <div className="grid grid-cols-4 gap-2">
-                {['Hydration', 'Rest', 'Exercise', 'Diet', 'Smoking Cessation', 'Other'].map(item => (
+                {[
+                  t('generalVisitReport.hydration'),
+                  t('generalVisitReport.rest'),
+                  t('generalVisitReport.exercise'),
+                  t('generalVisitReport.diet'),
+                  t('generalVisitReport.smokingCessation'),
+                  t('generalVisitReport.other')
+                ].map(item => (
                   <button
                     key={item}
                     type="button"
                     onClick={() => addToArray('plan.lifestyle', item)}
-                    className="px-3 py-1 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 transition-colors text-sm"
+                    className={`px-3 py-1 rounded transition-colors text-sm ${
+                      darkMode 
+                        ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' 
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
                   >
                     {item}
                   </button>
@@ -1645,30 +2009,117 @@ const GeneralVisitReport = ({ formData: externalFormData, setFormData: externalS
             </div>
             
             <div>
-              <FieldLabel>Follow-up</FieldLabel>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.followUp')}</FieldLabel>
               <Select
                 name="plan.follow_up"
                 value={formData?.plan?.follow_up || ''}
                 onChange={(e) => updateFormData('plan.follow_up', e.target.value)}
                 options={[
-                  { value: '24h', label: '24 hours' },
-                  { value: '3d', label: '3 days' },
-                  { value: '1w', label: '1 week' },
-                  { value: 'PRN', label: 'As needed (PRN)' }
+                  { value: '24h', label: t('generalVisitReport.hours24') },
+                  { value: '3d', label: t('generalVisitReport.days3') },
+                  { value: '1w', label: t('generalVisitReport.week1') },
+                  { value: 'PRN', label: t('generalVisitReport.asNeeded') }
                 ]}
+                darkMode={darkMode}
               />
+            </div>
+
+            {/* Work Capacity / Sick Leave Decision */}
+            <div className={`border-t pt-4 mt-4 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.workCapacitySickLeave')}</FieldLabel>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel darkMode={darkMode}>{t('generalVisitReport.workCapacityThisVisit')}</FieldLabel>
+                  <Select
+                    name="plan.work_capacity"
+                    value={formData?.plan?.work_capacity || 'fit_for_work'}
+                    onChange={(e) => updateFormData('plan.work_capacity', e.target.value)}
+                    options={[
+                      { value: 'fit_for_work', label: t('generalVisitReport.fitForWork') },
+                      { value: 'limited_capacity', label: t('generalVisitReport.limitedCapacity') },
+                      { value: 'temporarily_unfit', label: t('generalVisitReport.temporarilyUnfit') }
+                    ]}
+                    darkMode={darkMode}
+                  />
+                </div>
+                {formData?.plan?.work_capacity === 'temporarily_unfit' && (
+                  <div>
+                    <FieldLabel darkMode={darkMode}>{t('generalVisitReport.sickLeaveRecommended')}</FieldLabel>
+                    <Input
+                      name="plan.sick_leave_days"
+                      type="number"
+                      min="0"
+                      placeholder="Number of days"
+                      value={formData?.plan?.sick_leave_days || ''}
+                      onChange={(e) => updateFormData('plan.sick_leave_days', e.target.value)}
+                      darkMode={darkMode}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Hospitalization Decision */}
+            <div className={`border-t pt-4 mt-4 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+              <FieldLabel darkMode={darkMode}>{t('generalVisitReport.hospitalizationDecision')}</FieldLabel>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel darkMode={darkMode}>{t('generalVisitReport.hospitalization')}</FieldLabel>
+                  <Select
+                    name="plan.hospitalization"
+                    value={formData?.plan?.hospitalization || 'not_required'}
+                    onChange={(e) => updateFormData('plan.hospitalization', e.target.value)}
+                    options={[
+                      { value: 'not_required', label: t('generalVisitReport.notRequired') },
+                      { value: 'planned', label: t('generalVisitReport.planned') },
+                      { value: 'urgent_emergency', label: t('generalVisitReport.urgentEmergency') }
+                    ]}
+                    darkMode={darkMode}
+                  />
+                </div>
+                {(formData?.plan?.hospitalization === 'planned' || formData?.plan?.hospitalization === 'urgent_emergency') && (
+                  <div>
+                    <FieldLabel darkMode={darkMode}>{t('generalVisitReport.destinationHospitalWard')}</FieldLabel>
+                    <Input
+                      name="plan.destination_hospital_ward"
+                      placeholder="Optional free-text"
+                      value={formData?.plan?.destination_hospital_ward || ''}
+                      onChange={(e) => updateFormData('plan.destination_hospital_ward', e.target.value)}
+                      darkMode={darkMode}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Vitals & Allergies Reviewed Checkbox */}
+            <div className={`border-t pt-4 mt-4 ${darkMode ? 'border-slate-700' : 'border-slate-200'}`}>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={formData?.plan?.vitals_allergies_reviewed || false}
+                  onChange={(e) => updateFormData('plan.vitals_allergies_reviewed', e.target.checked)}
+                  className={`rounded w-4 h-4 text-emerald-600 focus:ring-emerald-500 ${
+                    darkMode 
+                      ? 'border-slate-600 bg-slate-700' 
+                      : 'border-slate-300 bg-white'
+                  }`}
+                />
+                <label className={`text-sm ${darkMode ? 'text-slate-300' : 'text-slate-600'}`}>{t('generalVisitReport.vitalsAllergiesReviewed')}</label>
+              </div>
             </div>
           </div>
         </Card>
 
         {/* Visit Summary */}
-        <Card title="Visit Summary">
+        <Card title={t('generalVisitReport.summary')} defaultCollapsed={true} darkMode={darkMode}>
           <TextArea
             name="summary"
-            placeholder="Brief summary of the visit, red flags for patient, and next steps..."
+            placeholder={t('generalVisitReport.summaryPlaceholder')}
             value={formData?.summary || ''}
             onChange={(e) => updateFormData('summary', e.target.value)}
             rows={4}
+            darkMode={darkMode}
           />
         </Card>
       </div>

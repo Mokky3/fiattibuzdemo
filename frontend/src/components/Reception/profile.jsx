@@ -1,15 +1,34 @@
 import React, { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ReceptionistHeader } from './ReceptionHeader'
 import { FiUser, FiSettings, FiBell, FiSave, FiEdit3, FiMail, FiPhone, FiMapPin, FiCalendar, FiClock, FiCamera, FiDownload, FiUpload, FiVolume2 } from 'react-icons/fi'
 import { receptionAPI } from '../../services/apiService'
 
 const ReceptionProfile = () => {
+  const { t } = useTranslation()
   const [isLoaded, setIsLoaded] = useState(false)
   const [activeTab, setActiveTab] = useState('personal')
   const [profileImage, setProfileImage] = useState(null)
   const [unsavedChanges, setUnsavedChanges] = useState(false)
   const [saveLoading, setSaveLoading] = useState(false)
   const [saveMessage, setSaveMessage] = useState('')
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme')
+    if (saved) return saved === 'dark'
+    return document.documentElement.classList.contains('dark')
+  })
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement
+    if (darkMode) {
+      root.classList.add('dark')
+    } else {
+      root.classList.remove('dark')
+    }
+  }, [darkMode])
   
   // Recent Activities State
   const [recentActivities, setRecentActivities] = useState([])
@@ -123,7 +142,7 @@ const ReceptionProfile = () => {
         console.error('❌ Failed to load reception profile:', e)
         console.error('Error details:', e.message)
         // Show error message to user
-        setSaveMessage('Failed to load profile data. Please check your authentication.')
+        setSaveMessage(t('failedToLoadProfileData'))
       } finally {
         setIsLoaded(true)
       }
@@ -188,10 +207,10 @@ const ReceptionProfile = () => {
         try {
           await receptionAPI.updateProfile(dto, 'default-clinic')
           setUnsavedChanges(false)
-          setSaveMessage('Changes saved')
+          setSaveMessage(t('changesSaved'))
         } catch (e) {
           console.error('Failed to save profile', e)
-          setSaveMessage('Failed to save changes')
+          setSaveMessage(t('failedToSaveChanges'))
         }
     setSaveLoading(false)
   }
@@ -232,20 +251,24 @@ const ReceptionProfile = () => {
   }
 
   const tabs = [
-    { id: 'personal', label: 'Personal Info', icon: <FiUser /> },
-    { id: 'notifications', label: 'Notifications', icon: <FiBell /> },
-    { id: 'preferences', label: 'Preferences', icon: <FiSettings /> }
+    { id: 'personal', label: t('personalInfo'), icon: <FiUser /> },
+    { id: 'notifications', label: t('notifications'), icon: <FiBell /> },
+    { id: 'preferences', label: t('preferences'), icon: <FiSettings /> }
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gradient-to-br from-gray-50 via-blue-50 to-teal-50'
+    }`}>
       <ReceptionistHeader />
 
       <div className={`max-w-screen-2xl mx-auto px-2 sm:px-4 py-6 sm:py-10 transition-all duration-700 transform ${isLoaded ? 'translate-y-0 opacity-100' : 'translate-y-6 opacity-0'}`}>
         
         <div className="flex flex-row gap-4 sm:gap-6">
           {/* Fixed Width Left Sidebar - Reception Information */}
-          <div className="w-80 flex-shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 h-fit sticky top-6">
+          <div className={`w-80 flex-shrink-0 rounded-xl shadow-sm border h-fit sticky top-6 transition-colors ${
+            darkMode ? 'bg-[#0D2026] border-[#133037]' : 'bg-white border-gray-100'
+          }`}>
             <div className="p-4 sm:p-6">
               <div className="text-center mb-6">
                 <div className="relative inline-block mb-4">
@@ -262,48 +285,78 @@ const ReceptionProfile = () => {
                       </span>
                     )}
                   </div>
-                  <label className="absolute bottom-0 right-0 bg-white p-1 rounded-full shadow-lg cursor-pointer hover:bg-gray-50">
-                    <FiCamera className="text-gray-600 text-sm" />
+                  <label className={`absolute bottom-0 right-0 p-1 rounded-full shadow-lg cursor-pointer transition-colors ${
+                    darkMode ? 'bg-[#07181D] hover:bg-[#133037]' : 'bg-white hover:bg-gray-50'
+                  }`}>
+                    <FiCamera className={`text-sm ${
+                      darkMode ? 'text-[#79CAC2]' : 'text-gray-600'
+                    }`} />
                     <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
                   </label>
                 </div>
-                <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                <h3 className={`text-lg font-semibold mb-2 ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                }`}>
                   {personalInfo.firstName || personalInfo.lastName 
                     ? `${personalInfo.firstName || ''} ${personalInfo.lastName || ''}`.trim()
-                    : 'Receptionist'}
+                    : t('receptionist')}
                 </h3>
-                <p className="text-sm text-gray-600 mb-1">{personalInfo.department || 'Reception'}</p>
+                <p className={`text-sm mb-1 ${
+                  darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                }`}>{personalInfo.department || t('reception')}</p>
                 {personalInfo.employeeId && (
-                  <p className="text-xs text-gray-500">Employee ID: {personalInfo.employeeId}</p>
+                  <p className={`text-xs ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>{t('employeeId')}: {personalInfo.employeeId}</p>
                 )}
               </div>
               
               {/* Information Box */}
-              <div className="border-t border-gray-200 pt-6">
-                <h4 className="text-sm font-semibold text-gray-800 mb-4">Information</h4>
+              <div className={`border-t pt-6 transition-colors ${
+                darkMode ? 'border-[#133037]' : 'border-gray-200'
+              }`}>
+                <h4 className={`text-sm font-semibold mb-4 ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                }`}>{t('information')}</h4>
                 <div className="space-y-3 text-sm">
                   {personalInfo.startDate && (
                     <div className="flex items-center justify-between">
-                      <span className="text-gray-600">Start Date:</span>
-                      <span className="font-medium text-gray-800">
+                      <span className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'}>{t('startDate')}:</span>
+                      <span className={`font-medium ${
+                        darkMode ? 'text-[#C1D9DD]' : 'text-gray-800'
+                      }`}>
                         {new Date(personalInfo.startDate).toLocaleDateString()}
                       </span>
                     </div>
                   )}
                   <div className="flex items-center justify-between">
-                    <span className="text-gray-600">Status:</span>
-                    <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">Active</span>
+                    <span className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'}>{t('status')}:</span>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      darkMode
+                        ? 'bg-[#062412] text-[#4ADE80]'
+                        : 'bg-green-100 text-green-800'
+                    }`}>{t('active')}</span>
                   </div>
                   {personalInfo.email && (
-                    <div className="flex items-center space-x-2 pt-2 border-t border-gray-100">
-                      <FiMail className="text-gray-400 text-xs" />
-                      <span className="text-xs text-gray-600 truncate">{personalInfo.email}</span>
+                    <div className={`flex items-center space-x-2 pt-2 border-t transition-colors ${
+                      darkMode ? 'border-[#133037]' : 'border-gray-100'
+                    }`}>
+                      <FiMail className={`text-xs ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                      }`} />
+                      <span className={`text-xs truncate ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                      }`}>{personalInfo.email}</span>
                     </div>
                   )}
                   {personalInfo.phone && (
                     <div className="flex items-center space-x-2">
-                      <FiPhone className="text-gray-400 text-xs" />
-                      <span className="text-xs text-gray-600">{personalInfo.phone}</span>
+                      <FiPhone className={`text-xs ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                      }`} />
+                      <span className={`text-xs ${
+                        darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'
+                      }`}>{personalInfo.phone}</span>
                     </div>
                   )}
                 </div>
@@ -315,34 +368,60 @@ const ReceptionProfile = () => {
           <div className="flex-1 min-w-0 w-full">
             {/* Header */}
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 space-y-4 md:space-y-0">
-              <h2 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent">Profile Settings</h2>
+              <h2 className={`text-xl sm:text-2xl font-bold ${
+                darkMode
+                  ? 'text-[#F5FEFF]'
+                  : 'bg-gradient-to-r from-[#5ACCC3] to-[#4DB6B0] bg-clip-text text-transparent'
+              }`}>{t('profileSettings')}</h2>
               
               {!isLoaded && (
-                <div className="flex items-center space-x-2 text-blue-600">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                  <span className="text-sm">Loading profile...</span>
+                <div className={`flex items-center space-x-2 ${
+                  darkMode ? 'text-[#79CAC2]' : 'text-blue-600'
+                }`}>
+                  <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${
+                    darkMode ? 'border-[#79CAC2]' : 'border-blue-600'
+                  }`}></div>
+                  <span className="text-sm">{t('loadingProfile')}...</span>
                 </div>
               )}
               
               {(unsavedChanges || saveMessage) && (
                 <div className="flex items-center space-x-4">
-                  {unsavedChanges && <span className="text-orange-600 text-sm">You have unsaved changes</span>}
-                  {saveMessage && <span className={`text-sm ${saveMessage.includes('Failed') ? 'text-red-600' : 'text-green-600'}`}>{saveMessage}</span>}
+                  {unsavedChanges && (
+                    <span className={`text-sm ${
+                      darkMode ? 'text-[#FACC15]' : 'text-orange-600'
+                    }`}>{t('youHaveUnsavedChanges')}</span>
+                  )}
+                  {saveMessage && (
+                    <span className={`text-sm ${
+                      saveMessage.includes('Failed') || saveMessage.includes(t('failed'))
+                        ? darkMode ? 'text-red-400' : 'text-red-600'
+                        : darkMode ? 'text-[#4ADE80]' : 'text-green-600'
+                    }`}>{saveMessage}</span>
+                  )}
                   <button 
                     onClick={handleSaveChanges}
                     disabled={saveLoading}
-                    className="bg-[#4DB6B0] hover:bg-[#5ACCC3] disabled:bg-[#4DB6B0]/60 text-white px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors"
+                    className={`px-4 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
+                      darkMode
+                        ? 'bg-[#79CAC2] hover:bg-[#58B4AA] disabled:bg-[#79CAC2]/60 text-[#050C0F]'
+                        : 'bg-[#4DB6B0] hover:bg-[#5ACCC3] disabled:bg-[#4DB6B0]/60 text-white'
+                    }`}
                   >
                     <FiSave className="text-sm" />
-                    <span>{saveLoading ? 'Saving...' : 'Save Changes'}</span>
+                    <span>{saveLoading ? t('saving') + '...' : t('saveChanges')}</span>
                   </button>
                 </div>
               )}
             </div>
 
             {/* Tabs */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-              <div className="border-b border-gray-200">
+            <div className={`rounded-xl shadow-sm border overflow-hidden transition-colors ${
+              darkMode ? 'bg-[#0D2026] border-[#133037]' : 'bg-white border-gray-100'
+            }`}>
+              <div className={`border-b transition-colors ${
+                darkMode ? 'border-[#133037]' : 'border-gray-200'
+              }`}>
                 <nav className="flex space-x-8 px-6">
                   {tabs.map((tab) => (
                     <button
@@ -350,8 +429,12 @@ const ReceptionProfile = () => {
                       onClick={() => setActiveTab(tab.id)}
                       className={`py-4 px-2 border-b-2 font-medium text-sm flex items-center space-x-2 transition-colors ${
                         activeTab === tab.id
-                          ? 'border-[#4DB6B0] text-[#4DB6B0]'
-                          : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                          ? darkMode
+                            ? 'border-[#79CAC2] text-[#79CAC2]'
+                            : 'border-[#4DB6B0] text-[#4DB6B0]'
+                          : darkMode
+                            ? 'border-transparent text-[#8AA2A7] hover:text-[#C1D9DD] hover:border-[#133037]'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                       }`}
                     >
                       {tab.icon}
@@ -366,109 +449,177 @@ const ReceptionProfile = () => {
                 {activeTab === 'personal' && (
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                        <FiUser className="text-[#4DB6B0]" />
-                        <span>Personal Information</span>
+                      <h3 className={`text-lg font-semibold mb-4 flex items-center space-x-2 ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                      }`}>
+                        <FiUser className={darkMode ? 'text-[#79CAC2]' : 'text-[#4DB6B0]'} />
+                        <span>{t('personalInformation')}</span>
                       </h3>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('firstName')}</label>
                           <input
                             type="text"
                             value={personalInfo.firstName}
                             onChange={(e) => handlePersonalInfoChange('firstName', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('lastName')}</label>
                           <input
                             type="text"
                             value={personalInfo.lastName}
                             onChange={(e) => handlePersonalInfoChange('lastName', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('email')}</label>
                           <div className="relative">
-                            <FiMail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                            <FiMail className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${
+                              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                            }`} />
                             <input
                               type="email"
                               value={personalInfo.email}
                               onChange={(e) => handlePersonalInfoChange('email', e.target.value)}
-                              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                              className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                                darkMode
+                                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                  : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                              }`}
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('phone')}</label>
                           <div className="relative">
-                            <FiPhone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                            <FiPhone className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${
+                              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                            }`} />
                             <input
                               type="tel"
                               value={personalInfo.phone}
                               onChange={(e) => handlePersonalInfoChange('phone', e.target.value)}
-                              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                              className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                                darkMode
+                                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                  : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                              }`}
                             />
                           </div>
                         </div>
                         <div className="md:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('address')}</label>
                           <div className="relative">
-                            <FiMapPin className="absolute left-3 top-3 text-gray-400" />
+                            <FiMapPin className={`absolute left-3 top-3 ${
+                              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                            }`} />
                             <input
                               type="text"
                               value={personalInfo.address}
                               onChange={(e) => handlePersonalInfoChange('address', e.target.value)}
-                              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                              className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                                darkMode
+                                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                  : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                              }`}
                             />
                           </div>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('city')}</label>
                           <input
                             type="text"
                             value={personalInfo.city}
                             onChange={(e) => handlePersonalInfoChange('city', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Birth Date</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('dateOfBirth')}</label>
                           <div className="relative">
-                            <FiCalendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
+                            <FiCalendar className={`absolute left-3 top-1/2 transform -translate-y-1/2 ${
+                              darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                            }`} />
                             <input
                               type="date"
                               value={personalInfo.birthDate}
                               onChange={(e) => handlePersonalInfoChange('birthDate', e.target.value)}
-                              className="w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                              className={`w-full pl-10 pr-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                                darkMode
+                                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                  : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                              }`}
                             />
                           </div>
                         </div>
                       </div>
                     </div>
 
-                    <div className="border-t border-gray-200 pt-6">
-                      <h4 className="text-md font-semibold text-gray-800 mb-4">Emergency Contact</h4>
+                    <div className={`border-t pt-6 transition-colors ${
+                      darkMode ? 'border-[#133037]' : 'border-gray-200'
+                    }`}>
+                      <h4 className={`text-md font-semibold mb-4 ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                      }`}>{t('emergencyContact')}</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Contact Name</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('contactName')}</label>
                           <input
                             type="text"
                             value={personalInfo.emergencyContact}
                             onChange={(e) => handlePersonalInfoChange('emergencyContact', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Contact Phone</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('contactPhone')}</label>
                           <input
                             type="tel"
                             value={personalInfo.emergencyPhone}
                             onChange={(e) => handlePersonalInfoChange('emergencyPhone', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           />
                         </div>
                       </div>
@@ -481,28 +632,42 @@ const ReceptionProfile = () => {
                 {activeTab === 'notifications' && (
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                        <FiBell className="text-[#4DB6B0]" />
-                        <span>Notification Preferences</span>
+                      <h3 className={`text-lg font-semibold mb-4 flex items-center space-x-2 ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                      }`}>
+                        <FiBell className={darkMode ? 'text-[#79CAC2]' : 'text-[#4DB6B0]'} />
+                        <span>{t('notificationPreferences')}</span>
                       </h3>
                       
                       <div className="space-y-6">
                         <div>
-                          <h4 className="text-md font-semibold text-gray-800 mb-3">Email Notifications</h4>
+                          <h4 className={`text-md font-semibold mb-3 ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                          }`}>{t('emailNotifications')}</h4>
                           <div className="space-y-3">
                             {Object.entries({
-                              appointmentReminders: 'Appointment Reminders',
-                              newPatientAlerts: 'New Patient Alerts',
-                              systemUpdates: 'System Updates',
-                              emergencyAlerts: 'Emergency Alerts'
+                              appointmentReminders: t('appointmentReminders'),
+                              newPatientAlerts: t('newPatientAlerts'),
+                              systemUpdates: t('systemUpdates'),
+                              emergencyAlerts: t('emergencyAlerts')
                             }).map(([key, label]) => (
-                              <label key={key} className="flex items-center justify-between p-3 rounded-lg border border-gray-200">
-                                <span className="text-sm text-gray-700">{label}</span>
+                              <label key={key} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                                darkMode
+                                  ? 'border-[#133037] bg-[#07181D]'
+                                  : 'border-gray-200'
+                              }`}>
+                                <span className={`text-sm ${
+                                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                                }`}>{label}</span>
                                 <input
                                   type="checkbox"
                                   checked={notifications[key]}
                                   onChange={(e) => handleNotificationChange(key, e.target.checked)}
-                                  className="w-4 h-4 text-[#4DB6B0] border-gray-300 rounded focus:ring-[#4DB6B0]"
+                                  className={`w-4 h-4 rounded focus:ring-2 transition-colors ${
+                                    darkMode
+                                      ? 'text-[#79CAC2] border-[#133037] focus:ring-[#79CAC2]'
+                                      : 'text-[#4DB6B0] border-gray-300 focus:ring-[#4DB6B0]'
+                                  }`}
                                 />
                               </label>
                             ))}
@@ -510,27 +675,39 @@ const ReceptionProfile = () => {
                         </div>
 
                         <div>
-                          <h4 className="text-md font-semibold text-gray-800 mb-3">Delivery Methods</h4>
+                          <h4 className={`text-md font-semibold mb-3 ${
+                            darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                          }`}>{t('deliveryMethods')}</h4>
                           <div className="space-y-3">
                             {Object.entries({
-                              emailNotifications: 'Email Notifications',
-                              smsNotifications: 'SMS Notifications',
-                              desktopNotifications: 'Desktop Notifications',
-                              soundAlerts: 'Sound Alerts'
+                              emailNotifications: t('emailNotifications'),
+                              smsNotifications: t('smsNotifications'),
+                              desktopNotifications: t('desktopNotifications'),
+                              soundAlerts: t('soundAlerts')
                             }).map(([key, label]) => (
-                              <label key={key} className="flex items-center justify-between p-3 rounded-lg border border-gray-200">
+                              <label key={key} className={`flex items-center justify-between p-3 rounded-lg border transition-colors ${
+                                darkMode
+                                  ? 'border-[#133037] bg-[#07181D]'
+                                  : 'border-gray-200'
+                              }`}>
                                 <div className="flex items-center space-x-3">
-                                  {key === 'emailNotifications' && <FiMail className="text-gray-600" />}
-                                  {key === 'smsNotifications' && <FiPhone className="text-gray-600" />}
-                                  {key === 'desktopNotifications' && <FiBell className="text-gray-600" />}
-                                  {key === 'soundAlerts' && <FiVolume2 className="text-gray-600" />}
-                                  <span className="text-sm text-gray-700">{label}</span>
+                                  {key === 'emailNotifications' && <FiMail className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'} />}
+                                  {key === 'smsNotifications' && <FiPhone className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'} />}
+                                  {key === 'desktopNotifications' && <FiBell className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'} />}
+                                  {key === 'soundAlerts' && <FiVolume2 className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-600'} />}
+                                  <span className={`text-sm ${
+                                    darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                                  }`}>{label}</span>
                                 </div>
                                 <input
                                   type="checkbox"
                                   checked={notifications[key]}
                                   onChange={(e) => handleNotificationChange(key, e.target.checked)}
-                                  className="w-4 h-4 text-[#4DB6B0] border-gray-300 rounded focus:ring-[#4DB6B0]"
+                                  className={`w-4 h-4 rounded focus:ring-2 transition-colors ${
+                                    darkMode
+                                      ? 'text-[#79CAC2] border-[#133037] focus:ring-[#79CAC2]'
+                                      : 'text-[#4DB6B0] border-gray-300 focus:ring-[#4DB6B0]'
+                                  }`}
                                 />
                               </label>
                             ))}
@@ -545,43 +722,63 @@ const ReceptionProfile = () => {
                 {activeTab === 'preferences' && (
                   <div className="space-y-6">
                     <div>
-                      <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center space-x-2">
-                        <FiSettings className="text-[#4DB6B0]" />
-                        <span>System Preferences</span>
+                      <h3 className={`text-lg font-semibold mb-4 flex items-center space-x-2 ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                      }`}>
+                        <FiSettings className={darkMode ? 'text-[#79CAC2]' : 'text-[#4DB6B0]'} />
+                        <span>{t('systemPreferences')}</span>
                       </h3>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Language</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('language')}</label>
                           <select
                             value={systemPrefs.language}
                             onChange={(e) => handleSystemPrefChange('language', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           >
-                            <option value="en">English</option>
-                            <option value="es">Spanish</option>
-                            <option value="fr">French</option>
+                            <option value="en">{t('english')}</option>
+                            <option value="uz">{t('uzbek')}</option>
+                            <option value="ru">{t('russian')}</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Timezone</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('timezone')}</label>
                           <select
                             value={systemPrefs.timezone}
                             onChange={(e) => handleSystemPrefChange('timezone', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           >
-                            <option value="America/New_York">Eastern Time</option>
-                            <option value="America/Chicago">Central Time</option>
-                            <option value="America/Denver">Mountain Time</option>
-                            <option value="America/Los_Angeles">Pacific Time</option>
+                            <option value="America/New_York">{t('easternTime')}</option>
+                            <option value="America/Chicago">{t('centralTime')}</option>
+                            <option value="America/Denver">{t('mountainTime')}</option>
+                            <option value="America/Los_Angeles">{t('pacificTime')}</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Date Format</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('dateFormat')}</label>
                           <select
                             value={systemPrefs.dateFormat}
                             onChange={(e) => handleSystemPrefChange('dateFormat', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           >
                             <option value="MM/DD/YYYY">MM/DD/YYYY</option>
                             <option value="DD/MM/YYYY">DD/MM/YYYY</option>
@@ -589,54 +786,84 @@ const ReceptionProfile = () => {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Time Format</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('timeFormat')}</label>
                           <select
                             value={systemPrefs.timeFormat}
                             onChange={(e) => handleSystemPrefChange('timeFormat', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           >
-                            <option value="12">12 Hour</option>
-                            <option value="24">24 Hour</option>
+                            <option value="12">{t('12Hour')}</option>
+                            <option value="24">{t('24Hour')}</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Theme</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('theme')}</label>
                           <select
                             value={systemPrefs.theme}
                             onChange={(e) => handleSystemPrefChange('theme', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           >
-                            <option value="light">Light</option>
-                            <option value="dark">Dark</option>
-                            <option value="auto">Auto</option>
+                            <option value="light">{t('light')}</option>
+                            <option value="dark">{t('dark')}</option>
+                            <option value="auto">{t('auto')}</option>
                           </select>
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">Auto Logout (minutes)</label>
+                          <label className={`block text-sm font-medium mb-2 ${
+                            darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+                          }`}>{t('autoLogoutMinutes')}</label>
                           <select
                             value={systemPrefs.autoLogout}
                             onChange={(e) => handleSystemPrefChange('autoLogout', e.target.value)}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#4DB6B0] focus:border-transparent"
+                            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent transition-colors ${
+                              darkMode
+                                ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                                : 'bg-white border-gray-300 text-gray-900 focus:ring-[#4DB6B0]'
+                            }`}
                           >
-                            <option value="15">15 minutes</option>
-                            <option value="30">30 minutes</option>
-                            <option value="60">1 hour</option>
-                            <option value="never">Never</option>
+                            <option value="15">15 {t('minutes')}</option>
+                            <option value="30">30 {t('minutes')}</option>
+                            <option value="60">1 {t('hour')}</option>
+                            <option value="never">{t('never')}</option>
                           </select>
                         </div>
                       </div>
                     </div>
 
-                    <div className="border-t border-gray-200 pt-6">
-                      <h4 className="text-md font-semibold text-gray-800 mb-4">Data Management</h4>
+                    <div className={`border-t pt-6 transition-colors ${
+                      darkMode ? 'border-[#133037]' : 'border-gray-200'
+                    }`}>
+                      <h4 className={`text-md font-semibold mb-4 ${
+                        darkMode ? 'text-[#F5FEFF]' : 'text-gray-800'
+                      }`}>{t('dataManagement')}</h4>
                       <div className="space-y-3">
-                        <button className="w-full md:w-auto flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        <button className={`w-full md:w-auto flex items-center space-x-2 px-4 py-2 border rounded-lg transition-colors ${
+                          darkMode
+                            ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}>
                           <FiDownload className="text-sm" />
-                          <span>Export Profile Data</span>
+                          <span>{t('exportProfileData')}</span>
                         </button>
-                        <button className="w-full md:w-auto flex items-center space-x-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                        <button className={`w-full md:w-auto flex items-center space-x-2 px-4 py-2 border rounded-lg transition-colors ${
+                          darkMode
+                            ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                            : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                        }`}>
                           <FiUpload className="text-sm" />
-                          <span>Import Settings</span>
+                          <span>{t('importSettings')}</span>
                         </button>
                       </div>
                     </div>
@@ -645,26 +872,38 @@ const ReceptionProfile = () => {
               </div>
 
               {/* Footer Actions */}
-              <div className="border-t border-gray-200 px-6 py-4 bg-gray-50">
+              <div className={`border-t px-6 py-4 transition-colors ${
+                darkMode ? 'border-[#133037] bg-[#07181D]' : 'border-gray-200 bg-gray-50'
+              }`}>
                 <div className="flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0">
-                  <div className="text-sm text-gray-500">
-                    Last updated: {new Date().toLocaleDateString()} at {new Date().toLocaleTimeString()}
+                  <div className={`text-sm ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+                  }`}>
+                    {t('lastUpdated')}: {new Date().toLocaleDateString()} {t('at')} {new Date().toLocaleTimeString()}
                   </div>
                   <div className="flex space-x-3">
-                    <button className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-100 transition-colors">
-                      Reset to Default
+                    <button className={`px-4 py-2 border rounded-lg transition-colors ${
+                      darkMode
+                        ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                        : 'border-gray-300 text-gray-700 hover:bg-gray-100'
+                    }`}>
+                      {t('resetToDefault')}
                     </button>
                     <button 
                       onClick={handleSaveChanges}
                       disabled={!unsavedChanges}
                       className={`px-6 py-2 rounded-lg flex items-center space-x-2 transition-colors ${
-                        unsavedChanges 
-                          ? 'bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white' 
-                          : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                        unsavedChanges
+                          ? darkMode
+                            ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                            : 'bg-[#4DB6B0] hover:bg-[#5ACCC3] text-white'
+                          : darkMode
+                            ? 'bg-[#133037] text-[#8AA2A7] cursor-not-allowed'
+                            : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                       }`}
                     >
                       <FiSave className="text-sm" />
-                      <span>Save All Changes</span>
+                      <span>{t('saveAllChanges')}</span>
                     </button>
                   </div>
                 </div>

@@ -32,7 +32,6 @@ const AdminClinics = () => {
     phone: '',
     email: '',
     website: '',
-    capacity: 0,
     established_date: '',
     license_number: '',
     accreditation: ''
@@ -61,6 +60,9 @@ const AdminClinics = () => {
           logo_url: clinic.logo_url || '',
           beds: clinic.beds || 0, // Use new 'beds' field from backend
           founded: clinic.established_date ? new Date(clinic.established_date).getFullYear().toString() : '',
+          established_date: clinic.established_date || '', // Include full established_date for form
+          license_number: clinic.license_number || '', // Include license_number
+          accreditation: clinic.accreditation || '', // Include accreditation
           departments: clinic.departments || [], // Use new 'departments' field from backend
           doctors: 0, // TODO: Fetch doctors count separately
           patients: 0, // TODO: Fetch patients count separately
@@ -152,10 +154,60 @@ const AdminClinics = () => {
     try {
       if (selectedClinic) {
         // Update existing clinic
-        await adminAPI.updateClinic(selectedClinic.id, formData)
+        const response = await adminAPI.updateClinic(selectedClinic.id, formData)
+        const updatedClinic = response?.data || response
+        // Transform backend response to match frontend structure
+        const transformedClinic = {
+          id: updatedClinic.id,
+          name: updatedClinic.name,
+          type: updatedClinic.hospital_type || 'General Hospital',
+          status: updatedClinic.status || 'Active',
+          address: updatedClinic.address || '',
+          city: updatedClinic.address ? updatedClinic.address.split(',')[2]?.trim() || 'Unknown' : 'Unknown',
+          phone: updatedClinic.phone || '',
+          email: updatedClinic.email || '',
+          website: updatedClinic.website || '',
+          logo_url: updatedClinic.logo_url || '',
+          beds: updatedClinic.beds || 0,
+          founded: updatedClinic.established_date ? new Date(updatedClinic.established_date).getFullYear().toString() : '',
+          established_date: updatedClinic.established_date || '', // Include full established_date
+          license_number: updatedClinic.license_number || '', // Include license_number
+          accreditation: updatedClinic.accreditation || '', // Include accreditation
+          departments: updatedClinic.departments || [],
+          doctors: 0,
+          patients: 0,
+          created_at: updatedClinic.created_at,
+          updated_at: updatedClinic.updated_at
+        }
         setClinics(clinics.map(c => 
-          c.id === selectedClinic.id ? { ...c, ...formData } : c
+          c.id === selectedClinic.id ? transformedClinic : c
         ))
+        
+        // Refresh the clinics list to ensure we have the latest data
+        const refreshedClinics = await adminAPI.getClinics()
+        const refreshedTransformed = refreshedClinics.map(clinic => ({
+          id: clinic.id,
+          name: clinic.name,
+          type: clinic.hospital_type || 'General Hospital',
+          status: clinic.status || 'Active',
+          address: clinic.address || '',
+          city: clinic.address ? clinic.address.split(',')[2]?.trim() || 'Unknown' : 'Unknown',
+          phone: clinic.phone || '',
+          email: clinic.email || '',
+          website: clinic.website || '',
+          logo_url: clinic.logo_url || '',
+          beds: clinic.beds || 0,
+          founded: clinic.established_date ? new Date(clinic.established_date).getFullYear().toString() : '',
+          established_date: clinic.established_date || '',
+          license_number: clinic.license_number || '',
+          accreditation: clinic.accreditation || '',
+          departments: clinic.departments || [],
+          doctors: 0,
+          patients: 0,
+          created_at: clinic.created_at,
+          updated_at: clinic.updated_at
+        }))
+        setClinics(refreshedTransformed)
       } else {
         // Create new clinic
         const newClinic = await adminAPI.createClinic(formData)
@@ -173,7 +225,6 @@ const AdminClinics = () => {
         phone: '',
         email: '',
         website: '',
-        capacity: 0,
         established_date: '',
         license_number: '',
         accreditation: ''
@@ -266,7 +317,6 @@ const AdminClinics = () => {
                   phone: '',
                   email: '',
                   website: '',
-                  capacity: 0,
                   established_date: '',
                   license_number: '',
                   accreditation: ''
@@ -528,7 +578,19 @@ const AdminClinics = () => {
                                 onClick={() => {
                                   if (canEdit) {
                                     setSelectedClinic(clinic)
-                                    setFormData(clinic)
+                                    // Map clinic data to formData structure
+                                    setFormData({
+                                      name: clinic.name || '',
+                                      hospital_type: clinic.type || 'General Hospital',
+                                      status: clinic.status || 'Active',
+                                      address: clinic.address || '',
+                                      phone: clinic.phone || '',
+                                      email: clinic.email || '',
+                                      website: clinic.website || '',
+                                      established_date: clinic.established_date ? clinic.established_date.split('T')[0] : (clinic.founded ? `${clinic.founded}-01-01` : ''), // Use full date if available
+                                      license_number: clinic.license_number || '',
+                                      accreditation: clinic.accreditation || ''
+                                    })
                                     setShowEditModal(true)
                                   }
                                 }}
@@ -633,7 +695,7 @@ const AdminClinics = () => {
                 <input
                   type="text"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.name}
+                  value={formData.name || ''}
                   onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
                   placeholder="Enter clinic name"
                 />
@@ -642,7 +704,7 @@ const AdminClinics = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Hospital Type</label>
                 <select
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.hospital_type}
+                  value={formData.hospital_type || 'General Hospital'}
                   onChange={e => setFormData(prev => ({ ...prev, hospital_type: e.target.value }))}
                 >
                   <option value="General Hospital">General Hospital</option>
@@ -656,7 +718,7 @@ const AdminClinics = () => {
                 <input
                   type="text"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.address}
+                  value={formData.address || ''}
                   onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))}
                   placeholder="Enter full address"
                 />
@@ -666,7 +728,7 @@ const AdminClinics = () => {
                 <input
                   type="text"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.phone}
+                  value={formData.phone || ''}
                   onChange={e => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                   placeholder="Enter phone number"
                 />
@@ -676,7 +738,7 @@ const AdminClinics = () => {
                 <input
                   type="email"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.email}
+                  value={formData.email || ''}
                   onChange={e => setFormData(prev => ({ ...prev, email: e.target.value }))}
                   placeholder="Enter email address"
                 />
@@ -686,19 +748,9 @@ const AdminClinics = () => {
                 <input
                   type="url"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.website}
+                  value={formData.website || ''}
                   onChange={e => setFormData(prev => ({ ...prev, website: e.target.value }))}
                   placeholder="Enter website URL"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Capacity (Beds)</label>
-                <input
-                  type="number"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.capacity}
-                  onChange={e => setFormData(prev => ({ ...prev, capacity: parseInt(e.target.value) || 0 }))}
-                  placeholder="Enter number of beds"
                 />
               </div>
               <div>
@@ -706,7 +758,7 @@ const AdminClinics = () => {
                 <input
                   type="date"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.established_date}
+                  value={formData.established_date || ''}
                   onChange={e => setFormData(prev => ({ ...prev, established_date: e.target.value }))}
                 />
               </div>
@@ -715,7 +767,7 @@ const AdminClinics = () => {
                 <input
                   type="text"
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.license_number}
+                  value={formData.license_number || ''}
                   onChange={e => setFormData(prev => ({ ...prev, license_number: e.target.value }))}
                   placeholder="Enter license number"
                 />
@@ -724,7 +776,7 @@ const AdminClinics = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Status</label>
                 <select
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#4DB6B0]"
-                  value={formData.status}
+                  value={formData.status || 'Active'}
                   onChange={e => setFormData(prev => ({ ...prev, status: e.target.value }))}
                 >
                   <option value="Active">Active</option>
@@ -746,7 +798,6 @@ const AdminClinics = () => {
                     phone: '',
                     email: '',
                     website: '',
-                    capacity: 0,
                     established_date: '',
                     license_number: '',
                     accreditation: ''

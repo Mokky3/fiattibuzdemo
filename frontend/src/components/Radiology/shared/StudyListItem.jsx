@@ -1,8 +1,8 @@
 import React from 'react'
-import { Eye, Flag } from 'lucide-react'
+import { Eye, Flag, Loader } from 'lucide-react'
 import { getModalityIcon, getPriorityColor, getReadingStatusColor, getTimeAgo } from './studyUtils'
 
-const StudyListItem = ({ study, expandedId, onToggleExpand, onSelect }) => {
+const StudyListItem = ({ study, expandedId, onToggleExpand, onSelect, isUpdating = false }) => {
   return (
     <div className={`bg-white rounded-lg shadow-sm border border-gray-100 p-6 hover:shadow-md transition-all duration-200 ${study.criticalFlag ? 'border-l-4 border-l-red-500' : ''}`}>
       <div className="flex items-start justify-between">
@@ -58,10 +58,20 @@ const StudyListItem = ({ study, expandedId, onToggleExpand, onSelect }) => {
             </button>
             <button
               onClick={() => onSelect(study)}
-              className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-1"
+              disabled={isUpdating}
+              className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center space-x-1 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <Eye className="w-4 h-4" />
-              <span>Read</span>
+              {isUpdating ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  <span>Updating...</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="w-4 h-4" />
+                  <span>Read</span>
+                </>
+              )}
             </button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { medicationsAPI, icdCodesAPI } from '../../../services/apiService';
+import { useTranslation } from 'react-i18next';
+import { medicationsAPI, icdCodesAPI, doctorPatientsAPI } from '../../../services/apiService';
 
 // Shared UI primitives (reusing from other report forms)
 const Card = React.memo(({ children, className = "", collapsible = false, isOpen = true, onToggle, title, counter }) => (
@@ -37,19 +38,20 @@ const FieldLabel = React.memo(({ children, required = false }) => (
   </label>
 ));
 
-const Input = React.memo(({ name, placeholder, value, onChange, className = "", type = "text", required = false }) => (
+const Input = React.memo(({ name, placeholder, value, onChange, className = "", type = "text", required = false, readOnly = false }) => (
   <input
     type={type}
     name={name}
     placeholder={placeholder}
     value={value}
-    onChange={onChange}
+    onChange={readOnly ? undefined : onChange}
     required={required}
+    readOnly={readOnly}
     className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${className}`}
   />
 ));
 
-const Select = React.memo(({ name, value, onChange, options, className = "", required = false }) => (
+const Select = React.memo(({ name, value, onChange, options, className = "", required = false, t }) => (
   <select
     name={name}
     value={value}
@@ -57,7 +59,7 @@ const Select = React.memo(({ name, value, onChange, options, className = "", req
     required={required}
     className={`w-full px-4 py-4 border border-slate-200 rounded-lg text-base text-slate-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 ${className}`}
   >
-    <option value="">Select...</option>
+    <option value="">{t ? t('allergyImmunologyReport.select') : 'Select...'}</option>
     {options.map(option => (
       <option key={option.value} value={option.value}>
         {option.label}
@@ -461,14 +463,63 @@ const DIAGNOSIS_CODE_PRESETS = [
 ];
 
 const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
+  const { t } = useTranslation();
+  
+  // Helper function to get translated preset
+  const getTranslatedPreset = (preset, category) => {
+    const keyMap = {
+      // Chief complaint presets
+      'nasal congestion': 'nasalCongestion',
+      'itchy eyes': 'itchyEyes',
+      'skin rash': 'skinRash',
+      'tree nuts': 'treeNuts',
+      'dust mite': 'dustMite',
+      'grass mix': 'grassMix',
+      'contrast media': 'contrastMedia',
+      'insect sting': 'insectSting',
+      'latex allergy': 'latexAllergy',
+      'food reaction': 'foodReaction',
+      'drug reaction': 'drugReaction',
+      // Avoidance advice
+      'dust mite control': 'dustMiteControl',
+      'saline nasal rinses': 'salineNasalRinses',
+      'hepa filter': 'hepaFilter',
+      'no pets in bedroom': 'noPetsInBedroom',
+      'encase bedding': 'encaseBedding',
+      'mold remediation': 'moldRemediation',
+      'food/symptom diary': 'foodSymptomDiary',
+      // Education topics
+      'intranasal spray technique': 'intranasalSprayTechnique',
+      'skin care (emollients)': 'skinCareEmollients',
+      'anaphylaxis action plan': 'anaphylaxisActionPlan',
+      'auto-injector training': 'autoInjectorTraining',
+      'asthma control steps': 'asthmaControlSteps',
+      // Referrals
+      'immunology_lab': 'immunologyLab'
+    };
+    const lowerPreset = preset.toLowerCase();
+    let key = keyMap[lowerPreset];
+    if (!key) {
+      // Convert "preset name" to "presetName" format
+      key = lowerPreset.split(/[\s\/_()]+/).map((word, i) => 
+        i === 0 ? word : word.charAt(0).toUpperCase() + word.slice(1)
+      ).join('').replace(/[()]/g, '');
+    }
+    return t(`allergyImmunologyReport.${category}.${key}`, { defaultValue: preset });
+  };
+  
   // Mode state
   const [mode, setMode] = useState('initial');
+
+  // Patient medications and loading state
+  const [patientMedications, setPatientMedications] = useState([]);
+  const [loadingMedications, setLoadingMedications] = useState(false);
 
   // Collapsed sections state
   const [collapsedSections, setCollapsedSections] = useState({
     scores: false,
     hpi: false,
-    vitals: false,
+    vitals: true, // Closed by default
     exam: false,
     tests: false,
     diagnosis: false,
@@ -762,6 +813,86 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
       }));
     }
   }, [patient, encounter]);
+
+  // Fetch vitals from backend (latest within 3 days)
+  useEffect(() => {
+    if (!patient?.patient_id) return;
+    
+    const fetchVitals = async () => {
+      try {
+        const vitalsList = await doctorPatientsAPI.getVitals(patient.patient_id);
+        
+        if (vitalsList && vitalsList.length > 0) {
+          // Filter vitals to only include entries within the last 3 days
+          const threeDaysAgo = new Date();
+          threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
+          
+          const recentVitals = vitalsList.filter(vital => {
+            if (!vital.recorded_at) return false;
+            const recordedDate = new Date(vital.recorded_at);
+            return recordedDate >= threeDaysAgo;
+          });
+          
+          // Get the most recent vitals entry from the filtered list (first in the list as it's sorted by recorded_at DESC)
+          const latestVitals = recentVitals.length > 0 ? recentVitals[0] : null;
+          
+          if (latestVitals) {
+            // Map backend vitals structure to form structure
+            const mappedVitals = {
+              bp: latestVitals.systolic_bp && latestVitals.diastolic_bp 
+                ? `${latestVitals.systolic_bp}/${latestVitals.diastolic_bp}` 
+                : formData.vitals.bp || '',
+              hr: latestVitals.heart_rate?.toString() || formData.vitals.hr || '',
+              temp: latestVitals.temperature?.toString() || formData.vitals.temp || '',
+              spo2: latestVitals.oxygen_saturation?.toString() || formData.vitals.spo2 || '',
+              height_cm: latestVitals.height?.toString() || patient?.height_cm?.toString() || formData.vitals.height_cm || '',
+              weight_kg: latestVitals.weight?.toString() || patient?.weight_kg?.toString() || formData.vitals.weight_kg || '',
+              bmi: latestVitals.bmi?.toString() || formData.vitals.bmi || ''
+            };
+            
+            // Only update if we have new vitals data
+            if (latestVitals.systolic_bp || latestVitals.heart_rate || latestVitals.temperature || latestVitals.oxygen_saturation || latestVitals.height || latestVitals.weight) {
+              setFormData(prev => ({
+                ...prev,
+                vitals: mappedVitals
+              }));
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching vitals:', error);
+      }
+    };
+    
+    fetchVitals();
+  }, [patient?.patient_id]);
+
+  // Fetch patient medications from database
+  useEffect(() => {
+    const fetchPatientMedications = async () => {
+      const patientId = patient?.patient_id || patient?.id || '';
+      if (!patientId) return;
+
+      try {
+        setLoadingMedications(true);
+        const medications = await doctorPatientsAPI.getMedications(patientId, true);
+        // Handle both SuccessResponse format and direct array
+        const medsArray = Array.isArray(medications) 
+          ? medications 
+          : (medications?.data && Array.isArray(medications.data) 
+            ? medications.data 
+            : []);
+        setPatientMedications(medsArray);
+      } catch (error) {
+        console.error('Error fetching patient medications:', error);
+        setPatientMedications([]);
+      } finally {
+        setLoadingMedications(false);
+      }
+    };
+    
+    fetchPatientMedications();
+  }, [patient?.patient_id, patient?.id]);
 
   // Auto-calculate BMI
   useEffect(() => {
@@ -1218,7 +1349,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                Initial
+                {t('allergyImmunologyReport.initial')}
               </button>
               <button
                 type="button"
@@ -1229,36 +1360,12 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                Discharge
+                {t('allergyImmunologyReport.discharge')}
               </button>
             </div>
             <div className="text-sm text-slate-500">
-              {lastSaved && `Last saved: ${lastSaved.toLocaleTimeString()}`}
+              {lastSaved && `${t('allergyImmunologyReport.lastSaved')}: ${lastSaved.toLocaleTimeString()}`}
             </div>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <p className="text-slate-500">Patient</p>
-              <p className="font-medium">
-                {patient?.first_name && patient?.last_name
-                  ? `${patient.first_name} ${patient.last_name}`
-                  : patient?.patient_id || 'N/A'}
-                {patient?.age && ` (${patient.age}${patient.gender ? `, ${patient.gender}` : ''})`}
-              </p>
-            </div>
-            <div>
-              <p className="text-slate-500">Clinic</p>
-              <p className="font-medium">{formData.meta.clinic_id || 'N/A'}</p>
-            </div>
-            <div>
-              <p className="text-slate-500">Physician</p>
-              <p className="font-medium">{formData.meta.physician_id || 'N/A'}</p>
-            </div>
-          </div>
-          
-          <div className="text-xs text-slate-400">
-            Encounter: {formData.meta.encounter_id || 'N/A'} • {formData.meta.datetime ? new Date(formData.meta.datetime).toLocaleString() : 'N/A'}
           </div>
         </div>
       </Card>
@@ -1266,32 +1373,35 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
       {/* Autosave Toast */}
       {showSaveToast && (
         <div className="fixed top-4 right-4 bg-emerald-600 text-white px-4 py-2 rounded-lg shadow-lg z-50">
-          Saved at {lastSaved?.toLocaleTimeString()}
+          {t('allergyImmunologyReport.savedAt')} {lastSaved?.toLocaleTimeString()}
         </div>
       )}
 
       {/* Chief Complaint */}
       <Card>
         <div>
-          <FieldLabel required>Chief Complaint</FieldLabel>
+          <FieldLabel required>{t('allergyImmunologyReport.chiefComplaint')}</FieldLabel>
           <div className="flex flex-wrap gap-2 mb-2">
-            {CHIEF_COMPLAINT_PRESETS.map(preset => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => {
-                  const current = formData.chief_complaint;
-                  updateFormData('chief_complaint', current ? `${current}, ${preset}` : preset);
-                }}
-                className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
-              >
-                + {preset}
-              </button>
-            ))}
+            {CHIEF_COMPLAINT_PRESETS.map(preset => {
+              const translatedPreset = getTranslatedPreset(preset, 'chiefComplaintPresets');
+              return (
+                <button
+                  key={preset}
+                  type="button"
+                  onClick={() => {
+                    const current = formData.chief_complaint;
+                    updateFormData('chief_complaint', current ? `${current}, ${translatedPreset}` : translatedPreset);
+                  }}
+                  className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm"
+                >
+                  + {translatedPreset}
+                </button>
+              );
+            })}
           </div>
           <Input
             name="chief_complaint"
-            placeholder="Describe the patient's main complaint..."
+            placeholder={t('allergyImmunologyReport.chiefComplaintPlaceholder')}
             value={formData.chief_complaint}
             onChange={(e) => updateFormData('chief_complaint', e.target.value)}
           />
@@ -1302,10 +1412,10 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Scores */}
-      <Card title="Scores" collapsible isOpen={!collapsedSections.scores} onToggle={() => toggleSection('scores')}>
+      <Card title={t('allergyImmunologyReport.scores')} collapsible isOpen={!collapsedSections.scores} onToggle={() => toggleSection('scores')}>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <FieldLabel>RCAT (0-30)</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.rcat')}</FieldLabel>
             <Input
               type="number"
               name="rcat_total"
@@ -1318,7 +1428,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             )}
           </div>
           <div>
-            <FieldLabel>ACT (5-25)</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.act')}</FieldLabel>
             <Input
               type="number"
               name="act_total"
@@ -1331,7 +1441,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             )}
           </div>
           <div>
-            <FieldLabel>UAS7 (0-42)</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.uas7')}</FieldLabel>
             <Input
               type="number"
               name="uas7_total"
@@ -1347,49 +1457,51 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* HPI */}
-      <Card title="History of Present Illness" collapsible isOpen={!collapsedSections.hpi} onToggle={() => toggleSection('hpi')}>
+      <Card title={t('allergyImmunologyReport.historyOfPresentIllness')} collapsible isOpen={!collapsedSections.hpi} onToggle={() => toggleSection('hpi')}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>Onset</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.onset')}</FieldLabel>
               <Select
                 name="onset"
                 value={formData.hpi.onset}
                 onChange={(e) => updateFormData('hpi.onset', e.target.value)}
                 options={[
-                  { value: 'acute', label: 'Acute' },
-                  { value: 'subacute', label: 'Subacute' },
-                  { value: 'chronic', label: 'Chronic' }
+                  { value: 'acute', label: t('allergyImmunologyReport.acute') },
+                  { value: 'subacute', label: t('allergyImmunologyReport.subacute') },
+                  { value: 'chronic', label: t('allergyImmunologyReport.chronic') }
                 ]}
+                t={t}
               />
             </div>
             <div>
-              <FieldLabel>Duration</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.duration')}</FieldLabel>
               <Input
                 name="duration"
-                placeholder="e.g., 2 weeks"
+                placeholder={t('allergyImmunologyReport.durationPlaceholder')}
                 value={formData.hpi.duration}
                 onChange={(e) => updateFormData('hpi.duration', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Course</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.course')}</FieldLabel>
               <Select
                 name="course"
                 value={formData.hpi.course}
                 onChange={(e) => updateFormData('hpi.course', e.target.value)}
                 options={[
-                  { value: 'intermittent', label: 'Intermittent' },
-                  { value: 'persistent', label: 'Persistent' },
-                  { value: 'progressive', label: 'Progressive' }
+                  { value: 'intermittent', label: t('allergyImmunologyReport.intermittent') },
+                  { value: 'persistent', label: t('allergyImmunologyReport.persistent') },
+                  { value: 'progressive', label: t('allergyImmunologyReport.progressive') }
                 ]}
+                t={t}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>Index Exposure Time</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.indexExposureTime')}</FieldLabel>
               <Input
                 type="datetime-local"
                 name="index_exposure_time"
@@ -1398,7 +1510,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
               />
             </div>
             <div>
-              <FieldLabel>Last Reaction Time</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.lastReactionTime')}</FieldLabel>
               <Input
                 type="datetime-local"
                 name="last_reaction_time"
@@ -1407,10 +1519,10 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
               />
             </div>
             <div>
-              <FieldLabel>Latency to Symptoms</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.latencyToSymptoms')}</FieldLabel>
               <Input
                 name="latency_to_symptoms"
-                placeholder="e.g., 30 minutes"
+                placeholder={t('allergyImmunologyReport.latencyPlaceholder')}
                 value={formData.hpi.latency_to_symptoms}
                 onChange={(e) => updateFormData('hpi.latency_to_symptoms', e.target.value)}
               />
@@ -1419,113 +1531,129 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
 
           {/* Triggers */}
           <div>
-            <FieldLabel>Triggers</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.triggers')}</FieldLabel>
             <div className="space-y-2">
               <div>
-                <p className="text-xs text-slate-600 mb-1">Food</p>
+                <p className="text-xs text-slate-600 mb-1">{t('allergyImmunologyReport.food')}</p>
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {FOOD_TRIGGERS.map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => {
-                        const current = formData.hpi.triggers.food;
-                        if (current.includes(preset)) {
-                          removeFromArray('hpi.triggers.food', current.indexOf(preset));
-                        } else {
-                          addToArray('hpi.triggers.food', preset);
-                        }
-                      }}
-                      className={`px-3 py-1 rounded-lg text-sm ${
-                        formData.hpi.triggers.food.includes(preset)
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
+                  {FOOD_TRIGGERS.map(preset => {
+                    const translatedPreset = getTranslatedPreset(preset, 'foodTriggers');
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          const current = formData.hpi.triggers.food;
+                          const originalPreset = preset;
+                          if (current.includes(originalPreset)) {
+                            removeFromArray('hpi.triggers.food', current.indexOf(originalPreset));
+                          } else {
+                            addToArray('hpi.triggers.food', originalPreset);
+                          }
+                        }}
+                        className={`px-3 py-1 rounded-lg text-sm ${
+                          formData.hpi.triggers.food.includes(preset)
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                            : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        {translatedPreset}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               
               <div>
-                <p className="text-xs text-slate-600 mb-1">Aeroallergens</p>
+                <p className="text-xs text-slate-600 mb-1">{t('allergyImmunologyReport.aeroallergens')}</p>
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {AEROALLERGENS.map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => {
-                        const current = formData.hpi.triggers.aeroallergens;
-                        if (current.includes(preset)) {
-                          removeFromArray('hpi.triggers.aeroallergens', current.indexOf(preset));
-                        } else {
-                          addToArray('hpi.triggers.aeroallergens', preset);
-                        }
-                      }}
-                      className={`px-3 py-1 rounded-lg text-sm ${
-                        formData.hpi.triggers.aeroallergens.includes(preset)
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
+                  {AEROALLERGENS.map(preset => {
+                    const translatedPreset = getTranslatedPreset(preset, 'aeroallergenPresets');
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          const current = formData.hpi.triggers.aeroallergens;
+                          const originalPreset = preset;
+                          if (current.includes(originalPreset)) {
+                            removeFromArray('hpi.triggers.aeroallergens', current.indexOf(originalPreset));
+                          } else {
+                            addToArray('hpi.triggers.aeroallergens', originalPreset);
+                          }
+                        }}
+                        className={`px-3 py-1 rounded-lg text-sm ${
+                          formData.hpi.triggers.aeroallergens.includes(preset)
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                            : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        {translatedPreset}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               
               <div>
-                <p className="text-xs text-slate-600 mb-1">Drugs</p>
+                <p className="text-xs text-slate-600 mb-1">{t('allergyImmunologyReport.drugs')}</p>
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {DRUG_TRIGGERS.map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => {
-                        const current = formData.hpi.triggers.drug;
-                        if (current.includes(preset)) {
-                          removeFromArray('hpi.triggers.drug', current.indexOf(preset));
-                        } else {
-                          addToArray('hpi.triggers.drug', preset);
-                        }
-                      }}
-                      className={`px-3 py-1 rounded-lg text-sm ${
-                        formData.hpi.triggers.drug.includes(preset)
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
+                  {DRUG_TRIGGERS.map(preset => {
+                    const translatedPreset = getTranslatedPreset(preset, 'drugTriggers');
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          const current = formData.hpi.triggers.drug;
+                          const originalPreset = preset;
+                          if (current.includes(originalPreset)) {
+                            removeFromArray('hpi.triggers.drug', current.indexOf(originalPreset));
+                          } else {
+                            addToArray('hpi.triggers.drug', originalPreset);
+                          }
+                        }}
+                        className={`px-3 py-1 rounded-lg text-sm ${
+                          formData.hpi.triggers.drug.includes(preset)
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                            : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        {translatedPreset}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               
               <div>
-                <p className="text-xs text-slate-600 mb-1">Insect Venom</p>
+                <p className="text-xs text-slate-600 mb-1">{t('allergyImmunologyReport.insectVenom')}</p>
                 <div className="flex flex-wrap gap-2 mb-2">
-                  {INSECT_VENOM.map(preset => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => {
-                        const current = formData.hpi.triggers.insect;
-                        if (current.includes(preset)) {
-                          removeFromArray('hpi.triggers.insect', current.indexOf(preset));
-                        } else {
-                          addToArray('hpi.triggers.insect', preset);
-                        }
-                      }}
-                      className={`px-3 py-1 rounded-lg text-sm ${
-                        formData.hpi.triggers.insect.includes(preset)
-                          ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
-                          : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
-                      }`}
-                    >
-                      {preset}
-                    </button>
-                  ))}
+                  {INSECT_VENOM.map(preset => {
+                    const translatedPreset = getTranslatedPreset(preset, 'insectVenomPresets');
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => {
+                          const current = formData.hpi.triggers.insect;
+                          const originalPreset = preset;
+                          if (current.includes(originalPreset)) {
+                            removeFromArray('hpi.triggers.insect', current.indexOf(originalPreset));
+                          } else {
+                            addToArray('hpi.triggers.insect', originalPreset);
+                          }
+                        }}
+                        className={`px-3 py-1 rounded-lg text-sm ${
+                          formData.hpi.triggers.insect.includes(preset)
+                            ? 'bg-emerald-100 text-emerald-700 border border-emerald-300'
+                            : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'
+                        }`}
+                      >
+                        {translatedPreset}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               
@@ -1537,7 +1665,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                     onChange={(e) => updateFormData('hpi.triggers.latex', e.target.checked)}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm">Latex</span>
+                  <span className="text-sm">{t('allergyImmunologyReport.latex')}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -1546,7 +1674,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                     onChange={(e) => updateFormData('hpi.triggers.cold', e.target.checked)}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm">Cold</span>
+                  <span className="text-sm">{t('allergyImmunologyReport.cold')}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -1555,7 +1683,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                     onChange={(e) => updateFormData('hpi.triggers.exercise', e.target.checked)}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm">Exercise</span>
+                  <span className="text-sm">{t('allergyImmunologyReport.exercise')}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -1564,7 +1692,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                     onChange={(e) => updateFormData('hpi.triggers.nsaid', e.target.checked)}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm">NSAID</span>
+                  <span className="text-sm">{t('allergyImmunologyReport.nsaid')}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input
@@ -1573,7 +1701,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                     onChange={(e) => updateFormData('hpi.triggers.alcohol', e.target.checked)}
                     className="w-4 h-4"
                   />
-                  <span className="text-sm">Alcohol</span>
+                  <span className="text-sm">{t('allergyImmunologyReport.alcohol')}</span>
                 </label>
               </div>
             </div>
@@ -1581,7 +1709,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
 
           {/* Reaction Pattern */}
           <div>
-            <FieldLabel>Reaction Pattern</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.reactionPattern')}</FieldLabel>
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2">
                 <input
@@ -1590,7 +1718,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.reaction_pattern.ige_mediated', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">IgE-mediated</span>
+                <span className="text-sm">{t('allergyImmunologyReport.igeMediated')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1599,7 +1727,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.reaction_pattern.non_ige', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Non-IgE</span>
+                <span className="text-sm">{t('allergyImmunologyReport.nonIge')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1608,14 +1736,14 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.reaction_pattern.mixed', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Mixed</span>
+                <span className="text-sm">{t('allergyImmunologyReport.mixed')}</span>
               </label>
             </div>
           </div>
 
           {/* Systems Involved */}
           <div>
-            <FieldLabel>Systems Involved</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.systemsInvolved')}</FieldLabel>
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2">
                 <input
@@ -1624,7 +1752,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.systems_involved.skin', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Skin</span>
+                <span className="text-sm">{t('allergyImmunologyReport.skin')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1633,7 +1761,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.systems_involved.gi', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">GI</span>
+                <span className="text-sm">{t('allergyImmunologyReport.gi')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1642,7 +1770,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.systems_involved.respiratory_upper', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Respiratory (Upper)</span>
+                <span className="text-sm">{t('allergyImmunologyReport.respiratoryUpper')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1651,7 +1779,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.systems_involved.respiratory_lower', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Respiratory (Lower)</span>
+                <span className="text-sm">{t('allergyImmunologyReport.respiratoryLower')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1660,7 +1788,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.systems_involved.cv', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Cardiovascular</span>
+                <span className="text-sm">{t('allergyImmunologyReport.cardiovascular')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1669,17 +1797,17 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.systems_involved.neuro', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Neurological</span>
+                <span className="text-sm">{t('allergyImmunologyReport.neurological')}</span>
               </label>
             </div>
           </div>
 
           {/* Symptom Details */}
           <div>
-            <FieldLabel>Symptom Details</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.symptomDetails')}</FieldLabel>
             <TextArea
               name="symptom_details"
-              placeholder="Detailed description of symptoms..."
+              placeholder={t('allergyImmunologyReport.symptomDetailsPlaceholder')}
               value={formData.hpi.symptom_details}
               onChange={(e) => updateFormData('hpi.symptom_details', e.target.value)}
               rows={3}
@@ -1688,7 +1816,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
 
           {/* Anaphylaxis */}
           <div className="border-t pt-4">
-            <FieldLabel>Anaphylaxis</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.anaphylaxis')}</FieldLabel>
             <div className="space-y-3">
               <label className="flex items-center gap-2">
                 <input
@@ -1697,40 +1825,41 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.anaphylaxis.occurred', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm font-medium">Anaphylaxis occurred</span>
+                <span className="text-sm font-medium">{t('allergyImmunologyReport.anaphylaxisOccurred')}</span>
               </label>
               
               {formData.hpi.anaphylaxis.occurred && (
                 <>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
                     <div>
-                      <FieldLabel>Grade</FieldLabel>
+                      <FieldLabel>{t('allergyImmunologyReport.grade')}</FieldLabel>
                       <Select
                         name="anaphylaxis_grade"
                         value={formData.hpi.anaphylaxis.grade}
                         onChange={(e) => updateFormData('hpi.anaphylaxis.grade', e.target.value)}
                         options={[
-                          { value: 'I', label: 'Grade I' },
-                          { value: 'II', label: 'Grade II' },
-                          { value: 'III', label: 'Grade III' },
-                          { value: 'IV', label: 'Grade IV' }
+                          { value: 'I', label: t('allergyImmunologyReport.gradeI') },
+                          { value: 'II', label: t('allergyImmunologyReport.gradeII') },
+                          { value: 'III', label: t('allergyImmunologyReport.gradeIII') },
+                          { value: 'IV', label: t('allergyImmunologyReport.gradeIV') }
                         ]}
+                        t={t}
                       />
                     </div>
                     <div>
-                      <FieldLabel>Tryptase (Acute)</FieldLabel>
+                      <FieldLabel>{t('allergyImmunologyReport.tryptaseAcute')}</FieldLabel>
                       <Input
                         name="tryptase_acute"
-                        placeholder="μg/L"
+                        placeholder={t('allergyImmunologyReport.tryptasePlaceholder')}
                         value={formData.hpi.anaphylaxis.tryptase_acute}
                         onChange={(e) => updateFormData('hpi.anaphylaxis.tryptase_acute', e.target.value)}
                       />
                     </div>
                     <div>
-                      <FieldLabel>Tryptase (Baseline)</FieldLabel>
+                      <FieldLabel>{t('allergyImmunologyReport.tryptaseBaseline')}</FieldLabel>
                       <Input
                         name="tryptase_baseline"
-                        placeholder="μg/L"
+                        placeholder={t('allergyImmunologyReport.tryptasePlaceholder')}
                         value={formData.hpi.anaphylaxis.tryptase_baseline}
                         onChange={(e) => updateFormData('hpi.anaphylaxis.tryptase_baseline', e.target.value)}
                       />
@@ -1738,7 +1867,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   </div>
                   {formData.hpi.anaphylaxis.tryptase_acute && !formData.hpi.anaphylaxis.tryptase_baseline && (
                     <div className="ml-6 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
-                      ⚠️ Baseline tryptase recommended after 24–48h
+                      {t('allergyImmunologyReport.baselineTryptaseWarning')}
                     </div>
                   )}
                   <div className="flex flex-wrap gap-4 ml-6">
@@ -1749,7 +1878,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                         onChange={(e) => updateFormData('hpi.anaphylaxis.epinephrine_given', e.target.checked)}
                         className="w-4 h-4"
                       />
-                      <span className="text-sm">Epinephrine given</span>
+                      <span className="text-sm">{t('allergyImmunologyReport.epinephrineGiven')}</span>
                     </label>
                     <label className="flex items-center gap-2">
                       <input
@@ -1758,7 +1887,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                         onChange={(e) => updateFormData('hpi.anaphylaxis.ed_visit', e.target.checked)}
                         className="w-4 h-4"
                       />
-                      <span className="text-sm">ED visit</span>
+                      <span className="text-sm">{t('allergyImmunologyReport.edVisit')}</span>
                     </label>
                   </div>
                 </>
@@ -1768,7 +1897,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
 
           {/* Atopic History */}
           <div className="border-t pt-4">
-            <FieldLabel>Atopic History</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.atopicHistory')}</FieldLabel>
             <div className="flex flex-wrap gap-4">
               <label className="flex items-center gap-2">
                 <input
@@ -1777,7 +1906,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.atopic_history.asthma', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Asthma</span>
+                <span className="text-sm">{t('allergyImmunologyReport.asthma')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1786,7 +1915,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.atopic_history.allergic_rhinitis', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Allergic Rhinitis</span>
+                <span className="text-sm">{t('allergyImmunologyReport.allergicRhinitis')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1795,7 +1924,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.atopic_history.atopic_dermatitis', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Atopic Dermatitis</span>
+                <span className="text-sm">{t('allergyImmunologyReport.atopicDermatitis')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1804,7 +1933,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.atopic_history.food_allergy', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Food Allergy</span>
+                <span className="text-sm">{t('allergyImmunologyReport.foodAllergy')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1813,7 +1942,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.atopic_history.chronic_urticaria', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Chronic Urticaria</span>
+                <span className="text-sm">{t('allergyImmunologyReport.chronicUrticaria')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1822,7 +1951,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.atopic_history.nasal_polyps', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">Nasal Polyps</span>
+                <span className="text-sm">{t('allergyImmunologyReport.nasalPolyps')}</span>
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -1831,7 +1960,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   onChange={(e) => updateFormData('hpi.atopic_history.eoe', e.target.checked)}
                   className="w-4 h-4"
                 />
-                <span className="text-sm">EoE</span>
+                <span className="text-sm">{t('allergyImmunologyReport.eoe')}</span>
               </label>
             </div>
           </div>
@@ -1839,17 +1968,17 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
           {/* Occupational & Home Environment */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Occupational Exposure</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.occupationalExposure')}</FieldLabel>
               <TextArea
                 name="occupational_exposure"
-                placeholder="Workplace allergens..."
+                placeholder={t('allergyImmunologyReport.occupationalExposurePlaceholder')}
                 value={formData.hpi.occupational_exposure}
                 onChange={(e) => updateFormData('hpi.occupational_exposure', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Home Environment</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.homeEnvironment')}</FieldLabel>
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-2">
                   <label className="flex items-center gap-2">
@@ -1859,7 +1988,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                       onChange={(e) => updateFormData('hpi.home_env.pets', e.target.checked)}
                       className="w-4 h-4"
                     />
-                    <span className="text-sm">Pets</span>
+                    <span className="text-sm">{t('allergyImmunologyReport.pets')}</span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input
@@ -1868,7 +1997,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                       onChange={(e) => updateFormData('hpi.home_env.smoke_exposure', e.target.checked)}
                       className="w-4 h-4"
                     />
-                    <span className="text-sm">Smoke Exposure</span>
+                    <span className="text-sm">{t('allergyImmunologyReport.smokeExposure')}</span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input
@@ -1877,7 +2006,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                       onChange={(e) => updateFormData('hpi.home_env.dust_mites_mattress', e.target.checked)}
                       className="w-4 h-4"
                     />
-                    <span className="text-sm">Dust Mites (Mattress)</span>
+                    <span className="text-sm">{t('allergyImmunologyReport.dustMitesMattress')}</span>
                   </label>
                   <label className="flex items-center gap-2">
                     <input
@@ -1886,7 +2015,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                       onChange={(e) => updateFormData('hpi.home_env.visible_mold', e.target.checked)}
                       className="w-4 h-4"
                     />
-                    <span className="text-sm">Visible Mold</span>
+                    <span className="text-sm">{t('allergyImmunologyReport.visibleMold')}</span>
                   </label>
                 </div>
                 <Select
@@ -1894,13 +2023,14 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   value={formData.hpi.home_env.seasonality}
                   onChange={(e) => updateFormData('hpi.home_env.seasonality', e.target.value)}
                   options={[
-                    { value: 'none', label: 'None' },
-                    { value: 'spring', label: 'Spring' },
-                    { value: 'summer', label: 'Summer' },
-                    { value: 'autumn', label: 'Autumn' },
-                    { value: 'winter', label: 'Winter' },
-                    { value: 'perennial', label: 'Perennial' }
+                    { value: 'none', label: t('allergyImmunologyReport.none') },
+                    { value: 'spring', label: t('allergyImmunologyReport.spring') },
+                    { value: 'summer', label: t('allergyImmunologyReport.summer') },
+                    { value: 'autumn', label: t('allergyImmunologyReport.autumn') },
+                    { value: 'winter', label: t('allergyImmunologyReport.winter') },
+                    { value: 'perennial', label: t('allergyImmunologyReport.perennial') }
                   ]}
+                  t={t}
                 />
               </div>
             </div>
@@ -1909,69 +2039,93 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
           {/* Medications & History */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Current Medications</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.currentMedications')}</FieldLabel>
+              {patientMedications.length > 0 && (
+                <div className="mb-2 p-2 border rounded-lg bg-blue-50 border-blue-200">
+                  <div className="text-xs font-semibold mb-1 text-blue-800">{t('allergyImmunologyReport.fromPatientRecord') || 'From Patient Record'}</div>
+                  <div className="space-y-1">
+                    {patientMedications.map((med, idx) => (
+                      <div key={idx} className="text-xs text-blue-700">
+                        • {med.medication_name || med.name} {med.dosage || ''} {med.frequency || ''} {med.route || ''}
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const medsText = patientMedications.map(m => 
+                        `${m.medication_name || m.name} ${m.dosage || ''} ${m.frequency || ''} ${m.route || ''}`.trim()
+                      ).join(', ');
+                      updateFormData('hpi.meds_current', medsText);
+                    }}
+                    className="mt-1 text-xs underline text-blue-600 hover:text-blue-800"
+                  >
+                    {t('allergyImmunologyReport.copyToForm') || 'Copy to Form'}
+                  </button>
+                </div>
+              )}
               <TextArea
                 name="meds_current"
-                placeholder="Current medications..."
+                placeholder={t('allergyImmunologyReport.currentMedicationsPlaceholder')}
                 value={formData.hpi.meds_current}
                 onChange={(e) => updateFormData('hpi.meds_current', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Contraindicated Medications</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.contraindicatedMedications')}</FieldLabel>
               <TextArea
                 name="meds_contra"
-                placeholder="Medications to avoid..."
+                placeholder={t('allergyImmunologyReport.contraindicatedMedicationsPlaceholder')}
                 value={formData.hpi.meds_contra}
                 onChange={(e) => updateFormData('hpi.meds_contra', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Allergies Noted</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.allergiesNoted')}</FieldLabel>
               <Input
                 name="allergies_noted"
-                placeholder="Known allergies..."
+                placeholder={t('allergyImmunologyReport.allergiesNotedPlaceholder')}
                 value={formData.hpi.allergies_noted}
                 onChange={(e) => updateFormData('hpi.allergies_noted', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Past Medical History</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.pastMedicalHistory')}</FieldLabel>
               <TextArea
                 name="pmh"
-                placeholder="PMH..."
+                placeholder={t('allergyImmunologyReport.pmhPlaceholder')}
                 value={formData.hpi.pmh}
                 onChange={(e) => updateFormData('hpi.pmh', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Past Surgical History</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.pastSurgicalHistory')}</FieldLabel>
               <TextArea
                 name="psh"
-                placeholder="PSH..."
+                placeholder={t('allergyImmunologyReport.pshPlaceholder')}
                 value={formData.hpi.psh}
                 onChange={(e) => updateFormData('hpi.psh', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Family History</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.familyHistory')}</FieldLabel>
               <TextArea
                 name="family"
-                placeholder="Family history..."
+                placeholder={t('allergyImmunologyReport.familyHistoryPlaceholder')}
                 value={formData.hpi.family}
                 onChange={(e) => updateFormData('hpi.family', e.target.value)}
                 rows={2}
               />
             </div>
             <div className="md:col-span-2">
-              <FieldLabel>Social History</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.socialHistory')}</FieldLabel>
               <TextArea
                 name="social"
-                placeholder="Social history..."
+                placeholder={t('allergyImmunologyReport.socialHistoryPlaceholder')}
                 value={formData.hpi.social}
                 onChange={(e) => updateFormData('hpi.social', e.target.value)}
                 rows={2}
@@ -1991,54 +2145,54 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed'
               }`}
             >
-              🧠 AI Suggest
+              {t('allergyImmunologyReport.aiSuggest')}
             </button>
           </div>
         </div>
       </Card>
 
       {/* Vitals & Physical Exam */}
-      <Card title="Vitals & Physical Exam" collapsible isOpen={!collapsedSections.vitals} onToggle={() => toggleSection('vitals')}>
+      <Card title={t('allergyImmunologyReport.vitalsPhysicalExam')} collapsible isOpen={!collapsedSections.vitals} onToggle={() => toggleSection('vitals')}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <FieldLabel>BP</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.bp')}</FieldLabel>
               <Input
                 name="bp"
-                placeholder="mmHg"
+                placeholder={t('allergyImmunologyReport.bpPlaceholder')}
                 value={formData.vitals.bp}
                 onChange={(e) => updateFormData('vitals.bp', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>HR</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.hr')}</FieldLabel>
               <Input
                 name="hr"
-                placeholder="bpm"
+                placeholder={t('allergyImmunologyReport.hrPlaceholder')}
                 value={formData.vitals.hr}
                 onChange={(e) => updateFormData('vitals.hr', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Temp</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.temp')}</FieldLabel>
               <Input
                 name="temp"
-                placeholder="°C"
+                placeholder={t('allergyImmunologyReport.tempPlaceholder')}
                 value={formData.vitals.temp}
                 onChange={(e) => updateFormData('vitals.temp', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>SpO2</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.spo2')}</FieldLabel>
               <Input
                 name="spo2"
-                placeholder="%"
+                placeholder={t('allergyImmunologyReport.spo2Placeholder')}
                 value={formData.vitals.spo2}
                 onChange={(e) => updateFormData('vitals.spo2', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Height (cm)</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.heightCm')}</FieldLabel>
               <Input
                 type="number"
                 name="height_cm"
@@ -2047,7 +2201,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
               />
             </div>
             <div>
-              <FieldLabel>Weight (kg)</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.weightKg')}</FieldLabel>
               <Input
                 type="number"
                 name="weight_kg"
@@ -2056,7 +2210,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
               />
             </div>
             <div>
-              <FieldLabel>BMI</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.bmi')}</FieldLabel>
               <Input
                 name="bmi"
                 value={formData.vitals.bmi}
@@ -2068,74 +2222,74 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
         </div>
       </Card>
 
-      <Card title="Physical Examination" collapsible isOpen={!collapsedSections.exam} onToggle={() => toggleSection('exam')}>
+      <Card title={t('allergyImmunologyReport.physicalExamination')} collapsible isOpen={!collapsedSections.exam} onToggle={() => toggleSection('exam')}>
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <FieldLabel>Skin</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.skin')}</FieldLabel>
               <TextArea
                 name="skin"
-                placeholder="Dermatological findings..."
+                placeholder={t('allergyImmunologyReport.skinPlaceholder')}
                 value={formData.exam.skin}
                 onChange={(e) => updateFormData('exam.skin', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Eyes</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.eyes')}</FieldLabel>
               <TextArea
                 name="eyes"
-                placeholder="Ocular findings..."
+                placeholder={t('allergyImmunologyReport.eyesPlaceholder')}
                 value={formData.exam.eyes}
                 onChange={(e) => updateFormData('exam.eyes', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Nose</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.nose')}</FieldLabel>
               <TextArea
                 name="nose"
-                placeholder="Nasal findings..."
+                placeholder={t('allergyImmunologyReport.nosePlaceholder')}
                 value={formData.exam.nose}
                 onChange={(e) => updateFormData('exam.nose', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Throat</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.throat')}</FieldLabel>
               <TextArea
                 name="throat"
-                placeholder="Throat findings..."
+                placeholder={t('allergyImmunologyReport.throatPlaceholder')}
                 value={formData.exam.throat}
                 onChange={(e) => updateFormData('exam.throat', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Lungs</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.lungs')}</FieldLabel>
               <TextArea
                 name="lungs"
-                placeholder="Respiratory findings..."
+                placeholder={t('allergyImmunologyReport.lungsPlaceholder')}
                 value={formData.exam.lungs}
                 onChange={(e) => updateFormData('exam.lungs', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Heart</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.heart')}</FieldLabel>
               <TextArea
                 name="heart"
-                placeholder="Cardiac findings..."
+                placeholder={t('allergyImmunologyReport.heartPlaceholder')}
                 value={formData.exam.heart}
                 onChange={(e) => updateFormData('exam.heart', e.target.value)}
                 rows={2}
               />
             </div>
             <div>
-              <FieldLabel>Abdomen</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.abdomen')}</FieldLabel>
               <TextArea
                 name="abdomen"
-                placeholder="Abdominal findings..."
+                placeholder={t('allergyImmunologyReport.abdomenPlaceholder')}
                 value={formData.exam.abdomen}
                 onChange={(e) => updateFormData('exam.abdomen', e.target.value)}
                 rows={2}
@@ -2144,55 +2298,58 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <FieldLabel>Urticaria</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.urticaria')}</FieldLabel>
               <Select
                 name="skin_urticaria"
                 value={formData.exam.skin_urticaria}
                 onChange={(e) => updateFormData('exam.skin_urticaria', e.target.value)}
                 options={[
-                  { value: 'present', label: 'Present' },
-                  { value: 'absent', label: 'Absent' }
+                  { value: 'present', label: t('allergyImmunologyReport.present') },
+                  { value: 'absent', label: t('allergyImmunologyReport.absent') }
                 ]}
+                t={t}
               />
             </div>
             <div>
-              <FieldLabel>Angioedema</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.angioedema')}</FieldLabel>
               <Select
                 name="angioedema"
                 value={formData.exam.angioedema}
                 onChange={(e) => updateFormData('exam.angioedema', e.target.value)}
                 options={[
-                  { value: 'present', label: 'Present' },
-                  { value: 'absent', label: 'Absent' }
+                  { value: 'present', label: t('allergyImmunologyReport.present') },
+                  { value: 'absent', label: t('allergyImmunologyReport.absent') }
                 ]}
+                t={t}
               />
             </div>
             <div>
-              <FieldLabel>Wheeze</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.wheeze')}</FieldLabel>
               <Select
                 name="wheeze"
                 value={formData.exam.wheeze}
                 onChange={(e) => updateFormData('exam.wheeze', e.target.value)}
                 options={[
-                  { value: 'present', label: 'Present' },
-                  { value: 'absent', label: 'Absent' }
+                  { value: 'present', label: t('allergyImmunologyReport.present') },
+                  { value: 'absent', label: t('allergyImmunologyReport.absent') }
                 ]}
+                t={t}
               />
             </div>
             <div>
-              <FieldLabel>AD Severity</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.adSeverity')}</FieldLabel>
               <Input
                 name="ad_severity"
-                placeholder="EASI score or description"
+                placeholder={t('allergyImmunologyReport.adSeverityPlaceholder')}
                 value={formData.exam.ad_severity}
                 onChange={(e) => updateFormData('exam.ad_severity', e.target.value)}
               />
             </div>
             <div>
-              <FieldLabel>Nasal Findings</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.nasalFindings')}</FieldLabel>
               <Input
                 name="nasal_findings"
-                placeholder="Turbinates, polyps, edema, discharge"
+                placeholder={t('allergyImmunologyReport.nasalFindingsPlaceholder')}
                 value={formData.exam.nasal_findings}
                 onChange={(e) => updateFormData('exam.nasal_findings', e.target.value)}
               />
@@ -2202,17 +2359,17 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
       </Card>
 
       {/* Tests Section - will be added next due to complexity */}
-      <Card title="Tests" collapsible isOpen={!collapsedSections.tests} onToggle={() => toggleSection('tests')}>
+      <Card title={t('allergyImmunologyReport.tests')} collapsible isOpen={!collapsedSections.tests} onToggle={() => toggleSection('tests')}>
         <div className="space-y-6">
           <p className="text-slate-500 text-sm">Test sections will be implemented here (SPT, IDT, Specific IgE, Challenge, Desensitization, etc.)</p>
         </div>
       </Card>
 
       {/* Diagnosis */}
-      <Card title="Diagnosis" collapsible isOpen={!collapsedSections.diagnosis} onToggle={() => toggleSection('diagnosis')}>
+      <Card title={t('allergyImmunologyReport.diagnosis')} collapsible isOpen={!collapsedSections.diagnosis} onToggle={() => toggleSection('diagnosis')}>
         <div className="space-y-4">
           <div>
-            <FieldLabel required>Main Diagnosis</FieldLabel>
+            <FieldLabel required>{t('allergyImmunologyReport.mainDiagnosis')}</FieldLabel>
             <div className="space-y-2">
               {formData.diagnosis.main && typeof formData.diagnosis.main === 'object' && (formData.diagnosis.main.code || formData.diagnosis.main.term) ? (
                 <div className="flex gap-2 items-start">
@@ -2241,12 +2398,12 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                     onClick={() => updateFormData('diagnosis.main', '')}
                     className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
                   >
-                    Clear
+                    {t('allergyImmunologyReport.clear')}
                   </button>
                 </div>
               ) : null}
               <IcdCodeSearchInput
-                placeholder="Search ICD-11 code or diagnosis..."
+                placeholder={t('allergyImmunologyReport.searchIcdCode')}
                 onSelect={(selected) => {
                   updateFormData('diagnosis.main', selected);
                 }}
@@ -2257,7 +2414,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             )}
           </div>
           <div>
-            <FieldLabel>Secondary Diagnoses</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.secondaryDiagnoses')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.diagnosis.secondary.map((diag, idx) => (
                 <Chip key={idx} onRemove={() => removeFromArray('diagnosis.secondary', idx)}>
@@ -2267,7 +2424,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
             <div className="flex gap-2">
               <Input
-                placeholder="Add secondary diagnosis..."
+                placeholder={t('allergyImmunologyReport.addSecondaryDiagnosis')}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     e.preventDefault();
@@ -2282,7 +2439,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
           </div>
           <div>
-            <FieldLabel>Diagnosis Codes</FieldLabel>
+            <FieldLabel>{t('allergyImmunologyReport.diagnosisCodes')}</FieldLabel>
             <div className="flex flex-wrap gap-2 mb-2">
               {formData.diagnosis.codes.map((code, idx) => (
                 <Chip key={idx} onRemove={() => removeFromArray('diagnosis.codes', idx)}>
@@ -2296,20 +2453,21 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                 value={newCode.system}
                 onChange={(e) => setNewCode(prev => ({ ...prev, system: e.target.value }))}
                 options={[
-                  { value: 'ICD10', label: 'ICD10' },
-                  { value: 'ICD11', label: 'ICD11' },
-                  { value: 'SNOMED', label: 'SNOMED' }
+                  { value: 'ICD10', label: t('allergyImmunologyReport.icd10') },
+                  { value: 'ICD11', label: t('allergyImmunologyReport.icd11') },
+                  { value: 'SNOMED', label: t('allergyImmunologyReport.snomed') }
                 ]}
+                t={t}
               />
               <Input
                 name="code_code"
-                placeholder="Code"
+                placeholder={t('allergyImmunologyReport.code')}
                 value={newCode.code}
                 onChange={(e) => setNewCode(prev => ({ ...prev, code: e.target.value }))}
               />
               <Input
                 name="code_term"
-                placeholder="Term"
+                placeholder={t('allergyImmunologyReport.term')}
                 value={newCode.term}
                 onChange={(e) => setNewCode(prev => ({ ...prev, term: e.target.value }))}
               />
@@ -2323,12 +2481,12 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                 }}
                 className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
               >
-                Add Code
+                {t('allergyImmunologyReport.addCode')}
               </button>
             </div>
             <div className="mt-2">
               <IcdCodeSearchInput
-                placeholder="Search ICD-11 code to add..."
+                placeholder={t('allergyImmunologyReport.searchIcdCodeToAdd')}
                 onSelect={(selected) => {
                   addToArray('diagnosis.codes', {
                     system: 'ICD11',
@@ -2344,10 +2502,10 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Plan & Treatment - Initial Mode Only */}
       {mode === 'initial' && (
-        <Card title="Plan & Treatment" collapsible isOpen={!collapsedSections.plan} onToggle={() => toggleSection('plan')}>
+        <Card title={t('allergyImmunologyReport.planTreatment')} collapsible isOpen={!collapsedSections.plan} onToggle={() => toggleSection('plan')}>
           <div className="space-y-4">
             <div>
-              <FieldLabel>Medications ({formData.plan.meds.length})</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.medications')} ({formData.plan.meds.length})</FieldLabel>
               {formData.plan.meds.length > 0 && (
                 <div className="flex flex-wrap gap-2 mt-2">
                   {formData.plan.meds.map((med, idx) => {
@@ -2364,7 +2522,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                 <div className="mt-3 grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
                   <div className="col-span-12">
                     <MedicationSearchInput
-                      placeholder="Search medication..."
+                      placeholder={t('allergyImmunologyReport.searchMedication')}
                       value={editingMed.med}
                       onChange={(e) => setEditingMed(s => ({ ...s, med: e.target.value }))}
                       onSelect={(selected) => {
@@ -2377,48 +2535,51 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                     />
                   </div>
                   <div className="col-span-12">
-                    <Input placeholder="Concentration/Strength" value={editingMed.conc_strength} onChange={(e) => setEditingMed(s => ({...s, conc_strength: e.target.value}))} />
+                    <Input placeholder={t('allergyImmunologyReport.concentrationStrength')} value={editingMed.conc_strength} onChange={(e) => setEditingMed(s => ({...s, conc_strength: e.target.value}))} />
                   </div>
                   <div className="col-span-12">
                     <Select name="route" value={editingMed.route} onChange={(e) => setEditingMed(s => ({...s, route: e.target.value}))} options={[
-                      {value:'inhaled',label:'Inhaled'},
-                      {value:'intranasal',label:'Intranasal'},
-                      {value:'oral',label:'Oral'},
-                      {value:'topical',label:'Topical'},
-                      {value:'injectable',label:'Injectable'},
-                      {value:'other',label:'Other'}
-                    ]} />
+                      {value:'inhaled',label:t('allergyImmunologyReport.inhaled')},
+                      {value:'intranasal',label:t('allergyImmunologyReport.intranasal')},
+                      {value:'oral',label:t('allergyImmunologyReport.oral')},
+                      {value:'topical',label:t('allergyImmunologyReport.topical')},
+                      {value:'injectable',label:t('allergyImmunologyReport.injectable')},
+                      {value:'other',label:t('allergyImmunologyReport.other')}
+                    ]} t={t} />
                   </div>
                   <div className="col-span-12">
-                    <Input placeholder="Frequency" value={editingMed.freq} onChange={(e) => setEditingMed(s => ({...s, freq: e.target.value}))} />
+                    <Input placeholder={t('allergyImmunologyReport.frequency')} value={editingMed.freq} onChange={(e) => setEditingMed(s => ({...s, freq: e.target.value}))} />
                   </div>
                   <div className="col-span-12">
-                    <Input placeholder="Duration" value={editingMed.duration} onChange={(e) => setEditingMed(s => ({...s, duration: e.target.value}))} />
+                    <Input placeholder={t('allergyImmunologyReport.duration')} value={editingMed.duration} onChange={(e) => setEditingMed(s => ({...s, duration: e.target.value}))} />
                   </div>
                   <div className="col-span-12">
-                    <TextArea placeholder="Instructions" value={editingMed.instructions} onChange={(e) => setEditingMed(s => ({...s, instructions: e.target.value}))} rows={2} />
+                    <TextArea placeholder={t('allergyImmunologyReport.instructions')} value={editingMed.instructions} onChange={(e) => setEditingMed(s => ({...s, instructions: e.target.value}))} rows={2} />
                   </div>
                   <div className="col-span-12 flex gap-2">
-                    <button type="button" onClick={saveMed} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">Save</button>
-                    <button type="button" onClick={() => { setEditingMed(null); setEditingMedIdx(null); }} className="px-4 py-2 border border-slate-300 rounded-lg">Cancel</button>
+                    <button type="button" onClick={saveMed} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">{t('allergyImmunologyReport.save')}</button>
+                    <button type="button" onClick={() => { setEditingMed(null); setEditingMedIdx(null); }} className="px-4 py-2 border border-slate-300 rounded-lg">{t('allergyImmunologyReport.cancel')}</button>
                   </div>
                 </div>
               )}
               {!editingMed && (
                 <button type="button" onClick={() => openMedEditor()} className="mt-2 px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
-                  + Add Medication
+                  {t('allergyImmunologyReport.addMedication')}
                 </button>
               )}
             </div>
 
             <div>
-              <FieldLabel>Avoidance</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.avoidance')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {AVOIDANCE_ADVICE.map(preset => (
-                  <button key={preset} type="button" onClick={() => addToArray('plan.avoidance', preset)} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
-                    + {preset}
-                  </button>
-                ))}
+                {AVOIDANCE_ADVICE.map(preset => {
+                  const translatedPreset = getTranslatedPreset(preset, 'avoidanceAdvice');
+                  return (
+                    <button key={preset} type="button" onClick={() => addToArray('plan.avoidance', preset)} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
+                      + {translatedPreset}
+                    </button>
+                  );
+                })}
               </div>
               <div className="flex flex-wrap gap-2">
                 {formData.plan.avoidance.map((adv, idx) => (
@@ -2428,78 +2589,78 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
 
             <div>
-              <FieldLabel>Emergency Action Plan</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.emergencyActionPlan')}</FieldLabel>
               {formData.hpi.anaphylaxis.occurred && !formData.plan.emergency_action_plan.epinephrine_auto_injector_prescribed && (
                 <div className="mb-2 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800">
-                  ⚠️ Epinephrine auto-injector recommended for anaphylaxis history
+                  {t('allergyImmunologyReport.epinephrineAutoInjectorRecommended')}
                 </div>
               )}
               <div className="space-y-2">
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={formData.plan.emergency_action_plan.epinephrine_auto_injector_prescribed} onChange={(e) => updateFormData('plan.emergency_action_plan.epinephrine_auto_injector_prescribed', e.target.checked)} className="w-4 h-4" />
-                  <span className="text-sm">Epinephrine auto-injector prescribed</span>
+                  <span className="text-sm">{t('allergyImmunologyReport.epinephrineAutoInjectorPrescribed')}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={formData.plan.emergency_action_plan.training_provided} onChange={(e) => updateFormData('plan.emergency_action_plan.training_provided', e.target.checked)} className="w-4 h-4" />
-                  <span className="text-sm">Training provided</span>
+                  <span className="text-sm">{t('allergyImmunologyReport.trainingProvided')}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={formData.plan.emergency_action_plan.written_plan_given} onChange={(e) => updateFormData('plan.emergency_action_plan.written_plan_given', e.target.checked)} className="w-4 h-4" />
-                  <span className="text-sm">Written plan given</span>
+                  <span className="text-sm">{t('allergyImmunologyReport.writtenPlanGiven')}</span>
                 </label>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <FieldLabel>Dose (mg)</FieldLabel>
+                    <FieldLabel>{t('allergyImmunologyReport.doseMg')}</FieldLabel>
                     <Input name="dose_mg" value={formData.plan.emergency_action_plan.dose_mg} onChange={(e) => updateFormData('plan.emergency_action_plan.dose_mg', e.target.value)} />
                   </div>
                   <div>
-                    <FieldLabel>Devices</FieldLabel>
+                    <FieldLabel>{t('allergyImmunologyReport.devices')}</FieldLabel>
                     <Select name="devices" value={formData.plan.emergency_action_plan.devices} onChange={(e) => updateFormData('plan.emergency_action_plan.devices', e.target.value)} options={[
                       {value:'0',label:'0'},
                       {value:'1',label:'1'},
                       {value:'2',label:'2'}
-                    ]} />
+                    ]} t={t} />
                   </div>
                 </div>
               </div>
             </div>
 
             <div>
-              <FieldLabel>Immunotherapy</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.immunotherapy')}</FieldLabel>
               <label className="flex items-center gap-2 mb-2">
                 <input type="checkbox" checked={formData.plan.immunotherapy.candidate} onChange={(e) => updateFormData('plan.immunotherapy.candidate', e.target.checked)} className="w-4 h-4" />
-                <span className="text-sm">Candidate for immunotherapy</span>
+                <span className="text-sm">{t('allergyImmunologyReport.candidateForImmunotherapy')}</span>
               </label>
               {formData.plan.immunotherapy.candidate && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
                   <div>
-                    <FieldLabel>Modality</FieldLabel>
+                    <FieldLabel>{t('allergyImmunologyReport.modality')}</FieldLabel>
                     <Select name="modality" value={formData.plan.immunotherapy.modality} onChange={(e) => updateFormData('plan.immunotherapy.modality', e.target.value)} options={[
-                      {value:'SCIT',label:'SCIT'},
-                      {value:'SLIT',label:'SLIT'},
-                      {value:'VIT',label:'VIT'},
-                      {value:'Biologic',label:'Biologic'},
-                      {value:'None',label:'None'}
-                    ]} />
+                      {value:'SCIT',label:t('allergyImmunologyReport.scit')},
+                      {value:'SLIT',label:t('allergyImmunologyReport.slit')},
+                      {value:'VIT',label:t('allergyImmunologyReport.vit')},
+                      {value:'Biologic',label:t('allergyImmunologyReport.biologic')},
+                      {value:'None',label:t('allergyImmunologyReport.none')}
+                    ]} t={t} />
                   </div>
                   <div>
-                    <FieldLabel>Start Date</FieldLabel>
+                    <FieldLabel>{t('allergyImmunologyReport.startDate')}</FieldLabel>
                     <Input type="date" name="start_date" value={formData.plan.immunotherapy.start_date} onChange={(e) => updateFormData('plan.immunotherapy.start_date', e.target.value)} />
                   </div>
                   <div>
-                    <FieldLabel>Build-up Scheme</FieldLabel>
+                    <FieldLabel>{t('allergyImmunologyReport.buildUpScheme')}</FieldLabel>
                     <Select name="build_up_scheme" value={formData.plan.immunotherapy.build_up_scheme} onChange={(e) => updateFormData('plan.immunotherapy.build_up_scheme', e.target.value)} options={[
-                      {value:'conventional',label:'Conventional'},
-                      {value:'rush',label:'Rush'},
-                      {value:'cluster',label:'Cluster'}
-                    ]} />
+                      {value:'conventional',label:t('allergyImmunologyReport.conventional')},
+                      {value:'rush',label:t('allergyImmunologyReport.rush')},
+                      {value:'cluster',label:t('allergyImmunologyReport.cluster')}
+                    ]} t={t} />
                   </div>
                   <div>
-                    <FieldLabel>Maintenance Interval (weeks)</FieldLabel>
+                    <FieldLabel>{t('allergyImmunologyReport.maintenanceIntervalWeeks')}</FieldLabel>
                     <Input name="maintenance_interval_w" value={formData.plan.immunotherapy.maintenance_interval_w} onChange={(e) => updateFormData('plan.immunotherapy.maintenance_interval_w', e.target.value)} />
                   </div>
                   <div>
-                    <FieldLabel>Expected Duration (years)</FieldLabel>
+                    <FieldLabel>{t('allergyImmunologyReport.expectedDurationYears')}</FieldLabel>
                     <Input name="expected_duration_y" value={formData.plan.immunotherapy.expected_duration_y} onChange={(e) => updateFormData('plan.immunotherapy.expected_duration_y', e.target.value)} />
                   </div>
                 </div>
@@ -2507,19 +2668,22 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
 
             <div>
-              <FieldLabel>Biologics</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.biologics')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {BIOLOGICS_PRESETS.map(preset => (
-                  <button key={preset} type="button" onClick={() => {
-                    if (formData.plan.biologics.includes(preset)) {
-                      removeFromArray('plan.biologics', formData.plan.biologics.indexOf(preset));
-                    } else {
-                      addToArray('plan.biologics', preset);
-                    }
-                  }} className={`px-3 py-1 rounded-lg text-sm ${formData.plan.biologics.includes(preset) ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'}`}>
-                    {preset}
-                  </button>
-                ))}
+                {BIOLOGICS_PRESETS.map(preset => {
+                  const translatedPreset = getTranslatedPreset(preset, 'biologicsPresets');
+                  return (
+                    <button key={preset} type="button" onClick={() => {
+                      if (formData.plan.biologics.includes(preset)) {
+                        removeFromArray('plan.biologics', formData.plan.biologics.indexOf(preset));
+                      } else {
+                        addToArray('plan.biologics', preset);
+                      }
+                    }} className={`px-3 py-1 rounded-lg text-sm ${formData.plan.biologics.includes(preset) ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'}`}>
+                      {translatedPreset}
+                    </button>
+                  );
+                })}
               </div>
               <div className="flex flex-wrap gap-2">
                 {formData.plan.biologics.map((bio, idx) => (
@@ -2529,13 +2693,16 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
 
             <div>
-              <FieldLabel>Education</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.education')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {EDUCATION_TOPICS.map(preset => (
-                  <button key={preset} type="button" onClick={() => addToArray('plan.education', preset)} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
-                    + {preset}
-                  </button>
-                ))}
+                {EDUCATION_TOPICS.map(preset => {
+                  const translatedPreset = getTranslatedPreset(preset, 'educationTopics');
+                  return (
+                    <button key={preset} type="button" onClick={() => addToArray('plan.education', preset)} className="px-3 py-1 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
+                      + {translatedPreset}
+                    </button>
+                  );
+                })}
               </div>
               <div className="flex flex-wrap gap-2">
                 {formData.plan.education.map((edu, idx) => (
@@ -2545,19 +2712,22 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
 
             <div>
-              <FieldLabel>Referrals</FieldLabel>
+              <FieldLabel>{t('allergyImmunologyReport.referrals')}</FieldLabel>
               <div className="flex flex-wrap gap-2 mb-2">
-                {REFERRAL_PRESETS.map(preset => (
-                  <button key={preset} type="button" onClick={() => {
-                    if (formData.plan.referrals.includes(preset)) {
-                      removeFromArray('plan.referrals', formData.plan.referrals.indexOf(preset));
-                    } else {
-                      addToArray('plan.referrals', preset);
-                    }
-                  }} className={`px-3 py-1 rounded-lg text-sm ${formData.plan.referrals.includes(preset) ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'}`}>
-                    {preset}
-                  </button>
-                ))}
+                {REFERRAL_PRESETS.map(preset => {
+                  const translatedPreset = getTranslatedPreset(preset, 'referralPresets');
+                  return (
+                    <button key={preset} type="button" onClick={() => {
+                      if (formData.plan.referrals.includes(preset)) {
+                        removeFromArray('plan.referrals', formData.plan.referrals.indexOf(preset));
+                      } else {
+                        addToArray('plan.referrals', preset);
+                      }
+                    }} className={`px-3 py-1 rounded-lg text-sm ${formData.plan.referrals.includes(preset) ? 'bg-emerald-100 text-emerald-700 border border-emerald-300' : 'bg-slate-100 text-slate-700 border border-slate-300 hover:bg-slate-200'}`}>
+                      {translatedPreset}
+                    </button>
+                  );
+                })}
               </div>
               <div className="flex flex-wrap gap-2">
                 {formData.plan.referrals.map((ref, idx) => (
@@ -2567,8 +2737,8 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
             </div>
 
             <div>
-              <FieldLabel>Follow-up</FieldLabel>
-              <Select name="follow_up" value={formData.plan.follow_up} onChange={(e) => updateFormData('plan.follow_up', e.target.value)} options={FOLLOW_UP_OPTIONS.map(f => ({ value: f, label: f === '48h' ? '48 hours' : f === '1w' ? '1 week' : f === '1m' ? '1 month' : f === '3m' ? '3 months' : f === '6m' ? '6 months' : f === 'PRN' ? 'PRN' : 'Specific date' }))} />
+              <FieldLabel>{t('allergyImmunologyReport.followUp')}</FieldLabel>
+              <Select name="follow_up" value={formData.plan.follow_up} onChange={(e) => updateFormData('plan.follow_up', e.target.value)} options={FOLLOW_UP_OPTIONS.map(f => ({ value: f, label: f === '48h' ? t('allergyImmunologyReport.followUp48h') : f === '1w' ? t('allergyImmunologyReport.followUp1w') : f === '1m' ? t('allergyImmunologyReport.followUp1m') : f === '3m' ? t('allergyImmunologyReport.followUp3m') : f === '6m' ? t('allergyImmunologyReport.followUp6m') : f === 'PRN' ? t('allergyImmunologyReport.prn') : t('allergyImmunologyReport.specificDate') }))} t={t} />
               {formData.plan.follow_up === 'date' && (
                 <div className="mt-2">
                   <Input type="date" name="follow_up_date" value={formData.plan.follow_up_date} onChange={(e) => updateFormData('plan.follow_up_date', e.target.value)} />
@@ -2581,7 +2751,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
       )}
 
       {/* Procedures Done */}
-      <Card title="Procedures Done" collapsible isOpen={!collapsedSections.procedures} onToggle={() => toggleSection('procedures')} counter={formData.procedures_done.length}>
+      <Card title={t('allergyImmunologyReport.proceduresDone')} collapsible isOpen={!collapsedSections.procedures} onToggle={() => toggleSection('procedures')} counter={formData.procedures_done.length}>
         <div className="space-y-4">
           {formData.procedures_done.length > 0 && (
             <div className="space-y-2">
@@ -2590,9 +2760,9 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   <div className="flex justify-between items-start">
                     <div>
                       <p className="font-medium">{proc.name} - {proc.date}</p>
-                      {proc.setting && <p className="text-sm text-slate-600">Setting: {proc.setting}</p>}
-                      {proc.result && <p className="text-sm text-slate-600">Result: {proc.result}</p>}
-                      {proc.adverse_events && <p className="text-sm text-red-600">Adverse Events: {proc.adverse_events}</p>}
+                      {proc.setting && <p className="text-sm text-slate-600">{t('allergyImmunologyReport.setting')}: {proc.setting}</p>}
+                      {proc.result && <p className="text-sm text-slate-600">{t('allergyImmunologyReport.result')}: {proc.result}</p>}
+                      {proc.adverse_events && <p className="text-sm text-red-600">{t('allergyImmunologyReport.adverseEvents')}: {proc.adverse_events}</p>}
                     </div>
                     <div className="flex gap-2">
                       <button type="button" onClick={() => openProcedureEditor(proc, idx)} className="text-slate-600 hover:text-slate-800">✎</button>
@@ -2605,23 +2775,23 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
           )}
           {editingProcedure && (
             <div className="grid grid-cols-12 gap-4 bg-white p-4 rounded-lg border">
-              <div className="col-span-12"><Input placeholder="Procedure name" value={editingProcedure.name} onChange={(e) => setEditingProcedure(s => ({...s, name: e.target.value}))} /></div>
-              <div className="col-span-12"><Input type="date" placeholder="Date" value={editingProcedure.date} onChange={(e) => setEditingProcedure(s => ({...s, date: e.target.value}))} /></div>
-              <div className="col-span-12"><Select name="setting" value={editingProcedure.setting} onChange={(e) => setEditingProcedure(s => ({...s, setting: e.target.value}))} options={[{value:'clinic',label:'Clinic'},{value:'ED',label:'ED'},{value:'inpatient',label:'Inpatient'}]} /></div>
-              <div className="col-span-12"><TextArea placeholder="Premeds" value={editingProcedure.premeds} onChange={(e) => setEditingProcedure(s => ({...s, premeds: e.target.value}))} rows={2} /></div>
-              <div className="col-span-12"><TextArea placeholder="Technique" value={editingProcedure.technique} onChange={(e) => setEditingProcedure(s => ({...s, technique: e.target.value}))} rows={2} /></div>
-              <div className="col-span-12"><TextArea placeholder="Findings" value={editingProcedure.findings} onChange={(e) => setEditingProcedure(s => ({...s, findings: e.target.value}))} rows={2} /></div>
-              <div className="col-span-12"><Select name="result" value={editingProcedure.result} onChange={(e) => setEditingProcedure(s => ({...s, result: e.target.value}))} options={[{value:'successful',label:'Successful'},{value:'partial',label:'Partial'},{value:'failed',label:'Failed'}]} /></div>
-              <div className="col-span-12"><TextArea placeholder="Adverse Events" value={editingProcedure.adverse_events} onChange={(e) => setEditingProcedure(s => ({...s, adverse_events: e.target.value}))} rows={2} /></div>
+              <div className="col-span-12"><Input placeholder={t('allergyImmunologyReport.procedureNamePlaceholder')} value={editingProcedure.name} onChange={(e) => setEditingProcedure(s => ({...s, name: e.target.value}))} /></div>
+              <div className="col-span-12"><Input type="date" placeholder={t('allergyImmunologyReport.datePlaceholder')} value={editingProcedure.date} onChange={(e) => setEditingProcedure(s => ({...s, date: e.target.value}))} /></div>
+              <div className="col-span-12"><Select name="setting" value={editingProcedure.setting} onChange={(e) => setEditingProcedure(s => ({...s, setting: e.target.value}))} options={[{value:'clinic',label:t('allergyImmunologyReport.clinic')},{value:'ED',label:t('allergyImmunologyReport.ed')},{value:'inpatient',label:t('allergyImmunologyReport.inpatient')}]} t={t} /></div>
+              <div className="col-span-12"><TextArea placeholder={t('allergyImmunologyReport.premeds')} value={editingProcedure.premeds} onChange={(e) => setEditingProcedure(s => ({...s, premeds: e.target.value}))} rows={2} /></div>
+              <div className="col-span-12"><TextArea placeholder={t('allergyImmunologyReport.technique')} value={editingProcedure.technique} onChange={(e) => setEditingProcedure(s => ({...s, technique: e.target.value}))} rows={2} /></div>
+              <div className="col-span-12"><TextArea placeholder={t('allergyImmunologyReport.findings')} value={editingProcedure.findings} onChange={(e) => setEditingProcedure(s => ({...s, findings: e.target.value}))} rows={2} /></div>
+              <div className="col-span-12"><Select name="result" value={editingProcedure.result} onChange={(e) => setEditingProcedure(s => ({...s, result: e.target.value}))} options={[{value:'successful',label:t('allergyImmunologyReport.successful')},{value:'partial',label:t('allergyImmunologyReport.partial')},{value:'failed',label:t('allergyImmunologyReport.failed')}]} t={t} /></div>
+              <div className="col-span-12"><TextArea placeholder={t('allergyImmunologyReport.adverseEvents')} value={editingProcedure.adverse_events} onChange={(e) => setEditingProcedure(s => ({...s, adverse_events: e.target.value}))} rows={2} /></div>
               <div className="col-span-12 flex gap-2">
-                <button type="button" onClick={saveProcedure} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">Save</button>
-                <button type="button" onClick={() => { setEditingProcedure(null); setEditingProcedureIdx(null); }} className="px-4 py-2 border border-slate-300 rounded-lg">Cancel</button>
+                <button type="button" onClick={saveProcedure} className="px-4 py-2 bg-emerald-600 text-white rounded-lg">{t('allergyImmunologyReport.save')}</button>
+                <button type="button" onClick={() => { setEditingProcedure(null); setEditingProcedureIdx(null); }} className="px-4 py-2 border border-slate-300 rounded-lg">{t('allergyImmunologyReport.cancel')}</button>
               </div>
             </div>
           )}
           {!editingProcedure && (
             <button type="button" onClick={() => openProcedureEditor()} className="px-4 py-2 bg-slate-100 text-slate-700 rounded-lg hover:bg-slate-200 text-sm">
-              + Add Procedure
+              {t('allergyImmunologyReport.addProcedure')}
             </button>
           )}
         </div>
@@ -2629,18 +2799,18 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
 
       {/* Outcome & Recommendations - Discharge Mode Only */}
       {mode === 'discharge' && (
-        <Card title="Outcome & Recommendations" collapsible isOpen={!collapsedSections.outcome} onToggle={() => toggleSection('outcome')}>
+        <Card title={t('allergyImmunologyReport.outcomeRecommendations')} collapsible isOpen={!collapsedSections.outcome} onToggle={() => toggleSection('outcome')}>
           <div className="space-y-4">
             <div>
-              <FieldLabel>Condition at Discharge</FieldLabel>
-              <Input name="condition" placeholder="Stable, improved, unchanged..." value={formData.outcome.condition} onChange={(e) => updateFormData('outcome.condition', e.target.value)} />
+              <FieldLabel>{t('allergyImmunologyReport.conditionAtDischarge')}</FieldLabel>
+              <Input name="condition" placeholder={t('allergyImmunologyReport.conditionPlaceholder')} value={formData.outcome.condition} onChange={(e) => updateFormData('outcome.condition', e.target.value)} />
             </div>
             <div>
-              <FieldLabel>Hospital Course</FieldLabel>
-              <TextArea name="course" placeholder="Summarize hospital stay, treatments, response..." value={formData.outcome.course} onChange={(e) => updateFormData('outcome.course', e.target.value)} rows={4} />
+              <FieldLabel>{t('allergyImmunologyReport.hospitalCourse')}</FieldLabel>
+              <TextArea name="course" placeholder={t('allergyImmunologyReport.hospitalCoursePlaceholder')} value={formData.outcome.course} onChange={(e) => updateFormData('outcome.course', e.target.value)} rows={4} />
             </div>
             <div>
-              <FieldLabel required>Recommendations</FieldLabel>
+              <FieldLabel required>{t('allergyImmunologyReport.recommendations')}</FieldLabel>
               <div className="space-y-2">
                 {formData.recommendations.map((rec, index) => (
                   <div key={index} className="flex items-center gap-2">
@@ -2649,7 +2819,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
                   </div>
                 ))}
                 <button type="button" className="px-3 py-2 border border-slate-300 rounded-lg text-sm hover:bg-slate-50" onClick={() => addToArray('recommendations', '')}>
-                  + Add Recommendation
+                  {t('allergyImmunologyReport.addRecommendation')}
                 </button>
               </div>
               {errors.recommendations && <p className="text-red-500 text-sm mt-1">{errors.recommendations}</p>}
@@ -2659,12 +2829,12 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
       )}
 
       {/* Attachments */}
-      <Card title="Attachments" collapsible isOpen={!collapsedSections.attachments} onToggle={() => toggleSection('attachments')} counter={formData.attachments.length}>
+      <Card title={t('allergyImmunologyReport.attachments')} collapsible isOpen={!collapsedSections.attachments} onToggle={() => toggleSection('attachments')} counter={formData.attachments.length}>
         <div className="space-y-4">
           <div className="border-2 border-dashed border-slate-300 rounded-lg p-6 text-center">
-            <p className="text-slate-500 mb-2">Drop files here or click to upload</p>
-            <p className="text-xs text-slate-400 mb-2">Include imaging reports, procedure notes, etc.</p>
-            <button type="button" className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200">Choose Files</button>
+            <p className="text-slate-500 mb-2">{t('allergyImmunologyReport.dropFilesHere')}</p>
+            <p className="text-xs text-slate-400 mb-2">{t('allergyImmunologyReport.includeImagingReports')}</p>
+            <button type="button" className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200">{t('allergyImmunologyReport.chooseFiles')}</button>
           </div>
           <div className="space-y-2">
             {formData.attachments.map((attachment, index) => (
@@ -2682,7 +2852,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
       <div className="sticky bottom-0 bg-white border-t border-slate-200 p-4 shadow-lg">
         <div className="flex justify-between items-center">
           <div className="text-sm text-slate-500">
-            {lastSaved && `Last saved: ${lastSaved.toLocaleTimeString()}`}
+            {lastSaved && `${t('allergyImmunologyReport.lastSaved')}: ${lastSaved.toLocaleTimeString()}`}
           </div>
           <div className="flex gap-3">
             <button
@@ -2690,14 +2860,14 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
               onClick={handleSaveDraft}
               className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
             >
-              Save Draft
+              {t('allergyImmunologyReport.saveDraft')}
             </button>
             <button
               type="button"
               onClick={handlePreview}
               className="px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
             >
-              Preview
+              {t('allergyImmunologyReport.preview')}
             </button>
             <button
               type="button"
@@ -2708,7 +2878,7 @@ const AllergyImmunologyReportForm = ({ patient, encounter, onSave }) => {
               }}
               className="px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
             >
-              Finalize & Save
+              {t('allergyImmunologyReport.finalizeSave')}
             </button>
           </div>
         </div>

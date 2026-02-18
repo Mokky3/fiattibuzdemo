@@ -1,10 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, Filter, User, Bell, Shield, Key, Camera, Edit, Save, X, Check, Mail, Phone, MapPin, Calendar, Clock, Download, Settings, Wrench } from 'lucide-react';
 // Import the header component
 import LabHeader from './header';
 import { getProfile, updateProfile, patchProfile, changePassword } from '../../services/labService';
 
 const LabProfileModule = () => {
+  const { t } = useTranslation();
+  
+  // Dark mode state - read from saved preference
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem('theme');
+    if (saved) return saved === 'dark';
+    return document.documentElement.classList.contains('dark');
+  });
+
+  // Apply theme on mount
+  useEffect(() => {
+    const root = document.documentElement;
+    if (darkMode) {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
+  }, [darkMode]);
+  
   const [activeTab, setActiveTab] = useState('profile');
   const [isEditing, setIsEditing] = useState(false);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
@@ -82,7 +102,7 @@ const LabProfileModule = () => {
         }
       } catch (e) {
         console.error('Error loading profile:', e);
-        if (active) setError('Failed to load profile data');
+        if (active) setError(t('failedToLoadProfileData'));
       } finally {
         if (active) setLoading(false);
       }
@@ -120,7 +140,7 @@ const LabProfileModule = () => {
       setIsEditing(false);
     } catch (error) {
       console.error('Error saving profile:', error);
-      setError('Failed to save profile changes');
+      setError(t('failedToSaveProfileChanges'));
     } finally {
       setLoading(false);
     }
@@ -133,11 +153,11 @@ const LabProfileModule = () => {
 
   const handlePasswordChange = async () => {
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setError('New passwords do not match');
+      setError(t('newPasswordsDoNotMatch'));
       return;
     }
     if (passwordData.newPassword.length < 8) {
-      setError('New password must be at least 8 characters long');
+      setError(t('newPasswordMustBeAtLeast8CharactersLong'));
       return;
     }
     try {
@@ -151,10 +171,10 @@ const LabProfileModule = () => {
     setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
     setShowPasswordForm(false);
       // Show success message (you could use a toast notification here)
-    alert('Password changed successfully');
+    alert(t('passwordChangedSuccessfully'));
     } catch (error) {
       console.error('Error changing password:', error);
-      const errorMessage = error.message || 'Failed to change password. Please check your current password.';
+      const errorMessage = error.message || t('failedToChangePasswordPleaseCheckYourCurrentPassword');
       setError(errorMessage);
     } finally {
       setLoading(false);
@@ -162,16 +182,26 @@ const LabProfileModule = () => {
   };
 
   const ProfileSection = () => (
-    <div className="bg-white rounded-lg border border-gray-200 p-6">
+    <div className={`rounded-lg border p-6 ${
+      darkMode
+        ? 'bg-[#0D2026] border-[#133037]'
+        : 'bg-white border-gray-200'
+    }`}>
       {/* Error Display */}
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className={`mb-4 border px-4 py-3 rounded-lg ${
+          darkMode
+            ? 'bg-red-900 bg-opacity-30 border-red-700 text-red-300'
+            : 'bg-red-50 border-red-200 text-red-700'
+        }`}>
           {error}
         </div>
       )}
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-bold text-gray-900">Profile Information</h2>
+        <h2 className={`text-xl font-bold ${
+          darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+        }`}>{t('profileInformation')}</h2>
         <div className="flex space-x-2">
           {!isEditing ? (
             <button
@@ -179,28 +209,40 @@ const LabProfileModule = () => {
                 setIsEditing(true);
                 setError(null);
               }}
-              className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                darkMode
+                  ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                  : 'bg-teal-500 hover:bg-teal-600 text-white'
+              }`}
               disabled={loading}
             >
               <Edit className="w-4 h-4" />
-              Edit Profile
+              {t('editProfile')}
             </button>
           ) : (
             <div className="flex space-x-2">
               <button
                 onClick={handleSaveProfile}
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-green-500 hover:bg-green-600 text-white'
+                }`}
                 disabled={loading}
               >
                 <Save className="w-4 h-4" />
-                {loading ? 'Saving...' : 'Save'}
+                {loading ? t('saving') : t('save')}
               </button>
               <button
                 onClick={handleCancelEdit}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  darkMode
+                    ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                    : 'bg-gray-500 hover:bg-gray-600 text-white'
+                }`}
               >
                 <X className="w-4 h-4" />
-                Cancel
+                {t('cancel')}
               </button>
             </div>
           )}
@@ -210,99 +252,189 @@ const LabProfileModule = () => {
       {/* Profile Picture */}
       <div className="flex items-center space-x-6 mb-8">
         <div className="relative">
-          <div className="w-24 h-24 bg-teal-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+          <div className={`w-24 h-24 rounded-full flex items-center justify-center text-white text-2xl font-bold ${
+            darkMode ? 'bg-[#79CAC2]' : 'bg-teal-500'
+          }`}>
             {profileData.firstName?.[0] || 'L'}{profileData.lastName?.[0] || 'T'}
           </div>
           {isEditing && (
-            <button className="absolute bottom-0 right-0 bg-white border border-gray-300 rounded-full p-2 hover:bg-gray-50">
-              <Camera className="w-4 h-4 text-gray-600" />
+            <button className={`absolute bottom-0 right-0 border rounded-full p-2 transition-colors ${
+              darkMode
+                ? 'bg-[#0D2026] border-[#133037] hover:bg-[#133037]'
+                : 'bg-white border-gray-300 hover:bg-gray-50'
+            }`}>
+              <Camera className={`w-4 h-4 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+              }`} />
             </button>
           )}
         </div>
         <div>
-          <h3 className="text-xl font-semibold text-gray-900">
-            {profileData.firstName || 'Lab'} {profileData.lastName || 'Technician'}
+          <h3 className={`text-xl font-semibold ${
+            darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+          }`}>
+            {profileData.firstName || t('lab')} {profileData.lastName || t('technician')}
           </h3>
-          <p className="text-gray-600">{profileData.position || 'Lab Technician'}</p>
-          <p className="text-sm text-gray-500">{profileData.department || 'Clinical Laboratory'}</p>
-          <p className="text-sm text-gray-500">Employee ID: {profileData.employeeId || 'N/A'}</p>
+          <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+            {profileData.position || t('labTechnician')}
+          </p>
+          <p className={`text-sm ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+          }`}>{profileData.department || t('clinicalLaboratory')}</p>
+          <p className={`text-sm ${
+            darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+          }`}>{t('employeeId')}: {profileData.employeeId || t('nA')}</p>
         </div>
       </div>
 
       {/* Personal Information */}
       <div className="mb-8">
-        <h4 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Personal Information
+        <h4 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('personalInformation')}
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">First Name</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('firstName')}</label>
             <input
               type="text"
               value={tempProfileData.firstName}
               onChange={(e) => setTempProfileData({...tempProfileData, firstName: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Last Name</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('lastName')}</label>
             <input
               type="text"
               value={tempProfileData.lastName}
               onChange={(e) => setTempProfileData({...tempProfileData, lastName: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('email')}</label>
             <input
               type="email"
               value={tempProfileData.email}
               onChange={(e) => setTempProfileData({...tempProfileData, email: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('phone')}</label>
             <input
               type="tel"
               value={tempProfileData.phone}
               onChange={(e) => setTempProfileData({...tempProfileData, phone: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'bg-gray-50'
+              }`}
             />
           </div>
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Address</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('address')}</label>
             <input
               type="text"
               value={tempProfileData.address}
               onChange={(e) => setTempProfileData({...tempProfileData, address: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('city')}</label>
             <input
               type="text"
               value={tempProfileData.city}
               onChange={(e) => setTempProfileData({...tempProfileData, city: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">State</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('state')}</label>
             <input
               type="text"
               value={tempProfileData.state}
               onChange={(e) => setTempProfileData({...tempProfileData, state: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'bg-gray-50'
+              }`}
             />
           </div>
         </div>
@@ -310,63 +442,107 @@ const LabProfileModule = () => {
 
       {/* Professional Information */}
       <div>
-        <h4 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Professional Information
+        <h4 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('professionalInformation')}
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Position</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('position')}</label>
             <input
               type="text"
               value={tempProfileData.position}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('department')}</label>
             <input
               type="text"
               value={tempProfileData.department}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Supervisor</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('supervisor')}</label>
             <input
               type="text"
               value={tempProfileData.supervisor}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Hire Date</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('hireDate')}</label>
             <input
               type="date"
               value={tempProfileData.hireDate}
               onChange={(e) => setTempProfileData({...tempProfileData, hireDate: e.target.value})}
               disabled={!isEditing}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                darkMode
+                  ? isEditing
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : isEditing
+                    ? 'border-gray-300 focus:ring-teal-500'
+                    : 'bg-gray-50'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Certification</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('certification')}</label>
             <input
               type="text"
               value={tempProfileData.certification}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">License Number</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('licenseNumber')}</label>
             <input
               type="text"
               value={tempProfileData.licenseNumber}
               disabled
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-gray-50"
+              className={`w-full border rounded-lg px-3 py-2 ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037] text-[#8AA2A7]'
+                  : 'bg-gray-50 border-gray-300'
+              }`}
             />
           </div>
         </div>
@@ -420,7 +596,7 @@ const LabProfileModule = () => {
       }
     } catch (error) {
       console.error('Error saving security settings:', error);
-      setError('Failed to save security settings. Please try again.');
+      setError(t('failedToSaveSecuritySettingsPleaseTryAgain'));
     } finally {
       setLoading(false);
     }
@@ -463,76 +639,122 @@ const LabProfileModule = () => {
     setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
   }, []);
 
-  const SecuritySection = (
+  const SecuritySection = () => (
     <div className="space-y-6">
       {/* Error Display */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+        <div className={`border px-4 py-3 rounded-lg ${
+          darkMode
+            ? 'bg-red-900 bg-opacity-30 border-red-700 text-red-300'
+            : 'bg-red-50 border-red-200 text-red-700'
+        }`}>
           {error}
         </div>
       )}
       {/* Password Change */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Password & Security
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('passwordSecurity')}
         </h3>
         
         {!showPasswordForm ? (
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900">Password</div>
-              <div className="text-sm text-gray-500">Last changed 3 days ago</div>
+              <div className={`font-medium ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('password')}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{t('lastChanged3DaysAgo')}</div>
             </div>
             <button
               onClick={handleShowPasswordForm}
-              className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2 rounded-lg transition-colors"
+              className={`px-4 py-2 rounded-lg transition-colors ${
+                darkMode
+                  ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                  : 'bg-teal-500 hover:bg-teal-600 text-white'
+              }`}
               disabled={loading}
             >
-              Change Password
+              {t('changePassword')}
             </button>
           </div>
         ) : (
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Current Password</label>
+              <label className={`block text-sm font-medium mb-2 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+              }`}>{t('currentPassword')}</label>
               <input
                 type="password"
                 value={passwordData.currentPassword}
                 onChange={handleCurrentPasswordChange}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                  darkMode
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'border-gray-300 focus:ring-teal-500'
+                }`}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">New Password</label>
+              <label className={`block text-sm font-medium mb-2 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+              }`}>{t('newPassword')}</label>
               <input
                 type="password"
                 value={passwordData.newPassword}
                 onChange={handleNewPasswordChange}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                  darkMode
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'border-gray-300 focus:ring-teal-500'
+                }`}
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Confirm New Password</label>
+              <label className={`block text-sm font-medium mb-2 ${
+                darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+              }`}>{t('confirmNewPassword')}</label>
               <input
                 type="password"
                 value={passwordData.confirmPassword}
                 onChange={handleConfirmPasswordChange}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500"
+                className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors ${
+                  darkMode
+                    ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                    : 'border-gray-300 focus:ring-teal-500'
+                }`}
               />
             </div>
             <div className="flex space-x-2">
               <button
                 onClick={handlePasswordChange}
-                className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode
+                    ? 'bg-green-600 hover:bg-green-700 text-white'
+                    : 'bg-green-500 hover:bg-green-600 text-white'
+                }`}
                 disabled={loading}
               >
-                {loading ? 'Updating...' : 'Update Password'}
+                {loading ? t('updating') : t('updatePassword')}
               </button>
               <button
                 onClick={handleCancelPasswordForm}
-                className="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition-colors"
+                className={`px-4 py-2 rounded-lg transition-colors ${
+                  darkMode
+                    ? 'bg-gray-600 hover:bg-gray-700 text-white'
+                    : 'bg-gray-500 hover:bg-gray-600 text-white'
+                }`}
               >
-                Cancel
+                {t('cancel')}
               </button>
             </div>
           </div>
@@ -540,15 +762,27 @@ const LabProfileModule = () => {
       </div>
 
       {/* Security Settings */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4 border-l-4 border-teal-500 pl-3">
-          Security Settings
+      <div className={`rounded-lg border p-6 ${
+        darkMode
+          ? 'bg-[#0D2026] border-[#133037]'
+          : 'bg-white border-gray-200'
+      }`}>
+        <h3 className={`text-lg font-semibold mb-4 border-l-4 pl-3 ${
+          darkMode
+            ? 'text-[#F5FEFF] border-[#79CAC2]'
+            : 'text-gray-900 border-teal-500'
+        }`}>
+          {t('securitySettings')}
         </h3>
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900">Two-Factor Authentication</div>
-              <div className="text-sm text-gray-500">Add an extra layer of security to your account</div>
+              <div className={`font-medium ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('twoFactorAuthentication')}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{t('addAnExtraLayerOfSecurityToYourAccount')}</div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -558,14 +792,22 @@ const LabProfileModule = () => {
                 disabled={loading}
                 className="sr-only peer disabled:opacity-50"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500 disabled:opacity-50"></div>
+              <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all disabled:opacity-50 ${
+                darkMode
+                  ? 'bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#79CAC2] peer-checked:bg-[#79CAC2] after:border-gray-600'
+                  : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 peer-checked:bg-teal-500 after:border-gray-300'
+              }`}></div>
             </label>
           </div>
           
           <div className="flex items-center justify-between">
             <div>
-              <div className="font-medium text-gray-900">Login Alerts</div>
-              <div className="text-sm text-gray-500">Get notified when someone logs into your account</div>
+              <div className={`font-medium ${
+                darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+              }`}>{t('loginAlerts')}</div>
+              <div className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{t('getNotifiedWhenSomeoneLogsIntoYourAccount')}</div>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
@@ -575,50 +817,70 @@ const LabProfileModule = () => {
                 disabled={loading}
                 className="sr-only peer disabled:opacity-50"
               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-teal-500 disabled:opacity-50"></div>
+              <div className={`w-11 h-6 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-5 after:w-5 after:transition-all disabled:opacity-50 ${
+                darkMode
+                  ? 'bg-gray-700 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-[#79CAC2] peer-checked:bg-[#79CAC2] after:border-gray-600'
+                  : 'bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-teal-300 peer-checked:bg-teal-500 after:border-gray-300'
+              }`}></div>
             </label>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Session Timeout</label>
+            <label className={`block text-sm font-medium mb-2 ${
+              darkMode ? 'text-[#C1D9DD]' : 'text-gray-700'
+            }`}>{t('sessionTimeout')}</label>
             <select
               value={profileData.sessionTimeout}
               onChange={(e) => handleSecuritySettingChange('sessionTimeout', parseInt(e.target.value))}
               disabled={loading}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                darkMode
+                  ? 'bg-[#07181D] border-[#133037] text-[#F5FEFF] focus:ring-[#79CAC2]'
+                  : 'border-gray-300 focus:ring-teal-500'
+              }`}
             >
-              <option value={15}>15 minutes</option>
-              <option value={30}>30 minutes</option>
-              <option value={60}>1 hour</option>
-              <option value={120}>2 hours</option>
-              <option value={240}>4 hours</option>
+              <option value={15}>15 {t('minutes')}</option>
+              <option value={30}>30 {t('minutes')}</option>
+              <option value={60}>1 {t('hour')}</option>
+              <option value={120}>2 {t('hours')}</option>
+              <option value={240}>4 {t('hours')}</option>
             </select>
           </div>
           
           {/* Save/Cancel buttons - only show when changes are made */}
           {securitySettingsChanged && (
-            <div className="flex items-center justify-end space-x-3 pt-4 border-t border-gray-200">
+            <div className={`flex items-center justify-end space-x-3 pt-4 border-t ${
+              darkMode ? 'border-[#133037]' : 'border-gray-200'
+            }`}>
               <button
                 onClick={handleCancelSecuritySettings}
                 disabled={loading}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`px-4 py-2 border rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                  darkMode
+                    ? 'border-[#133037] text-[#C1D9DD] hover:bg-[#133037]'
+                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
               >
-                Cancel
+                {t('cancel')}
               </button>
               <button
                 onClick={handleSaveSecuritySettings}
                 disabled={loading}
-                className="px-4 py-2 bg-teal-500 hover:bg-teal-600 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2"
+                className={`px-4 py-2 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 ${
+                  darkMode
+                    ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                    : 'bg-teal-500 hover:bg-teal-600 text-white'
+                }`}
               >
                 {loading ? (
                   <>
                     <span className="animate-spin">⏳</span>
-                    <span>Saving...</span>
+                    <span>{t('saving')}</span>
                   </>
                 ) : (
                   <>
                     <Save className="w-4 h-4" />
-                    <span>Save Changes</span>
+                    <span>{t('saveChanges')}</span>
                   </>
                 )}
               </button>
@@ -631,46 +893,78 @@ const LabProfileModule = () => {
 
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen transition-colors duration-500 ${
+      darkMode ? 'bg-[#050C0F]' : 'bg-gray-50'
+    }`}>
       {/* Header Component */}
       <LabHeader />
 
       <div className="flex h-[calc(100vh-64px)]">
         {/* Left Sidebar - Fixed */}
-        <div className="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+        <div className={`w-80 border-r overflow-y-auto ${
+          darkMode
+            ? 'bg-[#0D2026] border-[#133037]'
+            : 'bg-white border-gray-200'
+        }`}>
           <div className="p-6">
               {/* Profile Summary */}
               <div className="text-center mb-6">
-                <div className="w-20 h-20 bg-teal-500 rounded-full flex items-center justify-center text-white text-xl font-bold mx-auto mb-4">
+                <div className={`w-20 h-20 rounded-full flex items-center justify-center text-white text-xl font-bold mx-auto mb-4 ${
+                  darkMode ? 'bg-[#79CAC2]' : 'bg-teal-500'
+                }`}>
                 {profileData.firstName?.[0] || 'L'}{profileData.lastName?.[0] || 'T'}
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                {profileData.firstName || 'Lab'} {profileData.lastName || 'Technician'}
+                <h3 className={`text-lg font-semibold ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>
+                {profileData.firstName || t('lab')} {profileData.lastName || t('technician')}
                 </h3>
-              <p className="text-gray-600">{profileData.position || 'Lab Technician'}</p>
-              <p className="text-sm text-gray-500">{profileData.employeeId || 'N/A'}</p>
+              <p className={darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'}>
+                {profileData.position || t('labTechnician')}
+              </p>
+              <p className={`text-sm ${
+                darkMode ? 'text-[#8AA2A7]' : 'text-gray-500'
+              }`}>{profileData.employeeId || t('nA')}</p>
               </div>
 
               {/* Quick Info */}
-            <div className="space-y-3 mb-6 pb-6 border-b border-gray-200">
+            <div className={`space-y-3 mb-6 pb-6 border-b ${
+              darkMode ? 'border-[#133037]' : 'border-gray-200'
+            }`}>
                 <div className="flex items-center space-x-3">
-                  <Mail className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-600 truncate">{profileData.email || 'N/A'}</span>
+                  <Mail className={`w-4 h-4 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                  }`} />
+                <span className={`text-sm truncate ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>{profileData.email || t('nA')}</span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <Phone className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-600">{profileData.phone || 'N/A'}</span>
+                  <Phone className={`w-4 h-4 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                  }`} />
+                <span className={`text-sm ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>{profileData.phone || t('nA')}</span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <MapPin className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-600 truncate">
-                  {profileData.city || 'N/A'}{profileData.state ? `, ${profileData.state}` : ''}
+                  <MapPin className={`w-4 h-4 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                  }`} />
+                <span className={`text-sm truncate ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>
+                  {profileData.city || t('nA')}{profileData.state ? `, ${profileData.state}` : ''}
                 </span>
                 </div>
                 <div className="flex items-center space-x-3">
-                  <Calendar className="w-4 h-4 text-gray-400" />
-                <span className="text-sm text-gray-600">
-                  {profileData.hireDate ? `Joined ${profileData.hireDate}` : 'N/A'}
+                  <Calendar className={`w-4 h-4 ${
+                    darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                  }`} />
+                <span className={`text-sm ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>
+                  {profileData.hireDate ? `${t('joined')} ${profileData.hireDate}` : t('nA')}
                 </span>
                 </div>
               </div>
@@ -678,8 +972,8 @@ const LabProfileModule = () => {
               {/* Navigation */}
               <nav className="space-y-2">
               {[
-                  { id: 'profile', label: 'Profile', icon: User },
-                { id: 'security', label: 'Security', icon: Shield }
+                  { id: 'profile', label: t('profile'), icon: User },
+                { id: 'security', label: t('security'), icon: Shield }
                 ].map(item => {
                   const Icon = item.icon;
                   return (
@@ -688,8 +982,12 @@ const LabProfileModule = () => {
                       onClick={() => setActiveTab(item.id)}
                       className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left transition-colors ${
                         activeTab === item.id
-                        ? 'bg-teal-100 text-teal-700 border-l-4 border-teal-500'
-                          : 'text-gray-600 hover:bg-gray-100'
+                        ? darkMode
+                          ? 'bg-[#133037] text-[#79CAC2] border-l-4 border-[#79CAC2]'
+                          : 'bg-teal-100 text-teal-700 border-l-4 border-teal-500'
+                          : darkMode
+                            ? 'text-[#C1D9DD] hover:bg-[#133037]'
+                            : 'text-gray-600 hover:bg-gray-100'
                       }`}
                     >
                       <Icon className="w-4 h-4" />
@@ -699,20 +997,26 @@ const LabProfileModule = () => {
                 })}
               {/* Locked/Disabled Modules */}
               {[
-                { id: 'settings', label: 'Settings', icon: Settings, locked: true },
-                { id: 'notifications', label: 'Notifications', icon: Bell, locked: true },
-                { id: 'equipment', label: 'Equipment', icon: Wrench, locked: true }
+                { id: 'settings', label: t('settings'), icon: Settings, locked: true },
+                { id: 'notifications', label: t('notifications'), icon: Bell, locked: true },
+                { id: 'equipment', label: t('equipment'), icon: Wrench, locked: true }
               ].map(item => {
                 const Icon = item.icon;
                 return (
                   <div
                     key={item.id}
-                    className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left opacity-50 cursor-not-allowed relative"
-                    title="This module is locked and unavailable"
+                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-left opacity-50 cursor-not-allowed relative ${
+                      darkMode ? 'hover:bg-[#133037]' : ''
+                    }`}
+                    title={t('thisModuleIsLockedAndUnavailable')}
                   >
-                    <Icon className="w-4 h-4 text-gray-400" />
-                    <span className="text-gray-400">{item.label}</span>
-                    <span className="ml-auto text-xs text-gray-400">🔒</span>
+                    <Icon className={`w-4 h-4 ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                    }`} />
+                    <span className={darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'}>{item.label}</span>
+                    <span className={`ml-auto text-xs ${
+                      darkMode ? 'text-[#8AA2A7]' : 'text-gray-400'
+                    }`}>🔒</span>
                   </div>
                 );
               })}
@@ -727,17 +1031,29 @@ const LabProfileModule = () => {
             {activeTab === 'security' && <SecuritySection />}
             {/* Locked modules - show message if somehow accessed */}
             {(activeTab === 'settings' || activeTab === 'notifications' || activeTab === 'equipment') && (
-              <div className="bg-white rounded-lg border border-gray-200 p-12 text-center">
+              <div className={`rounded-lg border p-12 text-center ${
+                darkMode
+                  ? 'bg-[#0D2026] border-[#133037]'
+                  : 'bg-white border-gray-200'
+              }`}>
                 <div className="text-6xl mb-4">🔒</div>
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Module Locked</h2>
-                <p className="text-gray-600 mb-4">
-                  The {activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} module is currently locked and unavailable.
+                <h2 className={`text-2xl font-bold mb-2 ${
+                  darkMode ? 'text-[#F5FEFF]' : 'text-gray-900'
+                }`}>{t('moduleLocked')}</h2>
+                <p className={`mb-4 ${
+                  darkMode ? 'text-[#C1D9DD]' : 'text-gray-600'
+                }`}>
+                  {t('theModuleIsCurrentlyLockedAndUnavailable', { module: t(activeTab) })}
                 </p>
                 <button
                   onClick={() => setActiveTab('profile')}
-                  className="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded-lg transition-colors"
+                  className={`px-6 py-2 rounded-lg transition-colors ${
+                    darkMode
+                      ? 'bg-[#79CAC2] hover:bg-[#58B4AA] text-[#050C0F]'
+                      : 'bg-teal-500 hover:bg-teal-600 text-white'
+                  }`}
                 >
-                  Return to Profile
+                  {t('returnToProfile')}
                 </button>
               </div>
             )}
