@@ -62,12 +62,21 @@ try:
         BEAUTIFULSOUP_AVAILABLE = False
         logger.warning("BeautifulSoup not available. Table text recovery from HTML will be limited.")
     UNSTRUCTURED_AVAILABLE = True
-except ImportError as e:
+except (ImportError, OSError) as e:
+    error_text = str(e)
     logger.error(
         "unstructured.io library is not installed. "
         "Please install it with: pip install 'unstructured[pdf,docx]'"
     )
     logger.error(f"Import error: {e}")
+
+    # Common runtime dependency issue for cv2/image stack
+    if "libGL.so.1" in error_text:
+        logger.error(
+            "Missing system dependency 'libGL.so.1'. "
+            "Install it with: sudo apt-get update && sudo apt-get install -y libgl1"
+        )
+
     sys.exit(1)
 
 
