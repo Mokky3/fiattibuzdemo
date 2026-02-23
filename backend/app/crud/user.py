@@ -34,10 +34,13 @@ class CRUDUser(CRUDBase[User, Any, Any]):
         return db.query(User).filter(func.lower(User.username) == func.lower(username)).first()
     
     def get_by_username_or_email(self, db: Session, *, username_or_email: str) -> Optional[User]:
+        """Get user by username, email, or phone number."""
+        identifier = username_or_email.strip()
         return db.query(User).filter(
             or_(
-                func.lower(User.username) == func.lower(username_or_email),
-                func.lower(User.email) == func.lower(username_or_email)
+                func.lower(User.username) == func.lower(identifier),
+                func.lower(User.email) == func.lower(identifier),
+                User.phone == identifier
             )
         ).first()
 

@@ -65,13 +65,58 @@ Dockerfile.dev
 *.md
 !README.md
 
-# Scripts (keep only necessary ones)
-scripts/
+# Large directories that shouldn't be deployed
+# PACS directory (contains frontend code - 3000+ files!)
+app/common/pacs/
+
+# Database migrations and scripts (not needed in container)
+database/
+*.sql
+
+# Node modules (if any)
+node_modules/
+
+# Root-level utility scripts (not needed in production)
 *.py
 !app/**/*.py
+!run.py
+
+# Scripts directory (utility scripts, not needed in production)
+scripts/
+!app/scripts/**/*.py
 
 # Temporary files
 *.tmp
 *.bak
 *.swp
 
+# Large media files (exclude from PACS)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.ico
+*.webp
+
+# TypeScript/JavaScript files (frontend code in backend directory)
+*.ts
+*.tsx
+*.js
+*.jsx
+*.json
+!package.json
+!package-lock.json
+!requirements.txt
+!openapi.json
+!cloudbuild.yaml
+!Dockerfile
+
+# Other large files
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# Frontend files that shouldn't be in backend
+LabReport.jsx

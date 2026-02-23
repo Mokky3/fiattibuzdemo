@@ -49,9 +49,9 @@ class CRUDLabResults:
             from uuid import UUID as PyUUID
             # Cast organization_id string to UUID for comparison with hospital_id (UUID column)
             organization_uuid = PyUUID(organization_id) if isinstance(organization_id, str) else organization_id
-            # Cast LabOrder.id (String) to UUID for join with LabResult.lab_order_id (UUID)
+            # Cast LabOrder.id (String in model, but UUID in DB) to UUID for join with LabResult.lab_order_id (UUID)
             # Cast LabOrder.ordered_by (String) to UUID for join with Doctor.id (UUID)
-            query = query.join(LabOrder, cast(LabResult.lab_order_id, String(36)) == LabOrder.id)\
+            query = query.join(LabOrder, LabResult.lab_order_id == cast(LabOrder.id, PG_UUID))\
                          .join(Doctor, cast(LabOrder.ordered_by, PG_UUID) == Doctor.id)\
                          .join(doctor_hospitals, Doctor.id == doctor_hospitals.c.doctor_id)\
                          .filter(cast(doctor_hospitals.c.hospital_id, PG_UUID) == organization_uuid)
@@ -79,9 +79,9 @@ class CRUDLabResults:
             from uuid import UUID as PyUUID
             # Cast organization_id string to UUID for comparison with hospital_id (UUID column)
             organization_uuid = PyUUID(organization_id) if isinstance(organization_id, str) else organization_id
-            # Cast LabOrder.id (String) to UUID for join with LabResult.lab_order_id (UUID)
+            # Cast LabOrder.id (String in model, but UUID in DB) to UUID for join with LabResult.lab_order_id (UUID)
             # Cast LabOrder.ordered_by (String) to UUID for join with Doctor.id (UUID)
-            query = query.join(LabOrder, cast(LabResult.lab_order_id, String(36)) == LabOrder.id)\
+            query = query.join(LabOrder, LabResult.lab_order_id == cast(LabOrder.id, PG_UUID))\
                          .join(Doctor, cast(LabOrder.ordered_by, PG_UUID) == Doctor.id)\
                          .join(doctor_hospitals, Doctor.id == doctor_hospitals.c.doctor_id)\
                          .filter(cast(doctor_hospitals.c.hospital_id, PG_UUID) == organization_uuid)
@@ -104,16 +104,22 @@ class CRUDLabResults:
             from uuid import UUID as PyUUID
             # Cast organization_id string to UUID for comparison with hospital_id (UUID column)
             organization_uuid = PyUUID(organization_id) if isinstance(organization_id, str) else organization_id
-            # Cast LabResult.lab_order_id (UUID) to String for join with LabOrder.id (String)
+            # Cast LabOrder.id (String in model, but UUID in DB) to UUID for join with LabResult.lab_order_id (UUID)
             # Cast LabOrder.ordered_by (String) to UUID for join with Doctor.id (UUID)
-            base_query = base_query.join(LabOrder, cast(LabResult.lab_order_id, String(36)) == LabOrder.id)\
+            base_query = base_query.join(LabOrder, LabResult.lab_order_id == cast(LabOrder.id, PG_UUID))\
                                    .join(Doctor, cast(LabOrder.ordered_by, PG_UUID) == Doctor.id)\
                                    .join(doctor_hospitals, Doctor.id == doctor_hospitals.c.doctor_id)\
                                    .filter(cast(doctor_hospitals.c.hospital_id, PG_UUID) == organization_uuid)
         
         total = base_query.distinct().count()
         completed = base_query.filter(LabResult.status == LabResultStatus.FINAL).distinct().count()
-        pending = base_query.filter(LabResult.status == LabResultStatus.PENDING).distinct().count()
+        # Pending results are those that are not FINAL and not CANCELLED
+        pending = base_query.filter(
+            and_(
+                LabResult.status != LabResultStatus.FINAL,
+                LabResult.status != LabResultStatus.CANCELLED
+            )
+        ).distinct().count()
         abnormal = base_query.filter(LabResult.is_abnormal == True).distinct().count()
         critical = base_query.filter(LabResult.is_critical == True).distinct().count()
         return LabResultStats(total=total, completed=completed, pending=pending, abnormal=abnormal, critical=critical)

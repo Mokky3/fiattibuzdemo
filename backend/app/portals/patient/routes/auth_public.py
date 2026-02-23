@@ -6,7 +6,7 @@ from typing import Optional, Dict, Any
 from uuid import uuid4, UUID
 
 from fastapi import APIRouter, HTTPException, Body, status, Depends
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, validator, root_validator
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 
@@ -166,6 +166,21 @@ async def patient_self_register(payload: PatientSelfRegisterRequest = Body(...),
             raise HTTPException(status_code=409, detail="A patient with this national ID already exists")
     db.refresh(user)
 
+    # Send profile creation notification
+    try:
+        from app.common.services.notification_service import send_profile_creation_notification
+        patient_name = f"{payload.first_name} {payload.last_name}"
+        await send_profile_creation_notification(
+            phone_number=payload.phone,
+            email=payload.email,
+            patient_name=patient_name
+        )
+    except Exception as e:
+        # Log error but don't fail registration
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to send profile creation notification: {str(e)}")
+
     # Issue tokens
     access_token = AuthService.create_access_token({
         "sub": str(user.id),
@@ -198,22 +213,66 @@ async def patient_self_register(payload: PatientSelfRegisterRequest = Body(...),
 # ──────────────────────────────────────────────────────────────────────────────
 
 class AuthLoginRequest(BaseModel):
-    username_or_email: str = Field(..., min_length=3)
+    username_or_email: Optional[str] = Field(None, min_length=3)
+    phone: Optional[str] = Field(None, min_length=10)
     password: str = Field(..., min_length=6)
+    
+    @root_validator(skip_on_failure=True)
+    def validate_identifier(cls, values):
+        """Ensure at least one identifier is provided and normalize legacy fields."""
+        username_or_email = values.get('username_or_email')
+        phone = values.get('phone')
+        
+        # Normalize empty strings to None
+        if username_or_email and isinstance(username_or_email, str) and username_or_email.strip() == '':
+            username_or_email = None
+        if phone and isinstance(phone, str) and phone.strip() == '':
+            phone = None
+        
+        # Support legacy 'username_or_email' field that might contain phone number
+        if username_or_email and not phone:
+            identifier = str(username_or_email).strip()
+            if '@' in identifier:
+                # It's an email - keep it in username_or_email
+                values['username_or_email'] = identifier
+            elif identifier.replace('+', '').replace('-', '').replace(' ', '').replace('(', '').replace(')', '').isdigit():
+                # It looks like a phone number
+                values['phone'] = identifier
+                values['username_or_email'] = None
+            else:
+                # It's a username - keep it in username_or_email
+                values['username_or_email'] = identifier
+        
+        # Validate that at least one identifier is provided
+        if not values.get('username_or_email') and not values.get('phone'):
+            raise ValueError('Either username/email or phone number must be provided')
+        
+        return values
 
 
 @router.post("/login", response_model=AuthRegisterResponse)
 async def patient_login(payload: AuthLoginRequest = Body(...), db: Session = Depends(get_db)):
     """Authenticate patient and return JWT tokens."""
-    # Locate user by username or email
+    # Locate user by username, email, or phone
     user: Optional[User] = None  # type: ignore[assignment]
-    if "@" in payload.username_or_email:
-        user = db.query(User).filter(User.email.ilike(payload.username_or_email)).first()
-    else:
-        user = db.query(User).filter(User.username.ilike(payload.username_or_email)).first()
+    
+    if payload.phone:
+        # Find by phone number
+        user = db.query(User).filter(User.phone == payload.phone.strip()).first()
+    elif payload.username_or_email:
+        identifier = payload.username_or_email.strip()
+        if "@" in identifier:
+            # It's an email
+            user = db.query(User).filter(User.email.ilike(identifier)).first()
+        else:
+            # Try username first
+            user = db.query(User).filter(User.username.ilike(identifier)).first()
+            # If not found, try phone number
+            if not user:
+                user = db.query(User).filter(User.phone == identifier).first()
 
     if not user:
-        raise HTTPException(status_code=401, detail="User not found. Please check your email/username and try again.")
+        raise HTTPException(status_code=401, detail="User not found. Please check your email/phone/username and try again.")
     if user.role != UserRole.PATIENT:
         raise HTTPException(status_code=401, detail="Access denied. This portal is for patients only.")
     if not user.is_active or user.status != UserStatus.ACTIVE:

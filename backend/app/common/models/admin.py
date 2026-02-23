@@ -207,7 +207,7 @@ class ServicePrice(Base):
     
     id = Column(String(36), primary_key=True, default=uuid.uuid4, index=True)
     organization_id = Column(UUID(as_uuid=True), ForeignKey("ref.hospitals.id"), nullable=False)
-    department_id = Column(UUID(as_uuid=True), ForeignKey("ops.admin_departments.id"), nullable=True)
+    department_id = Column(UUID(as_uuid=True), ForeignKey("ref.hospital_departments.id"), nullable=True)
     
     # Service details
     service_code = Column(String(50), nullable=False)
@@ -250,7 +250,7 @@ class ServicePrice(Base):
     
     # Relationships
     # organization = relationship("Hospital", back_populates="service_prices")  # Commented out to avoid circular dependency
-    department = relationship("Department")
+    # department = relationship("HospitalDepartment", foreign_keys=[department_id])  # Commented out - use direct query instead
 
 
 class SystemConfig(Base):

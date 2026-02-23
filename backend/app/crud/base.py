@@ -198,7 +198,22 @@ class CRUDBase(Generic[ModelType, CreateSchemaType, UpdateSchemaType]):
         
         # Handle UUID generation if needed
         if hasattr(self.model, 'id') and 'id' not in obj_in_data:
-            obj_in_data['id'] = str(uuid.uuid4())  # Convert UUID to string for SQLite compatibility
+            # Check if we're using PostgreSQL (UUID type) or SQLite (String type)
+            import os
+            database_url = os.getenv("DATABASE_URL", "")
+            if database_url.startswith("postgresql"):
+                # For PostgreSQL, check if id column is UUID type
+                id_column = getattr(self.model, 'id', None)
+                if id_column and hasattr(id_column, 'type'):
+                    from sqlalchemy.dialects.postgresql import UUID as PostgresUUID
+                    if isinstance(id_column.type, PostgresUUID):
+                        obj_in_data['id'] = uuid.uuid4()  # UUID object for PostgreSQL
+                    else:
+                        obj_in_data['id'] = str(uuid.uuid4())  # String for String columns
+                else:
+                    obj_in_data['id'] = uuid.uuid4()  # Default to UUID object for PostgreSQL
+            else:
+                obj_in_data['id'] = str(uuid.uuid4())  # String for SQLite compatibility
         
         # Set created_at if exists and not provided
         if hasattr(self.model, 'created_at') and 'created_at' not in obj_in_data:

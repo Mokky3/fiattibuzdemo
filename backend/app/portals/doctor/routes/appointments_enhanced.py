@@ -89,6 +89,7 @@ async def list_all_appointments_simple(
         query = text("""
             SELECT 
                 a.id,
+                a.patient_id,
                 a.appointment_date,
                 a.duration_minutes,
                 a.appointment_type,
@@ -142,7 +143,7 @@ async def list_all_appointments_simple(
                 "date": date_str,
                 "time": time_str,
                 "patient": patient_name,
-                "patient_id": str(row.id),  # Using appointment id as placeholder
+                "patient_id": str(row.patient_id),  # Fixed: use actual patient_id from appointment
                 "appointment_type": row.appointment_type or "",
                 "status": row.status or "",
                 "description": row.notes or row.reason or "",
@@ -185,6 +186,7 @@ async def list_appointments_for_date_simple(
         query = text("""
             SELECT 
                 a.id,
+                a.patient_id,
                 a.appointment_date,
                 a.start_time,
                 a.end_time,
@@ -238,7 +240,7 @@ async def list_appointments_for_date_simple(
                 "date": date_str,
                 "time": time_str,
                 "patient": patient_name,
-                "patient_id": str(row.id),
+                "patient_id": str(row.patient_id),  # Fixed: use actual patient_id from appointment
                 "appointment_type": row.appointment_type or "",
                 "status": row.status or "",
                 "description": row.description or "",
@@ -505,6 +507,8 @@ async def create_appointment(
         # TODO: Make this configurable or get from payload
         default_hospital_id = as_uuid('bc5719be-aa1c-42fd-9b34-f3a6c841770a')
         
+        # When a doctor creates an appointment, it's automatically confirmed
+        # since the doctor has already accepted it by creating it
         a = Appointment(
             id=uuid.uuid4(),
             patient_id=patient_uuid,
@@ -512,7 +516,7 @@ async def create_appointment(
             hospital_id=default_hospital_id,
             appointment_date=appointment_date,
             duration_minutes=payload.duration_minutes or 30,
-            status="pending",
+            status="confirmed",  # Doctor-created appointments are automatically confirmed
             appointment_type=payload.appointment_type or "general_consultation",
             reason=payload.notes,
             notes=payload.notes,

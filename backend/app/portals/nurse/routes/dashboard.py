@@ -436,22 +436,26 @@ async def dashboard_messages(
     current_user: AuthenticatedUser = Depends(require_nurse_access()),
     db: Session = Depends(get_db),
 ) -> SuccessResponse:
-    """Get recent messages for dashboard display."""
-    # Get recent messages for the nurse (both sent and received)
-    messages = message_crud.get_messages_by_user(
-        db,
-        user_id=current_user.user_id,
-        skip=0,
-        limit=10  # Show last 10 messages
-    )
+    """Get recent messages for dashboard display - only messages sent TO the nurse."""
+    # Only get messages where the nurse is the RECIPIENT (messages sent TO the nurse)
+    # Exclude self-messages (where sender_id == recipient_id)
+    messages = db.query(Message).filter(
+        and_(
+            Message.recipient_id == current_user.user_id,
+            Message.sender_id != Message.recipient_id,  # Exclude self-messages
+            Message.deleted_at.is_(None)  # Exclude deleted messages
+        )
+    ).order_by(desc(Message.timestamp)).limit(10).all()
     
     messages_data = []
     for message in messages:
-        # Get sender info
+        # Get sender info (the person who sent the message to the nurse)
         sender = db.query(User).filter(User.id == message.sender_id).first()
         sender_name = "Unknown"
+        sender_id = None
         if sender:
-            sender_name = f"{sender.first_name} {sender.last_name}"
+            sender_name = f"{sender.first_name} {sender.last_name}".strip()
+            sender_id = str(sender.id)
         
         # Calculate time ago
         now = datetime.now(timezone.utc)
@@ -472,6 +476,7 @@ async def dashboard_messages(
         
         messages_data.append({
             "id": str(message.id),
+            "sender_id": sender_id or str(message.sender_id),
             "name": sender_name,
             "message": message.content[:100] + "..." if len(message.content) > 100 else message.content,
             "time": time_ago,
@@ -480,8 +485,8 @@ async def dashboard_messages(
             "priority": message.priority.value if message.priority else "normal"
         })
     
-    # Sort by timestamp (most recent first)
-    messages_data.sort(key=lambda x: x["time"], reverse=True)
+    # Sort by timestamp (most recent first) - already sorted by query, but ensure it
+    messages_data.sort(key=lambda x: x.get("time", ""), reverse=True)
     
     return SuccessResponse(data=messages_data, message="Messages retrieved")
 

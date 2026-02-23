@@ -1,0 +1,6 @@
+# Docker ignore for OHIF build
+node_modules/
+.git/
+*.md
+.DS_Store
+

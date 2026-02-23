@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -10,14 +10,20 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment from backend/.env as early as possible
-_backend_root = Path(__file__).resolve().parents[2]
-_env_path = _backend_root / ".env"
-try:
-    load_dotenv(dotenv_path=str(_env_path), encoding="utf-8")
-except Exception:
-    # Fallback: ignore if not present
-    pass
+# Load environment from repo root .env and backend/.env as early as possible
+_repo_root = Path(__file__).resolve().parents[2]
+_backend_dir = Path(__file__).resolve().parents[1]
+_env_paths = [
+    _repo_root / ".env",
+    _backend_dir / ".env",
+]
+for _env_path in _env_paths:
+    try:
+        if _env_path.exists():
+            load_dotenv(dotenv_path=str(_env_path), encoding="utf-8")
+    except Exception:
+        # Ignore missing/invalid env files to keep startup resilient
+        pass
 
 # Import database session
 from app.db.session import SessionLocal, engine
@@ -69,6 +75,7 @@ from app.portals.doctor.routes.test_orders_referrals import router as doctor_tes
 from app.portals.doctor.routes.settings import router as doctor_settings_router
 from app.portals.doctor.routes.stats import router as doctor_stats_router
 from app.portals.doctor.routes.auth_secure import router as doctor_auth_secure_router
+from app.portals.doctor.routes.imaging import router as doctor_imaging_router
 
 # Import routers from patient portal
 from app.portals.patient.routes.appointments import router as patient_appointments_router
@@ -86,6 +93,7 @@ from app.portals.patient.routes.auth_secure import router as patient_auth_secure
 from app.portals.patient.routes.fhir_export_erase_enhanced import router as patient_fhir_router
 from app.portals.patient.routes.auth_public import router as patient_auth_public_router
 from app.portals.patient.routes.medical_history import router as patient_medical_history_router
+from app.portals.patient.routes.imaging import router as patient_imaging_router
 
 # Unified auth
 from app.portals.auth.routes.public import router as unified_auth_public_router
@@ -148,6 +156,8 @@ from app.portals.radiology.routes.reports import router as radiology_reports_rou
 
 # Import medication API routes
 from app.api.v1.medications import router as medications_router
+from app.api.v1.telegram_bot import router as telegram_bot_router
+from app.api.v1.telegram_gateway import router as telegram_gateway_router
 
 # Configure logging
 logging.basicConfig(
@@ -223,18 +233,80 @@ app.add_middleware(
         "http://localhost:5174",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:5173",
+        "https://zamez.netlify.app",  # Your production site
+        # Add your Firebase hosting URL if you're using it too
+        "https://fiattib.web.app",
+        "https://fiattib.firebaseapp.com",
+        "https://fiattib.uz",  # Production domain
+        "https://www.fiattib.uz",  # Production domain with www
     ],
+    allow_origin_regex=r"https://.*\.netlify\.app",  # All Netlify previews
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
 )
 
+# ================================
+# CORS Helper Function
+# ================================
+def get_cors_headers(origin: str) -> dict:
+    """Get CORS headers for the given origin."""
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "https://zamez.netlify.app",
+        "https://fiattib.web.app",
+        "https://fiattib.firebaseapp.com",
+        "https://fiattib.uz",  # Production domain
+        "https://www.fiattib.uz",  # Production domain with www
+    ]
+    
+    if origin and (origin in allowed_origins or origin.endswith(".netlify.app")):
+        return {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "*",
+        }
+    return {}
+
 # Add OPTIONS handler for CORS preflight
 @app.options("/{rest_of_path:path}")
-async def options_handler():
+async def options_handler(request: Request, rest_of_path: str):
+    """Handle CORS preflight requests"""
+    origin = request.headers.get("origin")
+    headers = {}
+    
+    # Check if origin is allowed
+    allowed_origins = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+        "https://zamez.netlify.app",
+        "https://fiattib.web.app",
+        "https://fiattib.firebaseapp.com",
+        "https://fiattib.uz",
+        "https://www.fiattib.uz",
+    ]
+    
+    if origin:
+        if origin in allowed_origins or origin.endswith(".netlify.app"):
+            headers = {
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "3600",
+            }
+    
     from fastapi.responses import Response
-    return Response(status_code=204)
+    return Response(status_code=204, headers=headers)
 
 # Add simple health check
 @app.get("/api/v1/health")
@@ -493,7 +565,13 @@ app.include_router(
 app.include_router(
     doctor_auth_secure_router,
     prefix="/api/v1/doctor",
-    tags=["Doctor ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Secure Authentication"]
+    tags=["Doctor ÃƒÆ'Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ'Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ'Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ'Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Secure Authentication"]
+)
+
+app.include_router(
+    doctor_imaging_router,
+    prefix="/api/v1/doctor",
+    tags=["Doctor · Medical Imaging"]
 )
 
 # ================================
@@ -584,7 +662,13 @@ app.include_router(
 app.include_router(
     patient_auth_secure_router,
     prefix="/api/v1/patient",
-    tags=["Patient ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Secure Authentication"]
+    tags=["Patient ÃƒÆ'Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ'Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ'Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ'Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â· Secure Authentication"]
+)
+
+app.include_router(
+    patient_imaging_router,
+    prefix="/api/v1/patient",
+    tags=["Patient · Medical Imaging"]
 )
 
 # ================================
@@ -863,11 +947,28 @@ app.include_router(
     tags=["Medications"]
 )
 
+# Telegram Bot Integration
+app.include_router(
+    telegram_bot_router,
+    prefix="/api/v1",
+    tags=["Integrations · Telegram Bot"]
+)
+
+# Telegram Conversational Gateway
+app.include_router(
+    telegram_gateway_router,
+    prefix="/api/v1",
+    tags=["Integrations · Telegram Gateway"]
+)
+
 # ================================
 # Static Files
 # ================================
 # Mount static files for uploaded logos
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
+# Create uploads directory if it doesn't exist
+uploads_dir = Path("uploads")
+uploads_dir.mkdir(exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 # ================================
 # Exception Handlers
@@ -888,18 +989,7 @@ async def http_exception_handler(request, exc):
     
     # Get origin from request for CORS
     origin = request.headers.get("origin")
-    headers = {}
-    if origin and origin in [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-    ]:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
-        headers["Access-Control-Allow-Headers"] = "*"
+    headers = get_cors_headers(origin) if origin else {}
     
     return JSONResponse(
         status_code=exc.status_code,
@@ -914,18 +1004,7 @@ async def value_error_handler(request, exc):
     
     # Get origin from request for CORS
     origin = request.headers.get("origin")
-    headers = {}
-    if origin and origin in [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-    ]:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
-        headers["Access-Control-Allow-Headers"] = "*"
+    headers = get_cors_headers(origin) if origin else {}
     
     return JSONResponse(
         status_code=422,
@@ -943,18 +1022,7 @@ async def general_exception_handler(request, exc):
     
     # Get origin from request for CORS
     origin = request.headers.get("origin")
-    headers = {}
-    if origin and origin in [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "http://127.0.0.1:3000",
-        "http://127.0.0.1:5173",
-    ]:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Methods"] = "GET, POST, PATCH, PUT, DELETE, OPTIONS"
-        headers["Access-Control-Allow-Headers"] = "*"
+    headers = get_cors_headers(origin) if origin else {}
     
     return JSONResponse(
         status_code=500,
@@ -970,9 +1038,37 @@ async def general_exception_handler(request, exc):
 # Middleware
 # ================================
 @app.middleware("http")
-async def log_requests(request, call_next):
-    """Log all incoming requests"""
+async def log_requests(request: Request, call_next):
+    """Log all incoming requests and ensure CORS headers"""
     logger.info(f"Request: {request.method} {request.url.path}")
+    
+    # Handle OPTIONS preflight requests explicitly
+    if request.method == "OPTIONS":
+        origin = request.headers.get("origin")
+        allowed_origins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "https://zamez.netlify.app",
+            "https://fiattib.web.app",
+            "https://fiattib.firebaseapp.com",
+            "https://fiattib.uz",
+            "https://www.fiattib.uz",
+        ]
+        
+        from fastapi.responses import Response
+        headers = {}
+        if origin and (origin in allowed_origins or origin.endswith(".netlify.app")):
+            headers = {
+                "Access-Control-Allow-Origin": origin,
+                "Access-Control-Allow-Methods": "GET, POST, PATCH, PUT, DELETE, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
+                "Access-Control-Max-Age": "3600",
+            }
+        return Response(status_code=204, headers=headers)
     
     # Time the request
     start_time = time.time()
@@ -988,6 +1084,25 @@ async def log_requests(request, call_next):
     
     # Add custom headers
     response.headers["X-Process-Time"] = str(process_time)
+    
+    # Ensure CORS headers are present in response
+    origin = request.headers.get("origin")
+    if origin:
+        allowed_origins = [
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:5174",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:5173",
+            "https://zamez.netlify.app",
+            "https://fiattib.web.app",
+            "https://fiattib.firebaseapp.com",
+            "https://fiattib.uz",
+            "https://www.fiattib.uz",
+        ]
+        if origin in allowed_origins or origin.endswith(".netlify.app"):
+            response.headers["Access-Control-Allow-Origin"] = origin
+            response.headers["Access-Control-Allow-Credentials"] = "true"
     
     return response
 

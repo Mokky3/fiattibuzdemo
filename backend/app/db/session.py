@@ -18,6 +18,8 @@ from app.db.base_class import Base
 # Database URL from environment variable
 # Use PostgreSQL if available, otherwise fallback to SQLite
 DATABASE_URL = os.getenv("DATABASE_URL")
+SQLALCHEMY_DATABASE_URL = None  # Initialize to avoid NameError
+
 if DATABASE_URL and DATABASE_URL.startswith("postgresql"):
     try:
         import psycopg2  # noqa: F401
@@ -27,7 +29,7 @@ if DATABASE_URL and DATABASE_URL.startswith("postgresql"):
         print("Warning: psycopg2 not found, falling back to SQLite")
         DATABASE_URL = None
 
-if not DATABASE_URL:
+if not SQLALCHEMY_DATABASE_URL:
     # Always point SQLite to the project root ehr.db to avoid cwd-dependent paths
     # Fiattib.Uz directory is three levels up from this file: session.py -> db -> app -> backend -> Fiattib.Uz
     project_root = Path(__file__).resolve().parents[3]
@@ -43,16 +45,22 @@ _sql_echo_enabled = _sql_echo_env.lower() == "true"
 
 # Configure engine based on database type
 if SQLALCHEMY_DATABASE_URL.startswith("postgresql"):
-    # PostgreSQL configuration
+    _is_supabase = "supabase.com" in (DATABASE_URL or "")
+    # Supabase pooler closes idle connections; use shorter recycle and timeout
+    _pool_recycle = 300 if _is_supabase else 3600
+    _connect_args = {
+        "connect_timeout": 10,
+        "options": "-c timezone=UTC -c search_path=public,staging,ref,ops,ehr,core,financial"
+    }
+    if _is_supabase:
+        # Minimal search_path for pooler compatibility; avoid long options that can break handshake
+        _connect_args["options"] = "-c timezone=UTC -c search_path=public"
     engine = create_engine(
         SQLALCHEMY_DATABASE_URL,
-        pool_pre_ping=True,  # Verify connections before using
-        pool_recycle=3600,   # Recycle connections every hour
-        echo=_sql_echo_enabled,  # SQL logging (disabled by default to reduce log noise)
-        # PostgreSQL specific settings
-        connect_args={
-            "options": "-c timezone=UTC -c search_path=public,staging,ref,ops,ehr,core,financial"
-        }
+        pool_pre_ping=True,
+        pool_recycle=_pool_recycle,
+        echo=_sql_echo_enabled,
+        connect_args=_connect_args,
     )
 else:
     # SQLite configuration

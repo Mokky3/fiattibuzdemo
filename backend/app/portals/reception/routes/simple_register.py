@@ -33,16 +33,20 @@ async def simple_register_patient(
                     last_name = name_parts[1] if len(name_parts) > 1 else ''
         
         # Handle phone - map phone_number to phone
-        phone = patient_data.get('phone') or patient_data.get('phone_number') or ''
-        if phone and not isinstance(phone, str):
-            phone = str(phone)
+        phone = patient_data.get('phone') or patient_data.get('phone_number') or None
+        if phone:
+            if not isinstance(phone, str):
+                phone = str(phone)
+            phone = phone.strip()
+            if not phone:
+                phone = None  # Normalize empty strings to None
         
         # Handle email - make it optional if empty
         email = patient_data.get('email')
         if email and isinstance(email, str):
             email = email.strip()
             if not email:
-                email = None  # Make email optional if not provided
+                email = None  # Normalize empty strings to None
         else:
             email = None  # Make email optional if not provided
         
@@ -54,8 +58,9 @@ async def simple_register_patient(
         if not first_name or not last_name:
             raise HTTPException(status_code=400, detail="First name and last name are required (or provide full_name)")
         
-        if not phone:
-            raise HTTPException(status_code=400, detail="Phone number is required")
+        # Validate that at least one of phone or email is provided
+        if not phone and not email:
+            raise HTTPException(status_code=400, detail="Either phone number or email address must be provided")
         
         if not patient_data.get('date_of_birth'):
             raise HTTPException(status_code=400, detail="Date of birth is required")
@@ -116,6 +121,21 @@ async def simple_register_patient(
             patient_data=patient_data_dict,
             created_by=current_user.user_id
         )
+        
+        # Send profile creation notification
+        try:
+            from app.common.services.notification_service import send_profile_creation_notification
+            patient_name = f"{first_name} {last_name}"
+            await send_profile_creation_notification(
+                phone_number=phone if phone else None,
+                email=email if email else None,
+                patient_name=patient_name
+            )
+        except Exception as e:
+            # Log error but don't fail registration
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Failed to send profile creation notification: {str(e)}")
         
         return {
             "patient_id": str(patient_result.get("patient_id", "")),

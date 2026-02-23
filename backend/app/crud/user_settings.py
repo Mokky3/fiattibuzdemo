@@ -33,7 +33,12 @@ class CRUDUserProfile:
             db.add(profile)
         for key, value in profile_data.items():
             if hasattr(profile, key):
-                setattr(profile, key, value)
+                try:
+                    setattr(profile, key, value)
+                except Exception:
+                    # Skip fields that don't exist in the database yet (e.g., organization column)
+                    # This allows the code to work before migrations are run
+                    pass
         db.commit()
         db.refresh(profile)
         return profile

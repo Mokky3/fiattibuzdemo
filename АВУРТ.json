@@ -1,0 +1,229 @@
+{
+  "source_file": "АВУРТ.pdf",
+  "total_elements": 25,
+  "filtered_elements": 20,
+  "valid_elements": 20,
+  "removed_elements": 0,
+  "elements": [
+    {
+      "element_type": "Table",
+      "text": "История болезни Дата рождения 24.07.1966 | Отделение ЭФИ Дата Процедура /исследование/ 24.07.2023 | Электрофизиологическое исследование (ЭФИ) и радиочастотная аблация ‘медленных путей’? АВ- соединения.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1,
+        "text_as_html": "<table><thead><tr><th>История болезни</th><th></th><th>Дата рождения</th><th>24.07.1966</th><th>| Отделение</th><th>ЭФИ</th></tr></thead><tbody><tr><td>Дата Процедура /исследование/</td><td colspan=\"5\">24.07.2023 | Электрофизиологическое исследование (ЭФИ) и радиочастотная аблация ‘медленных путей’? АВ- соединения.</td></tr></tbody></table>"
+      },
+      "structured_data": {
+        "key_value_pairs": {
+          "Дата Процедура /исследование/": "24.07.2023 | Электрофизиологическое исследование (ЭФИ) и радиочастотная аблация ‘медленных путей’? АВ- соединения."
+        },
+        "matrix": [
+          [
+            "История болезни",
+            "",
+            "Дата рождения",
+            "24.07.1966",
+            "| Отделение",
+            "ЭФИ"
+          ],
+          [
+            "Дата Процедура /исследование/",
+            "24.07.2023 | Электрофизиологическое исследование (ЭФИ) и радиочастотная аблация ‘медленных путей’? АВ- соединения."
+          ]
+        ]
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Исходно регистрируется синусовый ритм с ЧСС 70 уд в мин.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Сначала операционная поля (место пункции) обработано с бетадином и спиртом. Далее под местной анестезией Sol.Novocaini 0,5% - 20,0 мл по методике Сельдингера с помощью иглы дважды пропунктирована правая бедренная вена, через которые с помощью интродьюсеров в полость сердца проведены 2 электрода для проведения ЭФИ в позиции CS и Гис.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "Title",
+      "text": "На синусовом ритме проведено ЭФИ:",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "(ЧСС 170 уд/мин) типичный с АВУРТ.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "С помощью картирующего-аблационного электрода в LAO=30° выполнена модификация АВ узлового проведения: выполнено 3 эффективных воздействия в правой среднесептальной области с параметрами: P = 30-40 Wt; t = 50-55°C; I = 95-110 Ohm и длительностью по 60 сек, во время которых регистрировался медленный ритм из АВ- соединения.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "Title",
+      "text": "Далее выполнено ЭФИ:",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Ретроградная точка Венкебаха =140 уд в мин.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Антеградная точка Венкебаха = 190 уд в мин.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "Title",
+      "text": "Далее введено Атропин 0,1%-0,5 мл и проведено контрольное ЭФИ:",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Ретроградная точка Венкебаха = 160 уд в мин.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "РЭРП АВУ = 280(120) мсек.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Антеградная точка Венкебаха = 220 уд в мин.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "АЭРП АВУ = 200(120) мсек.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Проведение через системы Гиса-Пуркинье. Тахикардия методами учащающей и программированной стимуляции не индуцируется.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "На этом процедура была завершена. Деканюляция. Гемостаз. Асептические наклейки на места пункций. Пациент переведен в отделение на синусовом ритме.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "Title",
+      "text": "Назначения:",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "List",
+      "text": "1. Постельный режим \n\n–\n\n 12 ч.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "List",
+      "text": "2. Наблюдение дежурного врача.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "List",
+      "text": "3. ЭКГ мониторинг и контроль.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    }
+  ]
+}

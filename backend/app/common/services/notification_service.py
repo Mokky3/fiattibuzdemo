@@ -178,41 +178,18 @@ class EmailService:
 
 # ──────────────────────────────────────────────────────── SMS Service ──
 class SMSService:
+    """SMS Service using Eskiz.uz gateway."""
+    
     @staticmethod
     async def send_sms(phone_number: str, message: str) -> bool:
-        """Send SMS notification."""
+        """Send SMS notification via Eskiz.uz gateway."""
+        from app.services.sms_notification_service import sms_notification_service
+        
         if not config.ENABLE_SMS:
             logger.info(f"SMS disabled, would send to {phone_number}: {message}")
             return True
         
-        try:
-            # Format phone number
-            if not phone_number.startswith('+'):
-                phone_number = f"+{phone_number}"
-            
-            # Prepare SMS payload
-            payload = {
-                "from": config.SMS_FROM_NUMBER,
-                "to": phone_number,
-                "text": message,
-                "api_key": config.SMS_API_KEY
-            }
-            
-            # Send SMS via HTTP API
-            async with aiohttp.ClientSession() as session:
-                async with session.post(config.SMS_API_URL, json=payload) as response:
-                    if response.status == 200:
-                        logger.info(f"SMS sent successfully to {phone_number}")
-                        return True
-                    else:
-                        logger.error(f"SMS API returned status {response.status}")
-                        return False
-                        
-        except Exception as e:
-            logger.error(f"Failed to send SMS to {phone_number}: {str(e)}")
-            # For demo purposes, log the message that would be sent
-            logger.info(f"SMS would contain: {message}")
-            return False
+        return await sms_notification_service.send_sms(phone_number, message)
 
 # ──────────────────────────────────────────────────────── Appointment Notifications ──
 async def send_appointment_notification(
@@ -317,6 +294,135 @@ Best regards,
 FIATTIB Medical Center Team
 """
         results["email"] = await EmailService.send_email(email, subject, body)
+    
+    return results
+
+# ──────────────────────────────────────────────────────── Profile Creation Notifications ──
+async def send_profile_creation_notification(
+    phone_number: Optional[str],
+    email: Optional[str],
+    patient_name: str = "Patient"
+) -> Dict[str, bool]:
+    """Send notification to patient when their profile is created."""
+    results = {"email": False, "sms": False}
+    
+    # Validate that at least one contact method is provided
+    if not phone_number and not email:
+        logger.warning("No contact method provided for profile creation notification")
+        return results
+    
+    # SMS notification
+    if phone_number:
+        sms_text = f"FIATTIB: Your patient profile has been created successfully. Welcome to FIATTIB Medical Center! Contact: +998712345678"
+        results["sms"] = await SMSService.send_sms(phone_number, sms_text)
+    
+    # Email notification
+    if email:
+        subject = "Welcome to FIATTIB Medical Center - Your Profile Has Been Created"
+        body = f"""
+Dear {patient_name},
+
+Welcome to FIATTIB Medical Center!
+
+Your patient profile has been successfully created in our system. You can now:
+
+- Schedule appointments with our doctors
+- Access your medical records and test results
+- Receive important health updates
+- Communicate with our medical staff
+
+If you have any questions or need assistance, please contact us:
+Phone: +998 71 234 56 78
+Email: info@fiattib.com
+Portal: https://fiattib.com/patient
+
+We look forward to providing you with excellent healthcare services.
+
+Best regards,
+FIATTIB Medical Center Team
+"""
+        html_body = f"""
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to FIATTIB Medical Center</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, sans-serif; background-color: #f8f9fa;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8f9fa; padding: 20px;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background-color: white; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+                    <!-- Header -->
+                    <tr>
+                        <td style="background-color: #4DB6B0; padding: 30px 40px; text-align: center;">
+                            <h1 style="color: white; margin: 0; font-size: 24px;">Welcome to FIATTIB Medical Center</h1>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td style="padding: 40px;">
+                            <p style="font-size: 16px; color: #333; margin-bottom: 20px;">
+                                Dear {patient_name},
+                            </p>
+                            
+                            <p style="font-size: 16px; color: #333; line-height: 1.6; margin-bottom: 20px;">
+                                Welcome to FIATTIB Medical Center!
+                            </p>
+                            
+                            <p style="font-size: 16px; color: #333; line-height: 1.6; margin-bottom: 20px;">
+                                Your patient profile has been successfully created in our system. You can now:
+                            </p>
+                            
+                            <ul style="font-size: 16px; color: #333; line-height: 1.8; margin-bottom: 30px;">
+                                <li>Schedule appointments with our doctors</li>
+                                <li>Access your medical records and test results</li>
+                                <li>Receive important health updates</li>
+                                <li>Communicate with our medical staff</li>
+                            </ul>
+                            
+                            <div style="background-color: #f8f9fa; padding: 20px; border-radius: 6px; margin-bottom: 30px;">
+                                <p style="font-size: 14px; color: #666; margin: 0;">
+                                    <strong>Contact Information:</strong><br>
+                                    Phone: +998 71 234 56 78<br>
+                                    Email: info@fiattib.com<br>
+                                    Portal: <a href="https://fiattib.com/patient" style="color: #4DB6B0;">https://fiattib.com/patient</a>
+                                </p>
+                            </div>
+                            
+                            <p style="font-size: 16px; color: #333; line-height: 1.6; margin-bottom: 30px;">
+                                We look forward to providing you with excellent healthcare services.
+                            </p>
+                            
+                            <div style="text-align: center;">
+                                <a href="https://fiattib.com/patient" 
+                                   style="background-color: #4DB6B0; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                                    Access Patient Portal
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background-color: #f8f9fa; padding: 20px; text-align: center; border-top: 1px solid #e9ecef;">
+                            <p style="color: #666; font-size: 12px; margin: 0;">
+                                FIATTIB Medical Center<br>
+                                123 Healthcare Avenue, Medical City<br>
+                                +998 71 234 56 78 | info@fiattib.com
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
+"""
+        results["email"] = await EmailService.send_email(email, subject, body, html_body)
     
     return results
 

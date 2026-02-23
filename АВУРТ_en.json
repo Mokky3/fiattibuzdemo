@@ -1,0 +1,229 @@
+{
+  "source_file": "АВУРТ.pdf",
+  "total_elements": 25,
+  "filtered_elements": 20,
+  "valid_elements": 20,
+  "removed_elements": 0,
+  "elements": [
+    {
+      "element_type": "Table",
+      "text": "Medical history Date of birth 24.07.1966 | Electrophysiology Department Date Procedure /study/ 24.07.2023 | Electrophysiological study (EPS) and radiofrequency ablation of 'slow pathways'? AV node connections.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1,
+        "text_as_html": "<table><thead><tr><th>История болезни</th><th></th><th>Дата рождения</th><th>24.07.1966</th><th>| Отделение</th><th>ЭФИ</th></tr></thead><tbody><tr><td>Дата Процедура /исследование/</td><td colspan=\"5\">24.07.2023 | Электрофизиологическое исследование (ЭФИ) и радиочастотная аблация ‘медленных путей’? АВ- соединения.</td></tr></tbody></table>"
+      },
+      "structured_data": {
+        "key_value_pairs": {
+          "Дата Процедура /исследование/": "24.07.2023 | Electrophysiological study (EPS) and radiofrequency ablation of 'slow pathways'? AV junction."
+        },
+        "matrix": [
+          [
+            "Medical history",
+            "",
+            "Date of birth",
+            "24.07.1966",
+            "| Department",
+            "EP (Electrophysiology)"
+          ],
+          [
+            "Date Procedure /study/",
+            "24.07.2023 | Electrophysiological study (EPS) and radiofrequency ablation of 'slow pathways'? AV junction."
+          ]
+        ]
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Initially, sinus rhythm is recorded with a heart rate of 70 bpm.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "First, the operative field (puncture site) was treated with betadine and alcohol. Then, under local anesthesia with Sol. Novocaini 0.5% - 20.0 ml, the right femoral vein was punctured twice using the Seldinger technique with a needle, through which 2 electrodes were introduced into the heart cavity for performing electrophysiological study (EFS) in the positions of CS and His.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "Title",
+      "text": "Sinus rhythm electrophysiological study (EPS) conducted:",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "(Heart rate 170 bpm) typical with AVNRT.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Using a mapping-ablation electrode in LAO=30°, modification of AV nodal conduction was performed: 3 effective applications were carried out in the right mid-septal area with parameters: P = 30-40 W; t = 50-55°C; I = 95-110 Ohm and a duration of 60 seconds, during which a slow rhythm from the AV junction was recorded.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "Title",
+      "text": "Further, an electrophysiological study (EPS) was performed:",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Wenckebach retrograde point = 140 bpm.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Antegrade Wenckebach point = 190 bpm.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "Title",
+      "text": "Subsequently, Atropine 0.1%-0.5 ml was administered and a control electrophysiological study (EFS) was conducted:",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Wenckebach retrograde point = 160 bpm.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "RERP AVU = 280(120) msec.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Antegrade Wenckebach point = 220 bpm.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "AERP AVU = 200(120) msec.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "Conduction through the His-Purkinje system. Tachycardia is not induced by frequent and programmed stimulation methods.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "NarrativeText",
+      "text": "The procedure was completed. Decannulation. Hemostasis. Aseptic stickers on the puncture sites. The patient was transferred to the department in sinus rhythm.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "Title",
+      "text": "Prescriptions:",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "List",
+      "text": "1. Bed rest – 12 hours.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "List",
+      "text": "2. Observation by the on-call physician.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    },
+    {
+      "element_type": "List",
+      "text": "3. ECG monitoring and control.",
+      "metadata": {
+        "filename": "АВУРТ.pdf",
+        "filetype": "application/pdf",
+        "last_modified": "2026-02-17T11:50:20",
+        "page_number": 1
+      }
+    }
+  ]
+}

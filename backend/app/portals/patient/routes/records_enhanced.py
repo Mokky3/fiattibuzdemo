@@ -137,6 +137,16 @@ async def list_records(
                 logger.warning(f"[RECORDS] Error fetching lab results: {e}")
                 db.rollback()
         
+        # 0e. Get RadiologyStudies from database (radiology imaging studies)
+        if record_type in ["all", "imaging"]:
+            try:
+                db_radiology_studies = _get_db_radiology_studies(db, current_patient)
+                logger.info(f"[RECORDS] Found {len(db_radiology_studies)} radiology studies from database")
+                all_records.extend(db_radiology_studies)
+            except Exception as e:
+                logger.warning(f"[RECORDS] Error fetching radiology studies: {e}")
+                db.rollback()
+        
         # 1. Get Encounters (visits/consultations) from FHIR
         if record_type in ["all", "consultation", "visit"]:
             encounters = await _get_encounters(current_patient, fhir_client)
@@ -2603,6 +2613,123 @@ def _get_db_lab_results(db: Session, current_patient: PatientUser) -> List[Recor
         import logging
         logger = logging.getLogger(__name__)
         logger.warning(f"Error fetching database lab results: {e}")
+        db.rollback()
+        return []
+
+
+def _get_db_radiology_studies(db: Session, current_patient: PatientUser) -> List[RecordItem]:
+    """Get radiology studies from database (RadiologyStudy table)."""
+    try:
+        from app.portals.patient.schemas.records_enhanced import RecordTypeEnum, RecordStatusEnum, PriorityEnum
+        from app.common.models.radiology import RadiologyStudy
+        from uuid import UUID
+        
+        # Convert patient_id to UUID for comparison
+        patient_uuid = UUID(str(current_patient.patient_id))
+        
+        # Query radiology studies for this patient
+        radiology_studies = db.query(RadiologyStudy).filter(
+            RadiologyStudy.patient_id == patient_uuid
+        ).order_by(RadiologyStudy.scheduled_date.desc(), RadiologyStudy.study_date.desc()).limit(200).all()
+        
+        result = []
+        for study in radiology_studies:
+            # Build description from study details
+            description_parts = []
+            if study.study_description:
+                description_parts.append(study.study_description)
+            if study.modality:
+                description_parts.append(f"Modality: {study.modality}")
+            if study.body_part:
+                description_parts.append(f"Body Part: {study.body_part}")
+            if study.indication:
+                description_parts.append(f"Indication: {study.indication}")
+            
+            description = " | ".join(description_parts) if description_parts else "Radiology Study"
+            
+            # Get clinic_id (default if not available)
+            clinic_id = "00000000-0000-0000-0000-000000000000"
+            
+            # Format dates
+            study_date = study.study_date or study.scheduled_date or study.order_date or datetime.now(timezone.utc)
+            if isinstance(study_date, datetime):
+                study_date_str = study_date.strftime("%Y-%m-%d")
+                created_at_str = study_date.isoformat()
+            elif hasattr(study_date, 'date'):
+                study_date_str = study_date.strftime("%Y-%m-%d")
+                created_at_str = datetime.combine(study_date, datetime.min.time()).isoformat()
+            else:
+                study_date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                created_at_str = datetime.now(timezone.utc).isoformat()
+            
+            uploaded_at = study.uploaded_at or datetime.now(timezone.utc)
+            updated_at_str = uploaded_at.isoformat() if isinstance(uploaded_at, datetime) else datetime.now(timezone.utc).isoformat()
+            
+            # Map status
+            status_enum = RecordStatusEnum.FINAL
+            if study.status:
+                status_lower = str(study.status).lower()
+                if "scheduled" in status_lower or "pending" in status_lower:
+                    status_enum = RecordStatusEnum.DRAFT
+                elif "completed" in status_lower or "final" in status_lower:
+                    status_enum = RecordStatusEnum.FINAL
+                elif "cancelled" in status_lower:
+                    status_enum = RecordStatusEnum.CANCELLED
+            
+            # Map priority
+            priority_enum = PriorityEnum.NORMAL
+            if study.priority:
+                priority_lower = str(study.priority).lower()
+                if "stat" in priority_lower or "urgent" in priority_lower:
+                    priority_enum = PriorityEnum.URGENT
+                elif "routine" in priority_lower:
+                    priority_enum = PriorityEnum.NORMAL
+            
+            # Get clinic/doctor info
+            clinic_name = study.location or "Radiology Department"
+            doctor_name = study.ordering_physician or ""
+            
+            # Build title
+            title = study.study_description or f"{study.modality or 'Radiology'} Study"
+            if study.body_part:
+                title += f" - {study.body_part}"
+            
+            # Include study metadata in attachments
+            attachments_list = []
+            if study.study_instance_uid or study.orthanc_study_id:
+                attachments_list.append({
+                    "type": "radiology_study",
+                    "studyInstanceUID": study.study_instance_uid,
+                    "orthancStudyId": study.orthanc_study_id,
+                    "modality": study.modality,
+                    "bodyPart": study.body_part,
+                    "accessionNumber": study.accession_number
+                })
+            
+            result.append(RecordItem(
+                id=str(study.id),
+                type=RecordTypeEnum.IMAGING,
+                date=study_date_str,
+                doctor=doctor_name,
+                clinic=clinic_name,
+                title=title,
+                summary=description,
+                status=status_enum,
+                priority=priority_enum,
+                notes=study.notes,
+                attachments=attachments_list,
+                fhir_resource_ids=[],
+                clinic_id=clinic_id,
+                patient_id=str(current_patient.patient_id),
+                created_at=created_at_str,
+                updated_at=updated_at_str
+            ))
+        
+        return result
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.warning(f"Error fetching database radiology studies: {e}")
         db.rollback()
         return []
 

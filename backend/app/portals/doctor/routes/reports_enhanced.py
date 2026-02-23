@@ -6,8 +6,13 @@ from typing import List, Dict, Any, Optional
 from uuid import uuid4
 import base64
 import json
+import tempfile
+import os
+import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Body, Query, status, Request
+logger = logging.getLogger(__name__)
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Body, Query, status, Request, UploadFile, File, Form
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -17,6 +22,7 @@ from app.services.fhir_client import FHIRClient
 from app.services.fhir_repository import fhir_repo
 from app.services.messaging_service import MessagingService
 from app.services.rbac_service import RBACService
+from app.services.fhir_processor import fhir_processor
 from app.common.schemas.responses_enhanced import (
     SuccessResponse, PaginatedResponse, ProblemDetail, ErrorType,
     create_problem_detail, create_paginated_response
@@ -1653,6 +1659,531 @@ async def get_report(
         raise HTTPException(status_code=500, detail=problem.dict())
 
 
+@router.options("/upload-note")
+async def upload_note_options(request: Request):
+    """Handle CORS preflight for upload-note endpoint"""
+    from fastapi.responses import Response
+    origin = request.headers.get("origin")
+    headers = {}
+    if origin and (origin in [
+        "http://localhost:3000", "http://localhost:5173", "http://localhost:5174",
+        "http://127.0.0.1:3000", "http://127.0.0.1:5173",
+        "https://zamez.netlify.app", "https://fiattib.web.app",
+        "https://fiattib.firebaseapp.com", "https://fiattib.uz", "https://www.fiattib.uz",
+    ] or origin.endswith(".netlify.app")):
+        headers = {
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Methods": "POST, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Max-Age": "3600",
+        }
+    return Response(status_code=204, headers=headers)
+
+
+@router.post("/upload-note", response_model=SuccessResponse[Dict[str, Any]], status_code=status.HTTP_201_CREATED)
+@audit_pii_access("write", "document", "note_upload")
+async def upload_note_pdf(
+    request: Request,
+    file: UploadFile = File(...),
+    patient_id: str = Form(...),
+    current_doctor: DoctorUser = Depends(get_current_doctor),
+    db: Session = Depends(get_db),
+    rbac_service: RBACService = Depends(get_rbac_service)
+):
+    """
+    Upload a PDF medical note, extract data, translate to English, map to FHIR, and store using hybrid storage.
+    
+    Pipeline:
+    1. Extract structured data from PDF using extractor.py
+    2. Translate and map to FHIR Bundle using translate_to_fhir.py
+    3. Process FHIR Bundle using fhir_processor.py (raw storage + relational sync + clinical sync + translation metadata)
+    """
+    try:
+        # Get AuthenticatedUser object for RBAC
+        from app.common.models.user import User
+        from app.common.auth.auth_service import AuthenticatedUser, AuthService
+        
+        user_obj = db.query(User).filter(User.id == current_doctor.id).first()
+        if not user_obj:
+            raise HTTPException(status_code=401, detail="User not found")
+        
+        user_permissions = AuthService.get_user_permissions(user_obj.role) if user_obj.role else []
+        authenticated_user = AuthenticatedUser(
+            user=user_obj,
+            permissions=user_permissions,
+            clinic_id=getattr(user_obj, 'clinic_id', None)
+        )
+        
+        # Validate file type (PDF only for now)
+        if file.content_type != "application/pdf":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported file type: {file.content_type}. Only PDF files are supported."
+            )
+        
+        # Validate file size (max 10MB)
+        file_content = await file.read()
+        if len(file_content) > 10 * 1024 * 1024:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File too large. Maximum size: 10MB"
+            )
+        
+        # Validate patient access
+        if not rbac_service.can_access_patient(authenticated_user, patient_id, None):
+            problem = create_problem_detail(
+                error_type=ErrorType.AUTHORIZATION_ERROR,
+                title="Patient Access Denied",
+                status=403,
+                detail="Doctor does not have access to this patient",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=403, detail=problem.dict())
+        
+        # Log with ASCII-safe filename to avoid UnicodeEncodeError on Windows console
+        safe_name = (file.filename or "upload").encode("ascii", "replace").decode("ascii")
+        logger.info("Processing PDF note %s for patient %s", safe_name, patient_id)
+        
+        # Step 1: Extract structured data from PDF
+        # Import extractor classes
+        import sys
+        from pathlib import Path as PathLib
+        
+        # Calculate scripts path: from app/portals/doctor/routes/reports_enhanced.py
+        # Go up: routes -> doctor -> portals -> app -> backend -> scripts
+        current_file = PathLib(__file__).resolve()
+        scripts_path = current_file.parent.parent.parent.parent.parent / "scripts"
+        
+        if not scripts_path.exists():
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Scripts directory not found at: {scripts_path}"
+            )
+        
+        sys.path.insert(0, str(scripts_path))
+        
+        try:
+            from extractor import MedicalDocumentExtractor
+        except ImportError as e:
+            logger.error(f"Failed to import MedicalDocumentExtractor: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to import extractor module. Make sure unstructured library is installed: {str(e)}"
+            )
+        
+        # Save uploaded file to temporary location
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            temp_file.write(file_content)
+            temp_file_path = temp_file.name
+        
+        try:
+            # Extract data from PDF: use 'fast' first so text-based PDFs work without Tesseract
+            extractor = MedicalDocumentExtractor(
+                ocr_languages=['rus', 'uzb', 'uzb_cyrl'],
+                strategy='fast'
+            )
+            try:
+                extracted_data = extractor.process_document(
+                    file_path=PathLib(temp_file_path),
+                    infer_table_structure=True
+                )
+            except Exception as extract_err:
+                err_str = str(extract_err)
+                err_type = type(extract_err).__name__
+                if "tesseract" in err_str.lower() or "TesseractNotFoundError" in err_type:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=(
+                            "This PDF appears to be a scanned image and requires OCR. "
+                            "Tesseract OCR is not installed or not in your PATH. "
+                            "Options: (1) Install Tesseract from https://github.com/UB-Mannheim/tesseract/wiki "
+                            "and add it to PATH, or (2) Use a PDF with selectable/embedded text."
+                        )
+                    ) from extract_err
+                raise
+
+            total_elements = extracted_data.get('total_elements', 0)
+            if total_elements == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "No text could be extracted from this PDF. "
+                        "It may be a scanned image. Install Tesseract OCR for scanned PDFs, "
+                        "or use a PDF that has selectable text."
+                    )
+                )
+            logger.info("Extracted %s elements from PDF", total_elements)
+            
+            # Step 2: Translate and map to FHIR Bundle
+            try:
+                from translate_to_fhir import TranslateToFHIRMapper
+            except ImportError as e:
+                logger.error(f"Failed to import TranslateToFHIRMapper: {e}")
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to import translate_to_fhir module: {str(e)}"
+                )
+            
+            try:
+                # Check for OpenAI API key (os is imported at module top)
+                if not os.getenv("OPENAI_API_KEY"):
+                    raise HTTPException(
+                        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                        detail="OPENAI_API_KEY environment variable is not set. Please configure it in your .env file."
+                    )
+                
+                mapper = TranslateToFHIRMapper()
+                fhir_bundle = mapper.translate_and_map_to_fhir(extracted_data)
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"Failed to translate and map to FHIR: {e}", exc_info=True)
+                error_msg = str(e)
+                if "OPENAI_API_KEY" in error_msg or "api key" in error_msg.lower():
+                    error_msg = "OpenAI API key is missing or invalid. Please check your OPENAI_API_KEY environment variable."
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to translate and map to FHIR: {error_msg}"
+                )
+            
+            logger.info(f"Created FHIR Bundle with {len(fhir_bundle.get('entry', []))} resources")
+            
+            # Step 3: Process FHIR Bundle using fhir_processor
+            # Update patient references in bundle to use the actual patient_id
+            for entry in fhir_bundle.get('entry', []):
+                resource = entry.get('resource', {})
+                if resource.get('resourceType') == 'Patient':
+                    # Update Patient resource ID to match our patient_id
+                    resource['id'] = patient_id
+                    entry['fullUrl'] = f"urn:uuid:{patient_id}"
+                elif 'subject' in resource:
+                    # Update subject reference to use our patient_id
+                    if isinstance(resource['subject'], dict):
+                        resource['subject']['reference'] = f"urn:uuid:{patient_id}"
+            
+            # Process the bundle
+            processing_results = fhir_processor.process_resource(fhir_bundle)
+            
+            logger.info(f"Processed FHIR Bundle: {len(processing_results.get('raw_storage', []))} raw resources, "
+                       f"{len(processing_results.get('relational_sync', []))} relational syncs, "
+                       f"{len(processing_results.get('clinical_sync', []))} clinical syncs")
+            
+            # Step 4: Create ClinicalNote record so it appears in the reports list
+            from app.common.models.doctor import ClinicalNote, Doctor
+            from uuid import UUID
+            
+            # Get doctor profile
+            doctor_profile = db.query(Doctor).filter(Doctor.user_id == current_doctor.id).first()
+            if not doctor_profile:
+                logger.warning(f"Doctor profile not found for user {current_doctor.id}, skipping ClinicalNote creation")
+            else:
+                # Use the structured JSON from OpenAI FHIR bundle for SOAP (chief complaint, HPI, assessment, plan)
+                import re
+                def _strip_div(div: Any) -> str:
+                    if not div:
+                        return ""
+                    s = str(div).strip()
+                    if not s:
+                        return ""
+                    # Remove HTML tags and decode common entities
+                    s = re.sub(r"<[^>]+>", " ", s)
+                    s = re.sub(r"&nbsp;", " ", s)
+                    s = re.sub(r"&amp;", "&", s)
+                    s = re.sub(r"&lt;", "<", s)
+                    s = re.sub(r"&gt;", ">", s)
+                    s = re.sub(r"\s+", " ", s).strip()
+                    return s
+
+                subjective_parts = []
+                objective_parts = []
+                assessment_parts = []
+                plan_parts = []
+
+                # 1) Extract chief complaint / HPI from Composition or Encounter in the bundle (structured output)
+                for entry in fhir_bundle.get('entry', []):
+                    resource = entry.get('resource', {})
+                    rtype = resource.get('resourceType')
+                    if rtype == 'Composition':
+                        for section in resource.get('section', []):
+                            title = (section.get('title') or '').lower()
+                            if any(x in title for x in ('chief complaint', 'reason for visit', 'present illness', 'history of present', 'complaints', '\u0436\u0430\u043b\u043e\u0431\u044b', '\u0430\u043d\u0430\u043c\u043d\u0435\u0437', 'shikoyat', 'anamnez')):
+                                text_block = section.get('text', {})
+                                if isinstance(text_block, dict) and text_block.get('div'):
+                                    subjective_parts.append(_strip_div(text_block.get('div')))
+                                elif isinstance(section.get('text'), str):
+                                    subjective_parts.append(section.get('text', '').strip())
+                    elif rtype == 'Encounter':
+                        reason = resource.get('reasonCode')
+                        reasons = [reason] if isinstance(reason, dict) else (reason if isinstance(reason, list) else [])
+                        for r in reasons:
+                            if isinstance(r, dict) and r.get('text'):
+                                subjective_parts.append(r.get('text', '').strip())
+                            for c in (r.get('coding') or []) if isinstance(r, dict) else []:
+                                if isinstance(c, dict) and c.get('display'):
+                                    subjective_parts.append(c.get('display', '').strip())
+                                    break
+
+                # 2) Extract from each resource type, using Narrative (text.div) from structured JSON when present
+                for entry in fhir_bundle.get('entry', []):
+                    resource = entry.get('resource', {})
+                    if resource.get('resourceType') == 'Condition':
+                        div_text = _strip_div(resource.get('text', {}).get('div') if isinstance(resource.get('text'), dict) else None)
+                        if div_text:
+                            assessment_parts.append(div_text)
+                        else:
+                            code_text = resource.get('code', {}).get('text', '')
+                            if code_text:
+                                assessment_parts.append(f"Condition: {code_text}")
+                        clinical_status = resource.get('clinicalStatus', {}).get('coding', [{}])[0].get('display', '')
+                        if clinical_status:
+                            assessment_parts.append(f"Status: {clinical_status}")
+
+                for entry in fhir_bundle.get('entry', []):
+                    resource = entry.get('resource', {})
+                    if resource.get('resourceType') == 'Observation':
+                        div_text = _strip_div(resource.get('text', {}).get('div') if isinstance(resource.get('text'), dict) else None)
+                        if div_text:
+                            objective_parts.append(div_text)
+                        else:
+                            code_text = resource.get('code', {}).get('text', '')
+                            value = resource.get('valueString') or resource.get('valueQuantity', {}).get('value', '')
+                            unit = resource.get('valueQuantity', {}).get('unit', '')
+                            if code_text and value:
+                                obs_text = f"{code_text}: {value}"
+                                if unit:
+                                    obs_text += f" {unit}"
+                                objective_parts.append(obs_text)
+
+                for entry in fhir_bundle.get('entry', []):
+                    resource = entry.get('resource', {})
+                    if resource.get('resourceType') == 'Procedure':
+                        div_text = _strip_div(resource.get('text', {}).get('div') if isinstance(resource.get('text'), dict) else None)
+                        if div_text:
+                            plan_parts.append(div_text)
+                        else:
+                            code_text = resource.get('code', {}).get('text', '')
+                            if code_text:
+                                plan_parts.append(f"Procedure: {code_text}")
+
+                for entry in fhir_bundle.get('entry', []):
+                    resource = entry.get('resource', {})
+                    if resource.get('resourceType') == 'MedicationAdministration':
+                        div_text = _strip_div(resource.get('text', {}).get('div') if isinstance(resource.get('text'), dict) else None)
+                        if div_text:
+                            plan_parts.append(div_text)
+                        else:
+                            medication = resource.get('medicationCodeableConcept', {}).get('text', '')
+                            if medication:
+                                plan_parts.append(f"Medication: {medication}")
+                
+                # Build full narrative from extracted PDF text so view report can show it
+                content_narrative = f"Medical note extracted from PDF: {file.filename}"
+                elements = extracted_data.get("elements", [])
+                if isinstance(elements, list) and elements:
+                    parts = []
+                    for elem in elements:
+                        if isinstance(elem, dict) and elem.get("text"):
+                            parts.append(elem["text"].strip())
+                    if parts:
+                        content_narrative = "\n\n".join(parts)
+                
+                # Derive subjective (chief complaint / HPI) from narrative when FHIR has no dedicated section.
+                # Avoid using letterhead (clinic name/address) as chief complaint: prefer explicit section or first substantive paragraph.
+                def _paragraph_looks_like_letterhead(para: str) -> bool:
+                    if not para or len(para) < 30:
+                        return True
+                    p = para.strip().lower()
+                    # Address-like: ends with digits, or contains common address/header tokens
+                    if p.endswith(("str.", "ul.", "street", "ave.", "blvd.")):
+                        return True
+                    for token in ("\u0443\u043b.", "ul.", "str.", "\u0433.", "city", "address", "clinic", "\u043a\u043b\u0438\u043d\u0438\u043a", "medical center"):
+                        if token in p and len(p) < 120:
+                            return True
+                    # Too many digits/dots (phone, index, date)
+                    digit_ratio = sum(c.isdigit() or c in ".,/" for c in p) / max(len(p), 1)
+                    if digit_ratio > 0.35:
+                        return True
+                    return False
+
+                def _find_subjective_in_narrative(text: str) -> Optional[str]:
+                    if not text or not text.strip():
+                        return None
+                    import re
+                    # Look for explicit chief complaint / HPI section (EN/RU/UZ)
+                    patterns = [
+                        r"(?:chief\s+complaint|reason\s+for\s+visit|present\s+illness|history\s+of\s+present\s+illness|complaints?)\s*[:\u00a0]\s*(.+?)(?=\n\n|\n[A-Z\u0410-\u042f]|\Z)",
+                        r"(\u0416\u0430\u043b\u043e\u0431\u044b|\u0410\u043d\u0430\u043c\u043d\u0435\u0437|\u041f\u0440\u0438\u0447\u0438\u043d\u0430)\s*[:\u00a0]\s*(.+?)(?=\n\n|\n[\u0410-\u042f]|\Z)",
+                        r"(shikoyat|tashxis|anamnez)\s*[:\u00a0]\s*(.+?)(?=\n\n|\Z)",
+                    ]
+                    for pat in patterns:
+                        m = re.search(pat, text, re.IGNORECASE | re.DOTALL)
+                        if m:
+                            block = m.group(1).strip()
+                            if len(block) > 20:
+                                return (block[:500] + "\u2026") if len(block) > 500 else block
+                    # Otherwise use first paragraph that does not look like letterhead
+                    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
+                    for para in paras:
+                        if not _paragraph_looks_like_letterhead(para) and len(para) >= 40:
+                            return (para[:500] + "\u2026") if len(para) > 500 else para
+                    # Fallback: first paragraph longer than 100 chars (skip one-line headers)
+                    for para in paras:
+                        if len(para) > 100:
+                            return (para[:500] + "\u2026") if len(para) > 500 else para
+                    return None
+
+                subjective_text = None
+                if subjective_parts:
+                    subjective_text = "\n".join(subjective_parts)
+                elif content_narrative and content_narrative != f"Medical note extracted from PDF: {file.filename}":
+                    subjective_text = _find_subjective_in_narrative(content_narrative)
+                    if not subjective_text:
+                        subjective_text = content_narrative[:500].strip() + ("\u2026" if len(content_narrative) > 500 else "")
+                if not subjective_text:
+                    subjective_text = f"Uploaded from PDF: {file.filename}"
+                
+                # Get note date from bundle timestamp or use current date
+                note_date = datetime.now(timezone.utc)
+                if fhir_bundle.get('timestamp'):
+                    try:
+                        # Try built-in fromisoformat first (Python 3.7+)
+                        note_date = datetime.fromisoformat(fhir_bundle['timestamp'].replace('Z', '+00:00'))
+                    except (ValueError, AttributeError):
+                        try:
+                            # Fallback to dateutil parser
+                            from dateutil import parser
+                            note_date = parser.isoparse(fhir_bundle['timestamp'])
+                        except:
+                            pass
+                
+                # Create ClinicalNote
+                clinical_note = ClinicalNote(
+                    patient_id=UUID(patient_id),
+                    doctor_id=doctor_profile.id,
+                    note_type="consultation",  # or "progress" based on your needs
+                    note_date=note_date,
+                    subjective=subjective_text,
+                    objective="\n".join(objective_parts) if objective_parts else None,
+                    assessment="\n".join(assessment_parts) if assessment_parts else None,
+                    plan="\n".join(plan_parts) if plan_parts else None,
+                    content=content_narrative,
+                    is_draft=False,
+                    created_by=current_doctor.id,
+                    fhir_document_reference_id=fhir_bundle.get('id')  # Link to the bundle
+                )
+                
+                db.add(clinical_note)
+                db.commit()
+                logger.info(f"Created ClinicalNote {clinical_note.id} for patient {patient_id}")
+            
+            # Helper function to convert datetime objects to ISO format strings
+            def serialize_datetime(obj):
+                """Recursively convert datetime and date objects to ISO format strings."""
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+                elif isinstance(obj, date):
+                    return obj.isoformat()
+                elif isinstance(obj, dict):
+                    return {k: serialize_datetime(v) for k, v in obj.items()}
+                elif isinstance(obj, list):
+                    return [serialize_datetime(item) for item in obj]
+                elif isinstance(obj, (int, float, str, bool, type(None))):
+                    return obj
+                else:
+                    # For other types, convert to string
+                    return str(obj)
+            
+            # Serialize processing_results to ensure all datetime objects are converted
+            serialized_processing_results = serialize_datetime(processing_results)
+            
+            from fastapi.responses import JSONResponse
+            origin = request.headers.get("origin")
+            response_data = SuccessResponse(
+                data={
+                    "patient_id": patient_id,
+                    "filename": file.filename,
+                    "extraction_summary": {
+                        "total_elements": extracted_data.get('total_elements', 0),
+                        "valid_elements": extracted_data.get('valid_elements', 0)
+                    },
+                    "fhir_processing": {
+                        "bundle_id": fhir_bundle.get('id'),
+                        "resources_count": len(fhir_bundle.get('entry', [])),
+                        "raw_storage_count": len(processing_results.get('raw_storage', [])),
+                        "relational_sync_count": len(processing_results.get('relational_sync', [])),
+                        "clinical_sync_count": len(processing_results.get('clinical_sync', [])),
+                        "translation_metadata_count": len(processing_results.get('translation_metadata', []))
+                    },
+                    "processing_results": serialized_processing_results
+                },
+                message="PDF note uploaded, extracted, translated, and processed successfully"
+            )
+            # Add CORS headers explicitly
+            headers = {}
+            if origin and (origin in [
+                "http://localhost:3000", "http://localhost:5173", "http://localhost:5174",
+                "http://127.0.0.1:3000", "http://127.0.0.1:5173",
+                "https://zamez.netlify.app", "https://fiattib.web.app",
+                "https://fiattib.firebaseapp.com", "https://fiattib.uz", "https://www.fiattib.uz"
+            ] or origin.endswith(".netlify.app")):
+                headers["Access-Control-Allow-Origin"] = origin
+                headers["Access-Control-Allow-Credentials"] = "true"
+            
+            # Serialize the entire response to handle any datetime objects
+            response_dict = response_data.dict()
+            serialized_response = serialize_datetime(response_dict)
+            
+            return JSONResponse(
+                content=serialized_response,
+                status_code=status.HTTP_201_CREATED,
+                headers=headers
+            )
+            
+        finally:
+            # Clean up temporary file
+            try:
+                if os.path.exists(temp_file_path):
+                    os.unlink(temp_file_path)
+            except Exception as e:
+                logger.warning(f"Failed to delete temporary file {temp_file_path}: {e}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing PDF note upload: {str(e)}", exc_info=True)
+        import traceback
+        error_traceback = traceback.format_exc()
+        logger.error(f"Full traceback:\n{error_traceback}")
+        
+        # Extract more detailed error information
+        error_detail = str(e)
+        if hasattr(e, '__cause__') and e.__cause__:
+            error_detail += f" (Caused by: {str(e.__cause__)})"
+        
+        problem = create_problem_detail(
+            error_type=ErrorType.INTERNAL_ERROR,
+            title="PDF Note Processing Failed",
+            status=500,
+            detail=f"Failed to process PDF note: {error_detail}",
+            trace_id=get_trace_id()
+        )
+        
+        # Include CORS headers in error response
+        origin = request.headers.get("origin")
+        headers = {}
+        if origin and (origin in [
+            "http://localhost:3000", "http://localhost:5173", "http://localhost:5174",
+            "http://127.0.0.1:3000", "http://127.0.0.1:5173",
+            "https://zamez.netlify.app", "https://fiattib.web.app",
+            "https://fiattib.firebaseapp.com", "https://fiattib.uz", "https://www.fiattib.uz"
+        ] or origin.endswith(".netlify.app")):
+            headers["Access-Control-Allow-Origin"] = origin
+            headers["Access-Control-Allow-Credentials"] = "true"
+        
+        raise HTTPException(status_code=500, detail=problem.dict(), headers=headers)
+
+
 # ──────────────────────────────────────────────────────────────────────────────
 # Medical Reports Router (for frontend compatibility)
 # ──────────────────────────────────────────────────────────────────────────────
@@ -1810,15 +2341,32 @@ async def get_report_by_appointment(
                 if clinical_note:
                     print(f"DEBUG: Found ClinicalNote by patient_id and time window: id={clinical_note.id}")
         
-        # Debug: log if ClinicalNote was found
+        # Debug: log if ClinicalNote was found and what content was retrieved (for PDF-upload / view report)
+        def _safe_preview(s, max_len=500):
+            """Preview string for debug logs; ASCII-safe to avoid UnicodeEncodeError on Windows console."""
+            if s is None:
+                return "(None)"
+            t = str(s).strip()
+            if not t:
+                return "(empty)"
+            try:
+                out = t[:max_len] + ("..." if len(t) > max_len else "")
+                return out.encode("ascii", "replace").decode("ascii")
+            except Exception:
+                return "(preview error)"
+
         print(f"DEBUG: Looking for ClinicalNote with report_id={report_id}")
         print(f"DEBUG: ClinicalNote found: {clinical_note is not None}")
         if clinical_note:
             print(f"DEBUG: ClinicalNote.id={clinical_note.id}")
             print(f"DEBUG: ClinicalNote.fhir_document_reference_id={clinical_note.fhir_document_reference_id}")
-            print(f"DEBUG: ClinicalNote.content length={len(clinical_note.content) if clinical_note.content else 0}")
-            if clinical_note.content:
-                print(f"DEBUG: ClinicalNote.content preview: {str(clinical_note.content)[:300]}")
+            print(f"DEBUG: --- RETRIEVED CONTENT (from DB) ---")
+            print(f"DEBUG:   content length={len(clinical_note.content) if clinical_note.content else 0}, preview: {_safe_preview(clinical_note.content, 400)}")
+            print(f"DEBUG:   subjective length={len(clinical_note.subjective) if clinical_note.subjective else 0}, preview: {_safe_preview(clinical_note.subjective, 200)}")
+            print(f"DEBUG:   objective length={len(clinical_note.objective) if clinical_note.objective else 0}, preview: {_safe_preview(clinical_note.objective, 200)}")
+            print(f"DEBUG:   assessment length={len(clinical_note.assessment) if clinical_note.assessment else 0}, preview: {_safe_preview(clinical_note.assessment, 200)}")
+            print(f"DEBUG:   plan length={len(clinical_note.plan) if clinical_note.plan else 0}, preview: {_safe_preview(clinical_note.plan, 200)}")
+            print(f"DEBUG: --- END RETRIEVED CONTENT ---")
         else:
             print(f"DEBUG: ERROR - No ClinicalNote found for report_id={report_id}")
         
@@ -2107,6 +2655,10 @@ async def get_report_by_appointment(
                 import traceback
                 traceback.print_exc()
                 report_content = {}
+                # When content is plain text (e.g. PDF upload), keep it so view can show it
+                if content_str and isinstance(content_str, str) and content_str.strip():
+                    report_content["summary"] = content_str.strip()
+                    print(f"DEBUG: Using ClinicalNote.content as plain-text summary (e.g. PDF upload)")
         else:
             print(f"DEBUG: WARNING - No ClinicalNote.content found. clinical_note exists: {clinical_note is not None}, has content: {clinical_note.content if clinical_note else False}")
         
@@ -2117,40 +2669,127 @@ async def get_report_by_appointment(
             except:
                 report_content = {"notes": doc_ref.get("description")} if doc_ref.get("description") else {}
         
-        # CRITICAL FALLBACK: If report_content is still empty but we have ClinicalNote, try to extract from assessment/plan fields
-        if not report_content and clinical_note:
-            print(f"DEBUG: report_content is empty, trying to extract from ClinicalNote.assessment and ClinicalNote.plan")
-            report_content = {}
-            
-            # Try to parse assessment field
-            if clinical_note.assessment:
+        # CRITICAL: Always merge ClinicalNote SOAP fields into report_content when present.
+        # (PDF-uploaded notes store data in SOAP; content is plain text. Manual notes may have JSON content.)
+        # This ensures view report shows subjective/objective/assessment/plan from DB.
+        if clinical_note:
+            try:
+                db.refresh(clinical_note)  # Force load latest SOAP columns from DB
+            except Exception:
+                pass
+            if not isinstance(report_content, dict):
+                report_content = {}
+            # Subjective -> chief complaint / HPI (fill if missing or empty)
+            if clinical_note.subjective:
+                hpi = report_content.get("hpi")
+                if not isinstance(hpi, dict):
+                    report_content["hpi"] = {}
+                need_subjective = not (report_content.get("hpi", {}).get("free") or report_content.get("chief_complaint"))
+                if need_subjective:
+                    if "hpi" not in report_content or not isinstance(report_content["hpi"], dict):
+                        report_content["hpi"] = {}
+                    report_content["hpi"]["free"] = clinical_note.subjective
+                    report_content["chief_complaint"] = clinical_note.subjective
+                    print(f"DEBUG: Filled from ClinicalNote.subjective")
+            # Objective -> physical examination
+            if clinical_note.objective:
+                if "pe" not in report_content or not report_content.get("pe") or not (report_content.get("pe") or {}).get("notes"):
+                    report_content["pe"] = report_content.get("pe") or {}
+                    if not isinstance(report_content["pe"], dict):
+                        report_content["pe"] = {}
+                    report_content["pe"]["notes"] = clinical_note.objective
+                    print(f"DEBUG: Filled from ClinicalNote.objective")
+            # Assessment -> diagnosis (try JSON, else plain text)
+            if clinical_note.assessment and not report_content.get("assessment"):
                 try:
                     assessment_data = json.loads(clinical_note.assessment) if isinstance(clinical_note.assessment, str) else clinical_note.assessment
                     if isinstance(assessment_data, dict):
                         report_content["assessment"] = assessment_data
-                        print(f"DEBUG: Extracted assessment from ClinicalNote.assessment")
-                except:
-                    pass
-            
-            # Try to parse plan field
-            if clinical_note.plan:
+                        print(f"DEBUG: Filled from ClinicalNote.assessment (JSON)")
+                except Exception:
+                    report_content["assessment"] = clinical_note.assessment
+                    print(f"DEBUG: Filled from ClinicalNote.assessment (plain text)")
+            # Plan -> treatment plan (try JSON, else plain text)
+            if clinical_note.plan and not report_content.get("plan"):
                 try:
                     plan_data = json.loads(clinical_note.plan) if isinstance(clinical_note.plan, str) else clinical_note.plan
                     if isinstance(plan_data, dict):
                         report_content["plan"] = plan_data
-                        print(f"DEBUG: Extracted plan from ClinicalNote.plan")
-                except:
-                    pass
-            
-            # Use subjective field for chief complaint or HPI
-            if clinical_note.subjective:
-                if "hpi" not in report_content:
-                    report_content["hpi"] = {}
-                if "free" not in report_content["hpi"]:
-                    report_content["hpi"]["free"] = clinical_note.subjective
-                if "chief_complaint" not in report_content:
-                    report_content["chief_complaint"] = clinical_note.subjective
-                print(f"DEBUG: Extracted subjective from ClinicalNote.subjective")
+                        print(f"DEBUG: Filled from ClinicalNote.plan (JSON)")
+                except Exception:
+                    report_content["plan"] = clinical_note.plan
+                    print(f"DEBUG: Filled from ClinicalNote.plan (plain text)")
+        
+        # When content was plain text (e.g. PDF upload), derive chief_complaint / HPI / diagnosis from summary if still missing
+        summary_text = report_content.get("summary", "") if isinstance(report_content, dict) else ""
+        if summary_text and isinstance(report_content, dict):
+            need_cc = not (report_content.get("chief_complaint") or (report_content.get("hpi") or {}).get("free"))
+            if need_cc:
+                # Skip letterhead (clinic address): use first substantive paragraph, not first paragraph
+                def _para_like_letterhead(p):
+                    if not p or len(p) < 30:
+                        return True
+                    pl = p.strip().lower()
+                    for tok in ("ul.", "str.", "\u0443\u043b.", "\u0433.", "address", "clinic", "medical center"):
+                        if tok in pl and len(pl) < 120:
+                            return True
+                    if sum(c.isdigit() or c in ".,/" for c in pl) / max(len(pl), 1) > 0.35:
+                        return True
+                    return False
+                paras_summary = [x.strip() for x in summary_text.split("\n\n") if x.strip()]
+                chief_from_summary = None
+                for para in paras_summary:
+                    if not _para_like_letterhead(para) and len(para) >= 40:
+                        chief_from_summary = (para[:500] + "\u2026") if len(para) > 500 else para
+                        break
+                if not chief_from_summary and paras_summary:
+                    for para in paras_summary:
+                        if len(para) > 100:
+                            chief_from_summary = (para[:500] + "\u2026") if len(para) > 500 else para
+                            break
+                if not chief_from_summary and paras_summary:
+                    chief_from_summary = (paras_summary[0][:500] + "\u2026") if len(paras_summary[0]) > 500 else paras_summary[0]
+                if chief_from_summary:
+                    if "hpi" not in report_content or not isinstance(report_content.get("hpi"), dict):
+                        report_content["hpi"] = {}
+                    report_content["hpi"]["free"] = summary_text[:4000] + ("\u2026" if len(summary_text) > 4000 else "")
+                    report_content["chief_complaint"] = chief_from_summary
+                    print(f"DEBUG: Derived chief_complaint and hpi from summary (plain-text content)")
+            # If assessment/diagnosis still missing, try to use summary as fallback for display
+            if not report_content.get("assessment") and not report_content.get("diagnosis"):
+                for label in ("Diagnosis:", "Assessment:", "Diagnosis", "Assessment"):
+                    if label in summary_text:
+                        idx = summary_text.find(label)
+                        rest = summary_text[idx + len(label):].strip()
+                        report_content["assessment"] = rest[:1500].strip() if rest else "(See additional notes)"
+                        print(f"DEBUG: Derived assessment from summary (after '{label}')")
+                        break
+                else:
+                    report_content["assessment"] = "(See additional notes)"
+            if not report_content.get("plan"):
+                for label in ("Plan:", "Treatment plan:", "Plan", "Treatment plan"):
+                    if label in summary_text:
+                        idx = summary_text.find(label)
+                        rest = summary_text[idx + len(label):].strip()
+                        report_content["plan"] = rest[:1500].strip() if rest else "(See additional notes)"
+                        print(f"DEBUG: Derived plan from summary (after '{label}')")
+                        break
+                else:
+                    report_content["plan"] = "(See additional notes)"
+        
+        # Debug: what will be sent to the view (report_content after SOAP merge)
+        if report_content and isinstance(report_content, dict):
+            print(f"DEBUG: --- REPORT_CONTENT FOR VIEW (after merge) ---")
+            print(f"DEBUG:   keys: {list(report_content.keys())}")
+            if report_content.get("summary"):
+                summary_preview = _safe_preview(report_content["summary"], 400)
+                print(f"DEBUG:   summary (-> additionalNotes) length={len(report_content['summary'])}, preview: {summary_preview}")
+            if report_content.get("chief_complaint"):
+                print(f"DEBUG:   chief_complaint preview: {_safe_preview(report_content['chief_complaint'], 150)}")
+            if report_content.get("hpi"):
+                hpi_free = report_content["hpi"].get("free", "") if isinstance(report_content.get("hpi"), dict) else ""
+                print(f"DEBUG:   hpi.free preview: {_safe_preview(hpi_free, 150)}")
+            print(f"DEBUG: --- END REPORT_CONTENT ---")
         
         # Final check - if report_content is still empty, log warning
         if not report_content:
@@ -2474,25 +3113,26 @@ async def get_report_by_appointment(
             "reportData": report_content if report_content else {}
         }
         
-        # Debug: Log what we're returning
+        # Debug: Log what we're returning (so you can see what content was retrieved and sent to frontend)
+        add_notes = formatted_response.get("additionalNotes") or formatted_response.get("additional_notes") or ""
         print(f"DEBUG: get_report_by_appointment - Returning formatted_response with:")
+        print(f"  chiefComplaint: {_safe_preview(formatted_response.get('chiefComplaint'), 80)}")
+        print(f"  historyOfPresentIllness: {_safe_preview(formatted_response.get('historyOfPresentIllness'), 80)}")
+        print(f"  physicalExamination: {_safe_preview(formatted_response.get('physicalExamination'), 80)}")
+        print(f"  diagnosis: {_safe_preview(formatted_response.get('diagnosis'), 80)}")
+        print(f"  treatmentPlan: {_safe_preview(formatted_response.get('treatmentPlan'), 80)}")
+        print(f"  additionalNotes (extracted content shown here): length={len(add_notes)}, value: {_safe_preview(add_notes, 400)}")
         print(f"  specialty: '{formatted_response.get('specialty', 'NOT SET')}'")
         print(f"  doc_type: '{formatted_response.get('doc_type', 'NOT SET')}'")
         print(f"  hasReportData: {bool(formatted_response.get('reportData'))}")
-        print(f"  reportData.doc_type: '{formatted_response.get('reportData', {}).get('doc_type', 'NOT SET') if isinstance(formatted_response.get('reportData'), dict) else 'NOT A DICT'}'")
-        print(f"  chiefComplaint length: {len(formatted_response['chiefComplaint']) if formatted_response['chiefComplaint'] else 0}, value: '{formatted_response['chiefComplaint'][:100] if formatted_response['chiefComplaint'] else '(empty)'}'")
-        print(f"  historyOfPresentIllness length: {len(formatted_response['historyOfPresentIllness']) if formatted_response['historyOfPresentIllness'] else 0}, value: '{formatted_response['historyOfPresentIllness'][:100] if formatted_response['historyOfPresentIllness'] else '(empty)'}'")
-        print(f"  physicalExamination length: {len(formatted_response['physicalExamination']) if formatted_response['physicalExamination'] else 0}, value: '{formatted_response['physicalExamination'][:100] if formatted_response['physicalExamination'] else '(empty)'}'")
-        print(f"  diagnosis length: {len(formatted_response['diagnosis']) if formatted_response['diagnosis'] else 0}, preview: '{formatted_response['diagnosis'][:100] if formatted_response['diagnosis'] else '(empty)'}'")
-        print(f"  treatmentPlan length: {len(formatted_response['treatmentPlan']) if formatted_response['treatmentPlan'] else 0}, preview: '{formatted_response['treatmentPlan'][:100] if formatted_response['treatmentPlan'] else '(empty)'}'")
         print(f"  reportData keys: {list(formatted_response.get('reportData', {}).keys()) if isinstance(formatted_response.get('reportData'), dict) else 'NOT A DICT'}")
         print(f"  reportData sample values:")
         if isinstance(formatted_response.get('reportData'), dict):
             report_data = formatted_response.get('reportData')
+            print(f"    - has summary (-> additionalNotes): {bool(report_data.get('summary'))}, len={len(report_data.get('summary') or '')}")
             print(f"    - has hpi: {bool(report_data.get('hpi'))}")
             print(f"    - has assessment: {bool(report_data.get('assessment'))}")
             print(f"    - has plan: {bool(report_data.get('plan'))}")
-            print(f"    - has diagnosis: {bool(report_data.get('diagnosis'))}")
             print(f"    - has chief_complaint: {bool(report_data.get('chief_complaint'))}")
         
         return SuccessResponse(

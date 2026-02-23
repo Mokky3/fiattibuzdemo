@@ -29,7 +29,7 @@ class NotificationService:
         }
         
         self.sms_config = {
-            "provider": os.getenv("SMS_PROVIDER", "twilio"),  # twilio, sms_ru, etc.
+            "provider": os.getenv("SMS_PROVIDER", "eskiz"),  # eskiz, twilio, sms_ru, etc.
             "api_key": os.getenv("SMS_API_KEY"),
             "api_secret": os.getenv("SMS_API_SECRET"),
             "from_number": os.getenv("SMS_FROM_NUMBER")
@@ -117,7 +117,9 @@ class NotificationService:
             # Generate SMS content
             sms_content = self._generate_sms_template(invitation, invitation_link)
             
-            if self.sms_config['provider'] == 'twilio':
+            if self.sms_config['provider'] == 'eskiz':
+                return await self._send_eskiz_sms(invitation.contact, sms_content)
+            elif self.sms_config['provider'] == 'twilio':
                 return await self._send_twilio_sms(invitation.contact, sms_content)
             elif self.sms_config['provider'] == 'sms_ru':
                 return await self._send_sms_ru_sms(invitation.contact, sms_content)
@@ -126,6 +128,25 @@ class NotificationService:
         
         except Exception as e:
             logger.error(f"Failed to send SMS to {invitation.contact}: {str(e)}")
+            raise
+    
+    async def _send_eskiz_sms(self, phone: str, content: str) -> Dict[str, Any]:
+        """Send SMS via Eskiz.uz gateway"""
+        try:
+            from app.services.sms_notification_service import sms_notification_service
+            
+            success = await sms_notification_service.send_sms(phone, content)
+            
+            return {
+                "success": success,
+                "notification_type": "SMS",
+                "notification_provider": "ESKIZ",
+                "notification_id": f"eskiz_{datetime.now().timestamp()}",
+                "sent_at": datetime.now(timezone.utc).isoformat()
+            }
+        
+        except Exception as e:
+            logger.error(f"Eskiz SMS failed: {str(e)}")
             raise
     
     async def _send_twilio_sms(self, phone: str, content: str) -> Dict[str, Any]:

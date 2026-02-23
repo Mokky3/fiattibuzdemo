@@ -203,6 +203,10 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Project-specific database files
+ehr.db
+*.db
+
 # Flask stuff:
 instance/
 .webassets-cache
@@ -306,6 +310,14 @@ poetry.toml
 
 # ruff
 .ruff_cache/
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Runtime uploads
+backend/uploads/
+backend/backups/
 
 # LSP config files
 pyrightconfig.json

@@ -1,10 +1,17 @@
 {
   "Name": "Orthanc",
   "StorageDirectory": "/var/lib/orthanc/db",
-  "Plugins": ["/usr/share/orthanc/plugins"],
+  "Plugins": ["/usr/local/share/orthanc/plugins"],
   "DicomWeb": {
     "Enable": true,
-    "Root": "/dicom-web/"
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado",
+    "Host": "0.0.0.0",
+    "Ssl": false,
+    "StowMaxInstances": 10,
+    "StowMaxSize": 10,
+    "QidoCaseSensitive": false
   },
   "RemoteAccessAllowed": true,
   "AuthenticationEnabled": false

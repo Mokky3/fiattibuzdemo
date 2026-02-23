@@ -27,4 +27,8 @@ psycopg2-binary==2.9.10
 alembic==1.13.1
 requests==2.31.0
 fpdf2==2.7.6
+pydicom==2.4.4
+google-cloud-storage==2.14.0
+unstructured[pdf,docx]==0.15.0
+openai>=1.0.0
 

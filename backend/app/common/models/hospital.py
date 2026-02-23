@@ -76,7 +76,15 @@ class Hospital(Base):
     email = Column(String(255), nullable=True)
     logo_url = Column(String(500), nullable=True)  # URL to clinic logo
     is_active = Column(Boolean, default=True)
+    
+    # Additional information
+    description = Column(Text, nullable=True)  # Hospital description
+    established_date = Column(Date, nullable=True)  # Date when hospital was established
+    license_number = Column(String(100), nullable=True)  # License number
+    accreditation = Column(String(200), nullable=True)  # Accreditation status
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships (simplified - only essential ones to avoid circular dependencies)
     users = relationship("User", back_populates="organization", foreign_keys="User.organization_id")

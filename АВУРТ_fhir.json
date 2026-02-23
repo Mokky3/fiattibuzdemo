@@ -1,0 +1,412 @@
+{
+  "resourceType": "Bundle",
+  "id": "a1b2c3d4-e5f6-7g8h-9i0j-k1l2m3n4o5p6",
+  "type": "transaction",
+  "timestamp": "2023-10-01T12:00:00Z",
+  "entry": [
+    {
+      "fullUrl": "urn:uuid:patient-id",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-id",
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">История болезни Дата рождения 24.07.1966</div>"
+        },
+        "birthDate": "1966-07-24"
+      },
+      "request": {
+        "method": "POST",
+        "url": "Patient"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:procedure-id-1",
+      "resource": {
+        "resourceType": "Procedure",
+        "id": "procedure-id-1",
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "257610000",
+              "display": "Electrophysiological study"
+            }
+          ],
+          "text": "Electrophysiological study (EPS) and radiofrequency ablation of slow pathways"
+        },
+        "subject": {
+          "reference": "urn:uuid:patient-id"
+        },
+        "performedDateTime": "2023-07-24",
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Дата Процедура /исследование/ 24.07.2023 | Электрофизиологическое исследование (ЭФИ) и радиочастотная аблация ‘медленных путей’? АВ- соединения.</div>"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-id-1",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-id-1",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8867-4",
+              "display": "Heart Rate"
+            }
+          ],
+          "text": "Heart Rate"
+        },
+        "subject": {
+          "reference": "urn:uuid:patient-id"
+        },
+        "valueQuantity": {
+          "value": 70,
+          "unit": "beats/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "{beats}/min"
+        },
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Исходно регистрируется синусовый ритм с ЧСС 70 уд в мин.</div>"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-id-2",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-id-2",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8885-8",
+              "display": "Wenckebach point"
+            }
+          ],
+          "text": "Wenckebach point retrograde"
+        },
+        "subject": {
+          "reference": "urn:uuid:patient-id"
+        },
+        "valueQuantity": {
+          "value": 140,
+          "unit": "beats/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "{beats}/min"
+        },
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Ретроградная точка Венкебаха =140 уд в мин.</div>"
+        },
+        "partOf": {
+          "reference": "urn:uuid:procedure-id-1"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-id-3",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-id-3",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "8885-8",
+              "display": "Wenckebach point"
+            }
+          ],
+          "text": "Wenckebach point anterograde"
+        },
+        "subject": {
+          "reference": "urn:uuid:patient-id"
+        },
+        "valueQuantity": {
+          "value": 190,
+          "unit": "beats/min",
+          "system": "http://unitsofmeasure.org",
+          "code": "{beats}/min"
+        },
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Антеградная точка Венкебаха = 190 уд в мин.</div>"
+        },
+        "partOf": {
+          "reference": "urn:uuid:procedure-id-1"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-id-4",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-id-4",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34551-2",
+              "display": "Electrical interval"
+            }
+          ],
+          "text": "RERP AVU"
+        },
+        "subject": {
+          "reference": "urn:uuid:patient-id"
+        },
+        "valueQuantity": {
+          "value": 280,
+          "unit": "ms",
+          "system": "http://unitsofmeasure.org",
+          "code": "ms"
+        },
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">РЭРП АВУ = 280(120) мсек.</div>"
+        },
+        "partOf": {
+          "reference": "urn:uuid:procedure-id-1"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:observation-id-5",
+      "resource": {
+        "resourceType": "Observation",
+        "id": "observation-id-5",
+        "status": "final",
+        "code": {
+          "coding": [
+            {
+              "system": "http://loinc.org",
+              "code": "34551-2",
+              "display": "Electrical interval"
+            }
+          ],
+          "text": "AERP AVU"
+        },
+        "subject": {
+          "reference": "urn:uuid:patient-id"
+        },
+        "valueQuantity": {
+          "value": 200,
+          "unit": "ms",
+          "system": "http://unitsofmeasure.org",
+          "code": "ms"
+        },
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">АЭРП АВУ = 200(120) мсек.</div>"
+        },
+        "partOf": {
+          "reference": "urn:uuid:procedure-id-1"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "Observation"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:procedure-id-2",
+      "resource": {
+        "resourceType": "Procedure",
+        "id": "procedure-id-2",
+        "status": "completed",
+        "code": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "447432005",
+              "display": "Radiofrequency ablation"
+            }
+          ],
+          "text": "Radiofrequency ablation"
+        },
+        "subject": {
+          "reference": "urn:uuid:patient-id"
+        },
+        "performedDateTime": "2023-07-24",
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">С помощью картирующего-аблационного электрода в LAO=30° выполнена модификация АВ узлового проведения: выполнено 3 эффективных воздействия в правой среднесептальной области с параметрами: P = 30-40 Wt; t = 50-55°C; I = 95-110 Ohm и длительностью по 60 сек.</div>"
+        },
+        "request": {
+          "method": "POST",
+          "url": "Procedure"
+        },
+        "partOf": {
+          "reference": "urn:uuid:procedure-id-1"
+        },
+        "component": [
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://unitsofmeasure.org",
+                  "code": "W",
+                  "display": "Watts"
+                }
+              ],
+              "text": "Power"
+            },
+            "valueQuantity": {
+              "value": 30,
+              "unit": "W",
+              "system": "http://unitsofmeasure.org",
+              "code": "W"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://unitsofmeasure.org",
+                  "code": "Cel",
+                  "display": "Celsius"
+                }
+              ],
+              "text": "Temperature"
+            },
+            "valueQuantity": {
+              "value": 55,
+              "unit": "Cel",
+              "system": "http://unitsofmeasure.org",
+              "code": "Cel"
+            }
+          },
+          {
+            "code": {
+              "coding": [
+                {
+                  "system": "http://unitsofmeasure.org",
+                  "code": "Ohm",
+                  "display": "Ohms"
+                }
+              ],
+              "text": "Impedance"
+            },
+            "valueQuantity": {
+              "value": 110,
+              "unit": "Ohm",
+              "system": "http://unitsofmeasure.org",
+              "code": "Ohm"
+            }
+          }
+        ]
+      },
+      "request": {
+        "method": "POST",
+        "url": "Procedure"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:medication-admin-id-1",
+      "resource": {
+        "resourceType": "MedicationAdministration",
+        "id": "medication-admin-id-1",
+        "status": "completed",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "1191",
+              "display": "Atropine"
+            }
+          ],
+          "text": "Atropine (Atropine)"
+        },
+        "subject": {
+          "reference": "urn:uuid:patient-id"
+        },
+        "dosage": {
+          "text": "0.1%-0.5 ml"
+        },
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Далее введено Атропин 0,1%-0,5 мл и проведено контрольное ЭФИ:</div>"
+        },
+        "request": {
+          "method": "POST",
+          "url": "MedicationAdministration"
+        },
+        "partOf": {
+          "reference": "urn:uuid:procedure-id-1"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "MedicationAdministration"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:medication-admin-id-2",
+      "resource": {
+        "resourceType": "MedicationAdministration",
+        "id": "medication-admin-id-2",
+        "status": "completed",
+        "medicationCodeableConcept": {
+          "coding": [
+            {
+              "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+              "code": "8554",
+              "display": "Procaine"
+            }
+          ],
+          "text": "Novocain (Procaine)"
+        },
+        "subject": {
+          "reference": "urn:uuid:patient-id"
+        },
+        "dosage": {
+          "text": "0.5 ml"
+        },
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\">Сначала операционная поля (место пункции) обработано с бетадином и спиртом. Далее под местной анестезией Sol.Novocaini 0,5% - 20,0 мл по методике Сельдингера с помощью иглы дважды пропунктирована правая бедренная вена.</div>"
+        },
+        "request": {
+          "method": "POST",
+          "url": "MedicationAdministration"
+        },
+        "partOf": {
+          "reference": "urn:uuid:procedure-id-1"
+        }
+      },
+      "request": {
+        "method": "POST",
+        "url": "MedicationAdministration"
+      }
+    }
+  ]
+}

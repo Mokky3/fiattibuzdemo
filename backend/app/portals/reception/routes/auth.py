@@ -1,12 +1,15 @@
 """Secure Reception Portal Authentication
 Implements real authentication and authorization for reception portal
 """
+import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from uuid import uuid4
 
+logger = logging.getLogger(__name__)
+
 from fastapi import APIRouter, Depends, HTTPException, Body, Query, status, Request
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, root_validator
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -46,8 +49,8 @@ class ReceptionDashboardStats(BaseModel):
 class PatientRegistration(BaseModel):
     first_name: str = Field(..., min_length=2, max_length=50, description="First name")
     last_name: str = Field(..., min_length=2, max_length=50, description="Last name")
-    email: EmailStr = Field(..., description="Email address")
-    phone: str = Field(..., description="Phone number")
+    email: Optional[EmailStr] = Field(None, description="Email address")
+    phone: Optional[str] = Field(None, description="Phone number")
     date_of_birth: str = Field(..., description="Date of birth (YYYY-MM-DD)")
     gender: str = Field(..., description="Gender")
     address: Optional[str] = Field(None, description="Address")
@@ -55,6 +58,23 @@ class PatientRegistration(BaseModel):
     emergency_contact_phone: Optional[str] = Field(None, description="Emergency contact phone")
     insurance_provider: Optional[str] = Field(None, description="Insurance provider")
     insurance_number: Optional[str] = Field(None, description="Insurance number")
+    
+    @root_validator(skip_on_failure=True)
+    def validate_contact_info(cls, values):
+        """Ensure at least one of email or phone is provided."""
+        email = values.get('email')
+        phone = values.get('phone')
+        
+        # Normalize empty strings to None
+        if email and isinstance(email, str) and email.strip() == '':
+            email = None
+        if phone and isinstance(phone, str) and phone.strip() == '':
+            phone = None
+        
+        if not email and not phone:
+            raise ValueError('Either email or phone number must be provided')
+        
+        return values
 
 class AppointmentBooking(BaseModel):
     patient_id: str = Field(..., description="Patient ID")
@@ -179,17 +199,32 @@ async def register_patient(
             current_user, ResourceType.PATIENT, ActionType.CREATE, current_user.clinic_id
         )
         
-        # Check if patient already exists
-        existing_patient = patient_crud.get_by_email(db=db, email=patient_data.email)
-        if existing_patient:
-            problem = create_problem_detail(
-                error_type=ErrorType.CONFLICT_ERROR,
-                title="Patient Already Exists",
-                status=409,
-                detail=f"Patient with email '{patient_data.email}' already exists",
-                trace_id=get_trace_id()
-            )
-            raise HTTPException(status_code=409, detail=problem.dict())
+        # Check if patient already exists (by email if provided, or by phone)
+        existing_patient = None
+        if patient_data.email:
+            existing_patient = patient_crud.get_by_email(db=db, email=patient_data.email)
+            if existing_patient:
+                problem = create_problem_detail(
+                    error_type=ErrorType.CONFLICT_ERROR,
+                    title="Patient Already Exists",
+                    status=409,
+                    detail=f"Patient with email '{patient_data.email}' already exists",
+                    trace_id=get_trace_id()
+                )
+                raise HTTPException(status_code=409, detail=problem.dict())
+        
+        # Also check by phone if email check didn't find a match
+        if not existing_patient and patient_data.phone:
+            existing_patient = db.query(Patient).filter(Patient.phone == patient_data.phone).first()
+            if existing_patient:
+                problem = create_problem_detail(
+                    error_type=ErrorType.CONFLICT_ERROR,
+                    title="Patient Already Exists",
+                    status=409,
+                    detail=f"Patient with phone number '{patient_data.phone}' already exists",
+                    trace_id=get_trace_id()
+                )
+                raise HTTPException(status_code=409, detail=problem.dict())
         
         # Create patient
         from app.common.schemas.patient_enhanced import PatientCreate
@@ -221,10 +256,24 @@ async def register_patient(
             affected_resource_type="patient",
             metadata={
                 "patient_email": patient_data.email,
+                "patient_phone": patient_data.phone,
                 "clinic_id": current_user.clinic_id,
                 "patient_name": f"{patient_data.first_name} {patient_data.last_name}"
             }
         )
+        
+        # Send profile creation notification
+        try:
+            from app.common.services.notification_service import send_profile_creation_notification
+            patient_name = f"{patient_data.first_name} {patient_data.last_name}"
+            await send_profile_creation_notification(
+                phone_number=patient_data.phone,
+                email=patient_data.email,
+                patient_name=patient_name
+            )
+        except Exception as e:
+            # Log error but don't fail registration
+            logger.error(f"Failed to send profile creation notification: {str(e)}")
         
         return SuccessResponse(
             data={"patient_id": str(patient.id), "status": "registered"},

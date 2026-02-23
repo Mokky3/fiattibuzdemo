@@ -9,7 +9,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException, Path, Body, status, Query
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, desc
+from sqlalchemy import or_, desc, func, String
 
 from .auth import get_current_doctor, DoctorUser
 from app.common.schemas.responses_enhanced import SuccessResponse
@@ -156,42 +156,119 @@ async def search_patients(
         from uuid import UUID
         
         doctor_user = db.query(User).filter(User.id == current.id).first()
-        if not doctor_user or not doctor_user.organization_id:
-            # If no clinic, return empty results
-            return []
+        clinic_uuid = None
+        if doctor_user and doctor_user.organization_id:
+            clinic_uuid = UUID(str(doctor_user.organization_id)) if isinstance(doctor_user.organization_id, str) else doctor_user.organization_id
+            print(f"DEBUG: Doctor's clinic: {clinic_uuid}")
+        else:
+            print(f"DEBUG: Doctor has no clinic association - will search all patients")
         
-        clinic_uuid = UUID(str(doctor_user.organization_id)) if isinstance(doctor_user.organization_id, str) else doctor_user.organization_id
-        
-        # Simple, safe patient search with User join and organization_patients filter
-        # Build search filters
+        # Simple, safe patient search with User join
+        # Build search filters - make search case-insensitive and more flexible
         like = f"%{q}%"
+        q_lower = q.lower()
         
-        # Base query with User join, organization_patients filter, and relationship loading
-        query = db.query(PatientORM).join(
-            OrganizationPatient, PatientORM.patient_id == OrganizationPatient.patient_id
-        ).join(
-            UserORM, PatientORM.user_id == UserORM.id
-        ).filter(
-            OrganizationPatient.organization_id == clinic_uuid,
-            OrganizationPatient.status == "active"
-        ).options(joinedload(PatientORM.user))
+        # Base query with User join and relationship loading
+        # For appointment creation, we want to show all patients, not just clinic patients
+        # But prioritize clinic patients if doctor has a clinic
+        # Note: We only search patients that have a user_id (where name/email data is stored)
+        if clinic_uuid:
+            # First try to find patients in the clinic
+            query = db.query(PatientORM).join(
+                OrganizationPatient, PatientORM.patient_id == OrganizationPatient.patient_id
+            ).join(
+                UserORM, PatientORM.user_id == UserORM.id
+            ).filter(
+                OrganizationPatient.organization_id == clinic_uuid,
+                OrganizationPatient.status == "active"
+            ).options(joinedload(PatientORM.user))
+        else:
+            # No clinic, search all patients that have a user_id
+            query = db.query(PatientORM).join(
+                UserORM, PatientORM.user_id == UserORM.id
+            ).options(joinedload(PatientORM.user))
         
         # Add search filters - search in User table for names and email
-        query = query.filter(
-            or_(
-                UserORM.first_name.ilike(like),
-                UserORM.last_name.ilike(like),
-                UserORM.full_name.ilike(like),
-                UserORM.email.ilike(like),
-                UserORM.phone.ilike(like),
-                PatientORM.phone.ilike(like),
-            )
-        )
+        # Use concatenated full name for better matching
+        search_filters = [
+            UserORM.first_name.ilike(like),
+            UserORM.last_name.ilike(like),
+            UserORM.full_name.ilike(like),
+            # Search in concatenated first_name + last_name
+            func.concat(UserORM.first_name, ' ', UserORM.last_name).ilike(like),
+            func.concat(UserORM.last_name, ' ', UserORM.first_name).ilike(like),
+            UserORM.email.ilike(like),
+            UserORM.phone.ilike(like),
+            PatientORM.phone.ilike(like),
+        ]
         
-        # Order and limit
-        results = query.order_by(UserORM.last_name.asc(), UserORM.first_name.asc()).distinct().limit(limit).all()
+        # Also search by patient_id if query looks like UUID (8+ chars)
+        if len(q) >= 8:
+            try:
+                # Try to match as UUID
+                search_filters.append(func.cast(PatientORM.patient_id, String).ilike(like))
+            except:
+                pass
         
-        print(f"DEBUG: Found {len(results)} patients")
+        query = query.filter(or_(*search_filters))
+        
+        # Order and limit - use distinct on patient_id to avoid duplicates
+        # PostgreSQL requires ORDER BY columns to be in SELECT when using DISTINCT
+        # So we order by patient_id first, then apply distinct, then sort in Python
+        results = query.order_by(PatientORM.patient_id).distinct(PatientORM.patient_id).limit(limit * 2).all()
+        
+        # Sort results by name in Python (since we can't do it in SQL with DISTINCT)
+        results = sorted(results, key=lambda p: (
+            (p.user.last_name or '') if p.user else '',
+            (p.user.first_name or '') if p.user else ''
+        ))[:limit]
+        
+        print(f"DEBUG: Found {len(results)} patients matching query '{q}' in clinic")
+        
+        # If no results in clinic, search all patients (for appointment creation flexibility)
+        if len(results) == 0 and clinic_uuid:
+            print(f"DEBUG: No patients found in clinic, searching all patients...")
+            # Search all patients without clinic filter, using the same search filters
+            all_patients_query = db.query(PatientORM).join(
+                UserORM, PatientORM.user_id == UserORM.id
+            ).filter(
+                or_(*search_filters)
+            ).options(joinedload(PatientORM.user)).order_by(
+                PatientORM.patient_id
+            ).distinct(PatientORM.patient_id).limit(limit * 2).all()
+            
+            # Sort by name in Python
+            all_patients_query = sorted(all_patients_query, key=lambda p: (
+                (p.user.last_name or '') if p.user else '',
+                (p.user.first_name or '') if p.user else ''
+            ))[:limit]
+            
+            print(f"DEBUG: Found {len(all_patients_query)} patients matching '{q}' (all patients)")
+            results = all_patients_query
+        
+        # Additional debug: check total patients in database
+        try:
+            total_patients = db.query(PatientORM).count()
+            print(f"DEBUG: Total patients in database: {total_patients}")
+            
+            # Check if any patients have user_id
+            patients_with_user = db.query(PatientORM).filter(PatientORM.user_id.isnot(None)).count()
+            print(f"DEBUG: Patients with user_id: {patients_with_user}")
+            
+            # Check if any users match the search (for debugging)
+            matching_users = db.query(UserORM).filter(
+                or_(
+                    UserORM.first_name.ilike(like),
+                    UserORM.last_name.ilike(like),
+                    UserORM.full_name.ilike(like),
+                    UserORM.email.ilike(like),
+                )
+            ).limit(5).all()
+            print(f"DEBUG: Found {len(matching_users)} users matching '{q}'")
+            for u in matching_users:
+                print(f"DEBUG:   - User: {u.first_name} {u.last_name} (ID: {u.id}, Email: {u.email})")
+        except Exception as debug_error:
+            print(f"DEBUG: Error in debug queries: {debug_error}")
         
         # Transform to response format
         search_results = []
@@ -211,6 +288,8 @@ async def search_patients(
                 })
             except Exception as patient_error:
                 print(f"DEBUG: Error processing patient {patient.patient_id}: {patient_error}")
+                import traceback
+                traceback.print_exc()
                 continue
         
         print(f"DEBUG: Transformed {len(search_results)} patients")
@@ -220,10 +299,11 @@ async def search_patients(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"DEBUG: Critical error in patient search: {e}")
+        print(f"ERROR: Critical error in patient search: {e}")
         import traceback
         traceback.print_exc()
-        # Return empty results instead of crashing
+        # Log the error but still return empty results
+        # In production, you might want to raise HTTPException here
         return []
 
 
@@ -233,13 +313,212 @@ async def get_patient(
     current: DoctorUser = Depends(get_current_doctor),
     db: Session = Depends(get_db)
 ):
+    # Get doctor's clinic and doctor_id
+    from app.common.models.user import User
+    from app.common.models.patient import OrganizationPatient
+    from app.common.models.doctor import Doctor
+    
+    doctor_user = db.query(User).filter(User.id == current.id).first()
+    if not doctor_user:
+        raise HTTPException(status_code=404, detail="Doctor not found")
+    
+    # Get doctor profile to get doctor_id
+    doctor_profile = db.query(Doctor).filter(Doctor.user_id == current.id).first()
+    doctor_id = doctor_profile.id if doctor_profile else None
+    
     # Get patient with user data using proper ORM models
-    p = db.query(PatientORM).join(UserORM, PatientORM.user_id == UserORM.id).options(
+    # Since the patient is searchable, it should have a user_id
+    # Use the same query pattern as search to ensure consistency
+    print(f"DEBUG: [get_patient] Looking for patient_id: {patient_id} (type: {type(patient_id)})")
+    
+    # Try query with user join (same as search) - this is how searchable patients are found
+    print(f"DEBUG: [get_patient] Querying PatientORM with user join")
+    p = db.query(PatientORM).join(
+        UserORM, PatientORM.user_id == UserORM.id
+    ).options(
         joinedload(PatientORM.user)
-    ).filter(PatientORM.patient_id == str(patient_id)).first()
+    ).filter(PatientORM.patient_id == patient_id).first()
+    print(f"DEBUG: [get_patient] Query with user join result: {p is not None}")
+    
+    # If not found with user join, try without join (for patients without user accounts)
+    if not p:
+        print(f"DEBUG: [get_patient] Patient not found with user join, trying without join")
+        p = db.query(PatientORM).filter(PatientORM.patient_id == patient_id).first()
+        print(f"DEBUG: [get_patient] Query without join result: {p is not None}")
+    
+    # Also try with cast to string (in case of UUID type issues)
+    if not p:
+        print(f"DEBUG: [get_patient] Trying cast to string query")
+        try:
+            from sqlalchemy import cast, String
+            p = db.query(PatientORM).join(
+                UserORM, PatientORM.user_id == UserORM.id
+            ).options(
+                joinedload(PatientORM.user)
+            ).filter(cast(PatientORM.patient_id, String) == str(patient_id)).first()
+            print(f"DEBUG: [get_patient] Cast query result: {p is not None}")
+        except Exception as e:
+            print(f"DEBUG: [get_patient] Cast query error: {e}")
+            pass
+    
+    # If still not found, maybe patient_id is actually a user_id
+    if not p:
+        print(f"DEBUG: [get_patient] Trying to find patient by user_id={patient_id}")
+        p = db.query(PatientORM).join(
+            UserORM, PatientORM.user_id == UserORM.id
+        ).options(
+            joinedload(PatientORM.user)
+        ).filter(PatientORM.user_id == patient_id).first()
+        if p:
+            print(f"DEBUG: [get_patient] Found patient by user_id: {p.patient_id}")
+    
+    if p:
+        print(f"DEBUG: [get_patient] Patient found: {p.patient_id}, user_id: {p.user_id}")
     
     if not p:
-        raise HTTPException(status_code=404, detail="Patient not found")
+        print(f"DEBUG: [get_patient] Patient {patient_id} not found in database")
+        print(f"DEBUG: [get_patient] doctor_id: {doctor_id}")
+        
+        # Check if doctor has an appointment with this patient_id
+        # If so, the patient might not exist yet, but we should still allow access
+        # and return minimal patient info
+        if doctor_id:
+            print(f"DEBUG: [get_patient] Checking for appointment with patient_id={patient_id}, doctor_id={doctor_id}")
+            # Try to find appointment with this patient_id
+            appointment = db.query(AppointmentORM).filter(
+                AppointmentORM.patient_id == patient_id,
+                AppointmentORM.doctor_id == doctor_id
+            ).first()
+            print(f"DEBUG: [get_patient] Appointment found: {appointment is not None}")
+            
+            # If not found, try to find ANY appointment with this doctor to see what patient_ids exist
+            if not appointment:
+                print(f"DEBUG: [get_patient] No appointment found, checking all appointments for this doctor")
+                all_appointments = db.query(AppointmentORM).filter(
+                    AppointmentORM.doctor_id == doctor_id
+                ).limit(10).all()
+                print(f"DEBUG: [get_patient] Total appointments for doctor: {len(all_appointments)}")
+                print(f"DEBUG: [get_patient] Sample appointment patient_ids: {[str(a.patient_id) for a in all_appointments]}")
+                print(f"DEBUG: [get_patient] Looking for patient_id: {patient_id}")
+                # Check if any appointment has a patient that matches by user_id
+                # OR if the passed patient_id is actually a user_id that matches an appointment's patient's user_id
+                for apt in all_appointments:
+                    print(f"DEBUG: [get_patient] Checking appointment: id={apt.id}, patient_id={apt.patient_id}")
+                    # Try to find patient by the appointment's patient_id
+                    apt_patient = db.query(PatientORM).filter(PatientORM.patient_id == apt.patient_id).first()
+                    if apt_patient:
+                        print(f"DEBUG: [get_patient] Appointment patient found: patient_id={apt_patient.patient_id}, user_id={apt_patient.user_id}")
+                        # Check if the passed patient_id matches this patient's user_id
+                        if apt_patient.user_id == patient_id:
+                            print(f"DEBUG: [get_patient] Found patient via appointment user_id match! appointment.patient_id={apt.patient_id}, patient.user_id={apt_patient.user_id}")
+                            p = apt_patient
+                            # Load user relationship
+                            if p.user_id:
+                                p = db.query(PatientORM).join(
+                                    UserORM, PatientORM.user_id == UserORM.id
+                                ).options(
+                                    joinedload(PatientORM.user)
+                                ).filter(PatientORM.patient_id == p.patient_id).first()
+                            break
+                        # Also check if the passed patient_id matches the appointment's patient_id directly
+                        elif apt.patient_id == patient_id:
+                            print(f"DEBUG: [get_patient] Found patient via appointment patient_id match! appointment.patient_id={apt.patient_id}")
+                            p = apt_patient
+                            # Load user relationship
+                            if p.user_id:
+                                p = db.query(PatientORM).join(
+                                    UserORM, PatientORM.user_id == UserORM.id
+                                ).options(
+                                    joinedload(PatientORM.user)
+                                ).filter(PatientORM.patient_id == p.patient_id).first()
+                            break
+                    else:
+                        print(f"DEBUG: [get_patient] No patient found for appointment patient_id={apt.patient_id}")
+            
+            if appointment:
+                print(f"DEBUG: [get_patient] Appointment patient_id: {appointment.patient_id}, doctor_id: {appointment.doctor_id}")
+            
+            if appointment:
+                print(f"DEBUG: [get_patient] Patient not found but doctor has appointment - creating minimal patient record")
+                # Patient doesn't exist but doctor has appointment - create minimal patient
+                # This can happen when appointments are created before patient records
+                try:
+                    from datetime import datetime
+                    p = PatientORM(
+                        patient_id=patient_id,
+                        user_id=None,  # No user account yet
+                        created_at=datetime.utcnow(),
+                        updated_at=datetime.utcnow()
+                    )
+                    db.add(p)
+                    db.commit()
+                    db.refresh(p)
+                    print(f"DEBUG: [get_patient] Created minimal patient record: {p.patient_id}")
+                except Exception as create_error:
+                    print(f"DEBUG: [get_patient] Error creating patient: {create_error}")
+                    import traceback
+                    traceback.print_exc()
+                    db.rollback()
+                    # Don't fail - try to find patient by user_id instead
+                    # Maybe the appointment's patient_id is actually a user_id
+                    print(f"DEBUG: [get_patient] Trying to find patient by user_id={patient_id}")
+                    p = db.query(PatientORM).filter(PatientORM.user_id == patient_id).first()
+                    if not p:
+                        raise HTTPException(status_code=500, detail=f"Failed to create patient record: {str(create_error)}")
+        else:
+            print(f"DEBUG: [get_patient] No doctor_id, cannot check appointments")
+        
+        # If still not found, check if patient_id is actually a user_id
+        if not p:
+            print(f"DEBUG: [get_patient] Trying to find patient by user_id={patient_id}")
+            p = db.query(PatientORM).filter(PatientORM.user_id == patient_id).first()
+            if p:
+                print(f"DEBUG: [get_patient] Found patient by user_id: {p.patient_id}")
+        
+        # If still not found, raise error
+        if not p:
+            # Check if any patient exists with similar ID
+            all_patients = db.query(PatientORM).limit(5).all()
+            print(f"DEBUG: [get_patient] Sample patient IDs in DB: {[str(p.patient_id) for p in all_patients]}")
+            raise HTTPException(status_code=404, detail="Patient not found")
+    
+    print(f"DEBUG: [get_patient] Found patient: {p.patient_id}, user_id: {p.user_id}")
+    
+    # Verify patient is accessible to this doctor:
+    # 1. Patient is in doctor's clinic, OR
+    # 2. Doctor has an appointment with this patient
+    clinic_uuid = None
+    has_access = False
+    
+    if doctor_user.organization_id:
+        clinic_uuid = UUID(str(doctor_user.organization_id)) if isinstance(doctor_user.organization_id, str) else doctor_user.organization_id
+        
+        # Check if patient is in doctor's clinic
+        org_patient = db.query(OrganizationPatient).filter(
+            OrganizationPatient.patient_id == patient_id,
+            OrganizationPatient.organization_id == clinic_uuid,
+            OrganizationPatient.status == "active"
+        ).first()
+        
+        if org_patient:
+            # Patient is in clinic, allow access
+            has_access = True
+            print(f"DEBUG: [get_patient] Patient is in doctor's clinic")
+    
+    # Check if doctor has an appointment with this patient (even if not in clinic)
+    if not has_access and doctor_id:
+        appointment = db.query(AppointmentORM).filter(
+            AppointmentORM.patient_id == patient_id,
+            AppointmentORM.doctor_id == doctor_id
+        ).first()
+        
+        if appointment:
+            has_access = True
+            print(f"DEBUG: [get_patient] Doctor has appointment with patient")
+    
+    if not has_access:
+        print(f"DEBUG: [get_patient] Patient not accessible - no clinic association and no appointment")
+        raise HTTPException(status_code=403, detail="Patient not accessible to this doctor")
     
     user = p.user if hasattr(p, 'user') else None
     
@@ -257,21 +536,20 @@ async def get_patient(
         patient_id_str = str(patient_id)
         patient_id_uuid = UUID(patient_id_str) if isinstance(patient_id, str) else patient_id
         
-        logger.info(f"🔍 [get_patient] Querying vitals for patient_id: {patient_id_str} (UUID: {patient_id_uuid})")
+        logger.info("[get_patient] Querying vitals for patient_id: %s (UUID: %s)", patient_id_str, patient_id_uuid)
         
-        # Query latest vital signs for height, weight, BMI, and recorded_at
-        # Get the most recent vital sign that has height or weight (BMI can be calculated)
+        # Query latest vital signs for height, weight, BMI, and measured_at (table has measured_at, not recorded_at)
         vitals_sql = text("""
-            SELECT height, weight, bmi, recorded_at, created_at
+            SELECT height, weight, bmi, measured_at, created_at
             FROM ehr.vital_signs
             WHERE patient_id = :patient_id
             AND (height IS NOT NULL OR weight IS NOT NULL)
-            ORDER BY recorded_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+            ORDER BY measured_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
             LIMIT 1
         """)
         try:
             vitals_result = db.execute(vitals_sql, {"patient_id": patient_id_uuid}).first()
-            logger.info(f"🔍 [get_patient] Vitals query result (UUID): {vitals_result}")
+            logger.info("[get_patient] Vitals query result (UUID): %s", vitals_result)
             if vitals_result:
                 height_val = vitals_result[0]
                 weight_val = vitals_result[1]
@@ -287,38 +565,40 @@ async def get_patient(
                         weight_kg = float(weight_val)
                         if height_m > 0:
                             bmi_val = round(weight_kg / (height_m * height_m), 1)
-                            logger.info(f"🔍 [get_patient] Calculated BMI on retrieval: {bmi_val} (height={height_val}cm, weight={weight_val}kg)")
+                            logger.info("[get_patient] Calculated BMI on retrieval: %s (height=%scm, weight=%skg)", bmi_val, height_val, weight_val)
                     except (ValueError, TypeError, ZeroDivisionError) as e:
-                        logger.warning(f"🔍 [get_patient] Could not calculate BMI: {e}")
+                        logger.warning("[get_patient] Could not calculate BMI: %s", e)
                         bmi_val = None
                 
                 bmi = str(bmi_val) if bmi_val is not None else None
                 
-                # Get the measurement date (prefer recorded_at, fallback to created_at)
-                recorded_at = vitals_result[3] if len(vitals_result) > 3 else None
-                created_at = vitals_result[4] if len(vitals_result) > 4 else None
-                last_measured = recorded_at or created_at
+                # Get the measurement date (prefer measured_at, fallback to created_at)
+                measured_at_val = vitals_result[3] if len(vitals_result) > 3 else None
+                created_at_val = vitals_result[4] if len(vitals_result) > 4 else None
+                last_measured = measured_at_val or created_at_val
                 if last_measured:
-                    # Convert to ISO format string
                     if hasattr(last_measured, 'isoformat'):
                         last_measured = last_measured.isoformat()
                     else:
                         last_measured = str(last_measured)
-                logger.info(f"🔍 [get_patient] Extracted: height={height}, weight={weight}, bmi={bmi}, last_measured={last_measured}")
+                logger.info("[get_patient] Extracted: height=%s, weight=%s, bmi=%s, last_measured=%s", height, weight, bmi, last_measured)
         except Exception as e1:
-            logger.warning(f"🔍 [get_patient] UUID query failed: {e1}, trying string comparison")
-            # Fallback to string comparison
+            logger.warning("[get_patient] UUID query failed: %s, trying string comparison", str(e1)[:200])
+            try:
+                db.rollback()
+            except Exception:
+                pass
             try:
                 vitals_sql_str = text("""
-                    SELECT height, weight, bmi, recorded_at, created_at
+                    SELECT height, weight, bmi, measured_at, created_at
                     FROM ehr.vital_signs
                     WHERE patient_id::text = :patient_id
                     AND (height IS NOT NULL OR weight IS NOT NULL)
-                    ORDER BY recorded_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+                    ORDER BY measured_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
                     LIMIT 1
                 """)
                 vitals_result = db.execute(vitals_sql_str, {"patient_id": patient_id_str}).first()
-                logger.info(f"🔍 [get_patient] Vitals query result (string): {vitals_result}")
+                logger.info("[get_patient] Vitals query result (string): %s", vitals_result)
                 if vitals_result:
                     height_val = vitals_result[0]
                     weight_val = vitals_result[1]
@@ -334,36 +614,35 @@ async def get_patient(
                             weight_kg = float(weight_val)
                             if height_m > 0:
                                 bmi_val = round(weight_kg / (height_m * height_m), 1)
-                                logger.info(f"🔍 [get_patient] Calculated BMI on retrieval (string): {bmi_val} (height={height_val}cm, weight={weight_val}kg)")
+                            logger.info("[get_patient] Calculated BMI on retrieval (string): %s (height=%scm, weight=%skg)", bmi_val, height_val, weight_val)
                         except (ValueError, TypeError, ZeroDivisionError) as e:
-                            logger.warning(f"🔍 [get_patient] Could not calculate BMI: {e}")
+                            logger.warning("[get_patient] Could not calculate BMI: %s", e)
                             bmi_val = None
                     
                     bmi = str(bmi_val) if bmi_val is not None else None
                     
-                    # Get the measurement date (prefer recorded_at, fallback to created_at)
-                    recorded_at = vitals_result[3] if len(vitals_result) > 3 else None
-                    created_at = vitals_result[4] if len(vitals_result) > 4 else None
-                    last_measured = recorded_at or created_at
+                    # Get the measurement date (prefer measured_at, fallback to created_at)
+                    measured_at_val = vitals_result[3] if len(vitals_result) > 3 else None
+                    created_at_val = vitals_result[4] if len(vitals_result) > 4 else None
+                    last_measured = measured_at_val or created_at_val
                     if last_measured:
-                        # Convert to ISO format string
                         if hasattr(last_measured, 'isoformat'):
                             last_measured = last_measured.isoformat()
                         else:
                             last_measured = str(last_measured)
-                    logger.info(f"🔍 [get_patient] Extracted: height={height}, weight={weight}, bmi={bmi}, last_measured={last_measured}")
+                    logger.info("[get_patient] Extracted: height=%s, weight=%s, bmi=%s, last_measured=%s", height, weight, bmi, last_measured)
             except Exception as e2:
-                logger.warning(f"🔍 [get_patient] String query also failed: {e2}")
+                logger.warning("[get_patient] String query also failed: %s", str(e2)[:200])
                 pass
     except Exception as e:
         import logging
         logger = logging.getLogger(__name__)
-        logger.error(f"🔍 [get_patient] Error querying vitals: {e}", exc_info=True)
+        logger.error("[get_patient] Error querying vitals: %s", str(e)[:200], exc_info=True)
         pass
     
     import logging
     logger = logging.getLogger(__name__)
-    logger.info(f"🔍 [get_patient] Final values: height={height}, weight={weight}, bmi={bmi}, last_measured={last_measured}")
+    logger.info("[get_patient] Final values: height=%s, weight=%s, bmi=%s, last_measured=%s", height, weight, bmi, last_measured)
     
     item = PatientOut(
         id=str(p.patient_id),
@@ -952,12 +1231,12 @@ async def get_patient_vitals(
                         pass
                 
                 vitals_sql = text("""
-                    SELECT id, temperature, heart_rate, systolic_bp, diastolic_bp, 
+                    SELECT id, temperature, heart_rate, blood_pressure_systolic, blood_pressure_diastolic,
                            respiratory_rate, oxygen_saturation, pain_scale, height, weight, bmi,
-                           recorded_by, recorded_at
+                           measured_by, measured_at
                     FROM ehr.vital_signs
                     WHERE patient_id = :patient_id
-                    ORDER BY recorded_at DESC NULLS LAST, id DESC
+                    ORDER BY measured_at DESC NULLS LAST, id DESC
                     LIMIT 50
                 """)
                 vitals_results = db.execute(vitals_sql, {"patient_id": patient_id_uuid}).all()
@@ -970,12 +1249,12 @@ async def get_patient_vitals(
                 try:
                     # Fallback to string comparison
                     vitals_sql = text("""
-                        SELECT id, temperature, heart_rate, systolic_bp, diastolic_bp, 
+                        SELECT id, temperature, heart_rate, blood_pressure_systolic, blood_pressure_diastolic,
                                respiratory_rate, oxygen_saturation, pain_scale, height, weight, bmi,
-                               recorded_by, recorded_at
+                               measured_by, measured_at
                         FROM ehr.vital_signs
                         WHERE patient_id::text = :patient_id
-                        ORDER BY recorded_at DESC NULLS LAST, id DESC
+                        ORDER BY measured_at DESC NULLS LAST, id DESC
                         LIMIT 50
                     """)
                     vitals_results = db.execute(vitals_sql, {"patient_id": patient_id_str}).all()
@@ -1004,8 +1283,8 @@ async def get_patient_vitals(
                 height = row[8] if len(row) > 8 else None
                 weight = row[9] if len(row) > 9 else None
                 bmi = row[10] if len(row) > 10 else None
-                recorded_by = row[11] if len(row) > 11 else None
-                recorded_at = row[12] if len(row) > 12 else None
+                measured_by = row[11] if len(row) > 11 else None
+                measured_at = row[12] if len(row) > 12 else None
                 
                 # Format BP
                 bp = None
@@ -1027,8 +1306,8 @@ async def get_patient_vitals(
                     "height": str(height) if height is not None else None,
                     "weight": str(weight) if weight is not None else None,
                     "bmi": str(bmi) if bmi is not None else None,
-                    "recordedBy": str(recorded_by) if recorded_by else None,
-                    "recordedAt": recorded_at.isoformat() if recorded_at else None,
+                    "recordedBy": str(measured_by) if measured_by else None,
+                    "recordedAt": measured_at.isoformat() if measured_at else None,
                 })
             
             print(f"Returning {len(items)} vitals for patient {patient_id_str}")

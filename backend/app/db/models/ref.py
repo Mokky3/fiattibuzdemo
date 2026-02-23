@@ -2,16 +2,8 @@ from sqlalchemy import Column, text, Integer, Float, Boolean
 from sqlalchemy.dialects.postgresql import UUID, DATE, TEXT, TIMESTAMP, JSONB
 from app.db.base_class import Base
 
-class Specialty(Base):
-    __tablename__ = "specialties"
-    __table_args__ = {"schema": "ref"}
-
-    id = Column(UUID(as_uuid=True), primary_key=True, server_default=text("gen_random_uuid()"))
-    name = Column(TEXT, nullable=False)
-    code = Column(TEXT, unique=True)
-    description = Column(TEXT)
-    is_active = Column(Boolean, default=True)
-    created_at = Column(TIMESTAMP(timezone=True), nullable=False, server_default=text("now()"))
+# Note: Specialty model is defined in app.common.models.practitioner
+# Removed duplicate definition to avoid SQLAlchemy table conflict
 
 class IcdCode(Base):
     __tablename__ = "icd_codes"

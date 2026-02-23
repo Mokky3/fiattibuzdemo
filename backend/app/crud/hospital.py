@@ -84,6 +84,9 @@ class CRUDHospital(CRUDBase[Hospital, BaseModel, BaseModel]):
             if 'status' in filters and filters['status']:
                 query = query.filter(Hospital.status == filters['status'])
             
+            if 'is_active' in filters:
+                query = query.filter(Hospital.is_active == filters['is_active'])
+            
             if 'city' in filters and filters['city']:
                 query = query.filter(Hospital.city == filters['city'])
             

@@ -14,6 +14,7 @@ class HospitalResponse(BaseModel):
     website: Optional[str] = Field(None, description="Hospital website")
     logo_url: Optional[str] = Field(None, description="Hospital logo URL")
     capacity: Optional[int] = Field(None, description="Hospital capacity")
+    description: Optional[str] = Field(None, description="Hospital description")
     established_date: Optional[str] = Field(None, description="Established date")
     license_number: Optional[str] = Field(None, description="License number")
     accreditation: Optional[str] = Field(None, description="Accreditation status")
@@ -45,7 +46,8 @@ class HospitalUpdate(BaseModel):
     phone: Optional[str] = Field(None, description="Hospital phone")
     email: Optional[EmailStr] = Field(None, description="Hospital email")
     website: Optional[str] = Field(None, description="Hospital website")
-    capacity: Optional[int] = Field(None, ge=1, description="Hospital capacity")
+    description: Optional[str] = Field(None, description="Hospital description")
+    established_date: Optional[str] = Field(None, description="Established date (YYYY-MM-DD format)")
     license_number: Optional[str] = Field(None, description="License number")
     accreditation: Optional[str] = Field(None, description="Accreditation status")
 
@@ -85,6 +87,7 @@ class ServicePriceResponse(BaseModel):
     id: str
     service: str
     department: Optional[str] = None
+    department_id: Optional[str] = None
     price: float
     currency: str
     active: bool

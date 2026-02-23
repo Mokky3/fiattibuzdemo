@@ -101,11 +101,14 @@ async def get_hospitals(
         filter_expressions = []
         # Note: hospital_type and status filters not available in simplified structure
         # Only basic filtering by is_active is supported
+        # For admin portal, show all hospitals by default (including inactive)
+        # Only filter if status is explicitly provided
         if status:
             if status.upper() == "ACTIVE":
                 filter_expressions.append(Hospital.is_active == True)
             elif status.upper() == "INACTIVE":
                 filter_expressions.append(Hospital.is_active == False)
+        # If no status filter, show all hospitals (admin can see everything)
         
         hospitals = hospital_crud.get_multi(
             db=db,
@@ -117,11 +120,13 @@ async def get_hospitals(
             # Create search filters dictionary for search_hospitals method
             search_filters = {}
             # Note: hospital_type filter not available in simplified structure
+            # Only apply is_active filter if status is explicitly provided
             if status:
                 if status.upper() == "ACTIVE":
                     search_filters['is_active'] = True
                 elif status.upper() == "INACTIVE":
                     search_filters['is_active'] = False
+            # If no status filter, search all hospitals (admin can see everything)
             
             hospitals = hospital_crud.search_hospitals(
                 db=db,
@@ -134,7 +139,6 @@ async def get_hospitals(
         for hospital in hospitals:
             # Use the simplified address field from database
             composed_address = hospital.address or ""
-            capacity_value = None  # Not available in simplified structure
             
             # Get departments and calculate total beds
             departments = db.query(HospitalDepartment).filter(
@@ -143,6 +147,13 @@ async def get_hospitals(
             
             total_beds = sum(dept.bed_capacity or 0 for dept in departments)
             department_names = [dept.name for dept in departments]
+            
+            # Get fields from database (now available after migration)
+            hospital_established_date = getattr(hospital, 'established_date', None)
+            hospital_license_number = getattr(hospital, 'license_number', None) or ""
+            hospital_accreditation = getattr(hospital, 'accreditation', None)
+            hospital_description = getattr(hospital, 'description', None) or ""
+            hospital_updated_at = getattr(hospital, 'updated_at', None)
             
             hospital_responses.append(HospitalResponse(
                 id=str(hospital.id),
@@ -153,13 +164,14 @@ async def get_hospitals(
                 phone=hospital.phone or "",
                 email=hospital.email or "",
                 website="",  # Not available in simplified structure
-                capacity=capacity_value,
-                established_date=None,  # Not available in simplified structure
-                license_number="",  # Not available in simplified structure
-                accreditation=None,
+                capacity=None,  # Capacity is calculated from departments (total_beds)
+                description=hospital_description,
+                established_date=hospital_established_date.isoformat() if hospital_established_date else None,
+                license_number=hospital_license_number,
+                accreditation=hospital_accreditation,
                 created_at=hospital.created_at.isoformat() if hospital.created_at else "",
-                updated_at="",  # Not available in simplified structure
-                beds=total_beds,
+                updated_at=hospital_updated_at.isoformat() if hospital_updated_at else "",
+                beds=total_beds,  # Total beds calculated from all departments
                 departments=department_names
             ))
         total = hospital_crud.count(db=db, filters=filter_expressions)
@@ -221,6 +233,13 @@ async def get_hospital(
         total_beds = sum(dept.bed_capacity or 0 for dept in departments)
         department_names = [dept.name for dept in departments]
         
+        # Get fields from database (now available after migration)
+        hospital_established_date = getattr(hospital, 'established_date', None)
+        hospital_license_number = getattr(hospital, 'license_number', None) or ""
+        hospital_accreditation = getattr(hospital, 'accreditation', None)
+        hospital_description = getattr(hospital, 'description', None) or ""
+        hospital_updated_at = getattr(hospital, 'updated_at', None)
+        
         hospital_response = HospitalResponse(
             id=str(hospital.id),
             name=hospital.name,
@@ -231,13 +250,14 @@ async def get_hospital(
             email=hospital.email or "",
             website="",  # Not available in simplified model
             logo_url=hospital.logo_url or None,  # Include logo URL
-            capacity=None,  # Not available in simplified model
-            established_date=None,  # Not available in simplified model
-            license_number="",  # Not available in simplified model
-            accreditation=None,  # Not available in simplified model
+            capacity=None,  # Capacity is calculated from departments (total_beds)
+            description=hospital_description,
+            established_date=hospital_established_date.isoformat() if hospital_established_date else None,
+            license_number=hospital_license_number,
+            accreditation=hospital_accreditation,
             created_at=hospital.created_at.isoformat() if hospital.created_at else "",
-            updated_at="",  # Not available in simplified model
-            beds=total_beds,
+            updated_at=hospital_updated_at.isoformat() if hospital_updated_at else "",
+            beds=total_beds,  # Total beds calculated from all departments
             departments=department_names
         )
         return SuccessResponse(
@@ -261,7 +281,8 @@ async def get_hospital(
 async def create_hospital(
     request: Request,
     payload: HospitalCreate = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     """Create a new hospital."""
     try:
@@ -274,13 +295,19 @@ async def create_hospital(
             "is_active": True  # Map from status
         }
         hospital = hospital_crud.create(db=db, obj_in=hospital_data)
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.HOSPITAL_CREATED,
-            description=f"Created hospital: {payload.name}",
-            affected_resource_id=str(hospital.id)
-        )
+        # Log admin activity - wrap in try-except to prevent breaking hospital creation if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.HOSPITAL_CREATED,
+                description=f"Created hospital: {payload.name}",
+                affected_resource_id=str(hospital.id)
+            )
+        except Exception as log_error:
+            # Log error but don't fail the hospital creation
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
         hospital_response = HospitalResponse(
             id=str(hospital.id),
             name=hospital.name,
@@ -320,7 +347,8 @@ async def update_hospital(
     request: Request,
     hospital_id: str,
     payload: HospitalUpdate = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     """Update hospital information."""
     try:
@@ -349,26 +377,89 @@ async def update_hospital(
             )
             raise HTTPException(status_code=404, detail=problem.dict())
         # Simplified update data - only use fields that exist in the model
+        # Handle both None and empty string values
         update_data: Dict[str, Any] = {}
-        if payload.name is not None:
+        if payload.name is not None and payload.name != "":
             update_data['name'] = payload.name
-        if payload.address is not None:
+        if payload.address is not None and payload.address != "":
             update_data['address'] = payload.address
-        if payload.phone is not None:
+        if payload.phone is not None and payload.phone != "":
             update_data['phone'] = payload.phone
-        if payload.email is not None:
+        if payload.email is not None and payload.email != "":
             update_data['email'] = payload.email
         if payload.status is not None:
             # Map status to is_active
             update_data['is_active'] = payload.status.upper() == "ACTIVE"
-        updated_hospital = hospital_crud.update(db=db, db_obj=hospital, obj_in=update_data)
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.HOSPITAL_UPDATED,
-            description=f"Updated hospital: {hospital.name}",
-            affected_resource_id=str(hospital.id)
-        )
+        if payload.established_date is not None and payload.established_date != "":
+            # Parse the date string to Date object
+            try:
+                from datetime import datetime as dt
+                established_date = dt.strptime(payload.established_date, "%Y-%m-%d").date()
+                update_data['established_date'] = established_date
+            except ValueError:
+                import logging
+                logging.warning(f"Invalid established_date format: {payload.established_date}. Expected YYYY-MM-DD")
+        if payload.license_number is not None and payload.license_number != "":
+            update_data['license_number'] = payload.license_number
+        if payload.accreditation is not None and payload.accreditation != "":
+            update_data['accreditation'] = payload.accreditation
+        if payload.description is not None and payload.description != "":
+            update_data['description'] = payload.description
+        
+        # Log what we're updating for debugging
+        import logging
+        logging.info(f"Payload received: name={payload.name}, address={payload.address}, phone={payload.phone}, email={payload.email}, status={payload.status}, established_date={payload.established_date}, license_number={payload.license_number}, accreditation={payload.accreditation}")
+        logging.info(f"Updating hospital {hospital_id} with data: {update_data}")
+        logging.info(f"Current hospital state: name={hospital.name}, address={hospital.address}, phone={hospital.phone}, email={hospital.email}, is_active={hospital.is_active}, established_date={getattr(hospital, 'established_date', None)}")
+        
+        # Check if update_data is empty
+        if not update_data:
+            problem = create_problem_detail(
+                error_type=ErrorType.VALIDATION_ERROR,
+                title="No Update Data Provided",
+                status=400,
+                detail="At least one field must be provided for update",
+                trace_id=get_trace_id()
+            )
+            raise HTTPException(status_code=400, detail=problem.dict())
+        
+        # Update fields directly on the hospital object to ensure changes are applied
+        for key, value in update_data.items():
+            if hasattr(hospital, key):
+                setattr(hospital, key, value)
+        
+        # Set updated_at if exists
+        if hasattr(hospital, 'updated_at'):
+            setattr(hospital, 'updated_at', datetime.utcnow())
+        
+        # Commit changes
+        db.add(hospital)
+        db.commit()
+        db.refresh(hospital)
+        
+        updated_hospital = hospital
+        
+        logging.info(f"Hospital updated: name={updated_hospital.name}, address={updated_hospital.address}, phone={updated_hospital.phone}, email={updated_hospital.email}, is_active={updated_hospital.is_active}, capacity={getattr(updated_hospital, 'capacity', None)}, established_date={getattr(updated_hospital, 'established_date', None)}, license_number={getattr(updated_hospital, 'license_number', None)}, accreditation={getattr(updated_hospital, 'accreditation', None)}")
+        # Log admin activity - wrap in try-except to prevent breaking hospital update if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.HOSPITAL_UPDATED,
+                description=f"Updated hospital: {hospital.name}",
+                affected_resource_id=str(hospital.id)
+            )
+        except Exception as log_error:
+            # Log error but don't fail the hospital update
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
+        # Get departments and calculate total beds
+        departments = db.query(HospitalDepartment).filter(
+            HospitalDepartment.hospital_id == updated_hospital.id
+        ).all()
+        total_beds = sum(dept.bed_capacity or 0 for dept in departments)
+        department_names = [dept.name for dept in departments]
+        
         hospital_response = HospitalResponse(
             id=str(updated_hospital.id),
             name=updated_hospital.name,
@@ -378,13 +469,16 @@ async def update_hospital(
             phone=updated_hospital.phone or "",
             email=updated_hospital.email or "",
             website="",  # Not available in simplified model
-            logo_url=hospital.logo_url or None,  # Include logo URL
-            capacity=None,  # Not available in simplified model
-            established_date=None,  # Not available in simplified model
-            license_number="",  # Not available in simplified model
-            accreditation=None,  # Not available in simplified model
+            logo_url=updated_hospital.logo_url or None,  # Include logo URL
+            capacity=None,  # Capacity is calculated from departments (total_beds)
+            description=getattr(updated_hospital, 'description', None) or "",
+            established_date=updated_hospital.established_date.isoformat() if hasattr(updated_hospital, 'established_date') and updated_hospital.established_date else None,
+            license_number=getattr(updated_hospital, 'license_number', '') or "",
+            accreditation=getattr(updated_hospital, 'accreditation', None),
             created_at=updated_hospital.created_at.isoformat() if updated_hospital.created_at else "",
-            updated_at=""  # Not available in simplified model
+            updated_at=updated_hospital.updated_at.isoformat() if hasattr(updated_hospital, 'updated_at') and updated_hospital.updated_at else "",
+            beds=total_beds,
+            departments=department_names
         )
         return SuccessResponse(
             data=hospital_response,
@@ -407,7 +501,8 @@ async def update_hospital(
 async def delete_hospital(
     request: Request,
     hospital_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     """Delete a hospital (soft delete)."""
     try:
@@ -435,14 +530,20 @@ async def delete_hospital(
                 trace_id=get_trace_id()
             )
             raise HTTPException(status_code=404, detail=problem.dict())
-        hospital_crud.soft_delete(db=db, id=hospital_id)
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.HOSPITAL_DELETED,
-            description=f"Deleted hospital: {hospital.name}",
-            affected_resource_id=str(hospital.id)
-        )
+        hospital_crud.soft_delete(db=db, id=hospital_uuid)
+        # Log admin activity - wrap in try-except to prevent breaking hospital deletion if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.HOSPITAL_DELETED,
+                description=f"Deleted hospital: {hospital.name}",
+                affected_resource_id=str(hospital.id)
+            )
+        except Exception as log_error:
+            # Log error but don't fail the hospital deletion
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
         return SuccessResponse(
             data={"status": "deleted"},
             message="Hospital deleted successfully"
@@ -623,13 +724,13 @@ async def get_clinic_stats(
         try:
             from app.common.models.notification import Notification
             # Try to get satisfaction from feedback notifications
-            satisfaction_ratings = db.query(Notification.metadata).filter(
+            satisfaction_ratings = db.query(Notification.metadata_json).filter(
                 Notification.hospital_id == hospital_uuid,
                 Notification.type == "patient_feedback",
-                Notification.metadata.contains({"rating"})
+                Notification.metadata_json.contains({"rating"})
             ).all()
             if satisfaction_ratings:
-                ratings = [float(notif.metadata.get("rating", 0)) for notif in satisfaction_ratings if notif.metadata.get("rating")]
+                ratings = [float(notif.metadata_json.get("rating", 0)) for notif in satisfaction_ratings if notif.metadata_json.get("rating")]
                 patient_satisfaction = sum(ratings) / len(ratings) if ratings else 4.2
             else:
                 patient_satisfaction = 4.2
@@ -1013,7 +1114,8 @@ async def create_department(
     request: Request,
     hospital_id: str,
     payload: DepartmentCreate = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     """Create a new department for a hospital."""
     try:
@@ -1065,14 +1167,15 @@ async def create_department(
         try:
             admin_crud.log_admin_activity(
                 db=db,
-                admin_id=uuid4(),
+                admin_id=current_user.user_id,
                 activity_type=ActivityType.DEPARTMENT_CREATED,
                 description=f"Created department '{payload.name}' in hospital '{hospital.name}'",
                 affected_resource_id=str(department.id)
             )
         except Exception as log_error:
             # Log the error but don't fail the department creation
-            print(f"Admin logging error: {log_error}")
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
         department_response = DepartmentResponse(
             id=str(department.id),
             name=department.name,
@@ -1271,6 +1374,7 @@ async def list_service_pricing(
                 id=str(p.id),
                 service=p.service_name,
                 department=department_name,
+                department_id=str(p.department_id) if p.department_id else None,
                 price=p.base_price,
                 currency=p.currency,
                 active=p.is_active,
@@ -1347,6 +1451,7 @@ async def create_service_pricing(
                 id=str(price.id),
                 service=price.service_name,
                 department=department_name,
+                department_id=str(price.department_id) if price.department_id else None,
                 price=price.base_price,
                 currency=price.currency,
                 active=price.is_active,
@@ -1407,6 +1512,7 @@ async def update_service_pricing(
                 id=str(updated.id),
                 service=updated.service_name,
                 department=department_name,
+                department_id=str(updated.department_id) if updated.department_id else None,
                 price=updated.base_price,
                 currency=updated.currency,
                 active=updated.is_active,
@@ -1469,7 +1575,9 @@ class ClinicStaffResponse(BaseModel):
     phone: Optional[str] = None
     role: str
     department: Optional[str] = None
+    department_id: Optional[str] = None
     status: str
+    permissions: Optional[List[str]] = None
 
 class ClinicStaffCreateRequest(BaseModel):
     first_name: str
@@ -1487,6 +1595,7 @@ class ClinicStaffUpdateRequest(BaseModel):
     role: Optional[str] = None
     department_id: Optional[str] = None
     status: Optional[str] = None
+    permissions: Optional[List[str]] = None
 
 @router.get("/{hospital_id}/staff", response_model=SuccessResponse[List[ClinicStaffResponse]])
 @audit_pii_access("read", "clinic_staff", "staff_list")
@@ -1527,14 +1636,29 @@ async def list_clinic_staff(
 
         resp = []
         for u in users:
+            # Get department name if department_id exists
+            department_name = None
+            if u.department_id:
+                department = db.query(HospitalDepartment).filter(HospitalDepartment.id == u.department_id).first()
+                department_name = department.name if department else None
+            
+            # Get permissions from custom_permissions JSON field
+            user_permissions = []
+            if u.custom_permissions and isinstance(u.custom_permissions, dict):
+                user_permissions = u.custom_permissions.get('permissions', [])
+            elif u.custom_permissions and isinstance(u.custom_permissions, list):
+                user_permissions = u.custom_permissions
+            
             resp.append(ClinicStaffResponse(
                 id=str(u.id),
                 name=f"{u.first_name} {u.last_name}".strip() or u.email,
                 email=u.email,
                 phone=u.phone,
                 role=u.role.value if u.role else "",
-                department=None,
+                department=department_name,
+                department_id=str(u.department_id) if u.department_id else None,
                 status=u.status.value if u.status else "",
+                permissions=user_permissions if user_permissions else None,
             ))
         return SuccessResponse(data=resp, message="Clinic staff retrieved successfully")
     except HTTPException:
@@ -1556,7 +1680,8 @@ async def create_clinic_staff(
     request: Request,
     hospital_id: str,
     payload: ClinicStaffCreateRequest = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     try:
         # Convert string ID to UUID for PostgreSQL compatibility
@@ -1603,14 +1728,20 @@ async def create_clinic_staff(
         db.commit()
         db.refresh(user)
 
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.USER_CREATED,
-            description=f"Created clinic staff: {user.email}",
-            affected_resource_id=str(user.id),
-            affected_resource_type="clinic_staff",
-        )
+        # Log admin activity - wrap in try-except to prevent breaking staff creation if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.USER_CREATED,
+                description=f"Created clinic staff: {user.email}",
+                affected_resource_id=str(user.id),
+                affected_resource_type="clinic_staff",
+            )
+        except Exception as log_error:
+            # Log error but don't fail the staff creation
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
 
         return SuccessResponse(
             data=ClinicStaffResponse(
@@ -1644,7 +1775,8 @@ async def update_clinic_staff(
     hospital_id: str,
     user_id: str,
     payload: ClinicStaffUpdateRequest = Body(...),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     try:
         # Convert string ID to UUID for PostgreSQL compatibility
@@ -1675,18 +1807,40 @@ async def update_clinic_staff(
             raise HTTPException(status_code=404, detail=problem.dict())
 
         update_data: Dict[str, Any] = {}
-        if payload.first_name is not None:
-            update_data["first_name"] = payload.first_name
-        if payload.last_name is not None:
-            update_data["last_name"] = payload.last_name
-        if payload.email is not None:
-            update_data["email"] = payload.email
-        if payload.phone is not None:
-            update_data["phone"] = payload.phone
+        # Note: first_name, last_name, email, and phone are not allowed to be updated
+        # These are core identity fields that should not be changed by admins
+        # Only role, department_id, status, and permissions can be updated
+        
         if payload.role is not None:
             update_data["role"] = UserRole(payload.role)
         if payload.status is not None:
             update_data["status"] = UserStatus(payload.status)
+        if payload.department_id is not None:
+            # Convert string to UUID if provided
+            if payload.department_id:
+                try:
+                    department_uuid = uuid.UUID(payload.department_id)
+                    update_data["department_id"] = department_uuid
+                except ValueError:
+                    import logging
+                    logging.warning(f"Invalid department_id format: {payload.department_id}")
+            else:
+                update_data["department_id"] = None
+        
+        # Handle permissions - store in custom_permissions JSON field
+        if payload.permissions is not None:
+            # Initialize custom_permissions if it doesn't exist
+            if user.custom_permissions is None:
+                user.custom_permissions = {}
+            # Store permissions as a list in custom_permissions
+            # If empty list, clear permissions
+            if payload.permissions:
+                user.custom_permissions['permissions'] = payload.permissions
+            else:
+                # Remove permissions key if empty list
+                if 'permissions' in user.custom_permissions:
+                    del user.custom_permissions['permissions']
+            # Don't add to update_data, we'll set it directly
 
         for k, v in update_data.items():
             setattr(user, k, v)
@@ -1694,14 +1848,33 @@ async def update_clinic_staff(
         db.commit()
         db.refresh(user)
 
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.USER_UPDATED,
-            description=f"Updated clinic staff: {user.email}",
-            affected_resource_id=str(user.id),
-            affected_resource_type="clinic_staff",
-        )
+        # Log admin activity - wrap in try-except to prevent breaking staff update if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.USER_UPDATED,
+                description=f"Updated clinic staff: {user.email}",
+                affected_resource_id=str(user.id),
+                affected_resource_type="clinic_staff",
+            )
+        except Exception as log_error:
+            # Log error but don't fail the staff update
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
+
+        # Get department name if department_id exists
+        department_name = None
+        if user.department_id:
+            department = db.query(HospitalDepartment).filter(HospitalDepartment.id == user.department_id).first()
+            department_name = department.name if department else None
+
+        # Get permissions from custom_permissions JSON field
+        user_permissions = []
+        if user.custom_permissions and isinstance(user.custom_permissions, dict):
+            user_permissions = user.custom_permissions.get('permissions', [])
+        elif user.custom_permissions and isinstance(user.custom_permissions, list):
+            user_permissions = user.custom_permissions
 
         return SuccessResponse(
             data=ClinicStaffResponse(
@@ -1710,8 +1883,10 @@ async def update_clinic_staff(
                 email=user.email,
                 phone=user.phone,
                 role=user.role.value if user.role else "",
-                department=None,
+                department=department_name,
+                department_id=str(user.department_id) if user.department_id else None,
                 status=user.status.value if user.status else "",
+                permissions=user_permissions if user_permissions else None,
             ),
             message="Clinic staff updated successfully",
         )
@@ -1734,7 +1909,8 @@ async def delete_clinic_staff(
     request: Request,
     hospital_id: str,
     user_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: AuthenticatedUser = Depends(require_admin_access())
 ):
     try:
         # Convert string ID to UUID for PostgreSQL compatibility
@@ -1765,14 +1941,20 @@ async def delete_clinic_staff(
             raise HTTPException(status_code=404, detail=problem.dict())
         db.delete(user)
         db.commit()
-        admin_crud.log_admin_activity(
-            db=db,
-            admin_id=uuid4(),
-            activity_type=ActivityType.USER_DELETED,
-            description=f"Deleted clinic staff: {user.email}",
-            affected_resource_id=str(user.id),
-            affected_resource_type="clinic_staff",
-        )
+        # Log admin activity - wrap in try-except to prevent breaking staff deletion if logging fails
+        try:
+            admin_crud.log_admin_activity(
+                db=db,
+                admin_id=current_user.user_id,
+                activity_type=ActivityType.USER_DELETED,
+                description=f"Deleted clinic staff: {user.email}",
+                affected_resource_id=str(user.id),
+                affected_resource_type="clinic_staff",
+            )
+        except Exception as log_error:
+            # Log error but don't fail the staff deletion
+            import logging
+            logging.error(f"Failed to log admin activity: {str(log_error)}")
         return SuccessResponse(data={"status": "deleted"}, message="Clinic staff deleted successfully")
     except HTTPException:
         raise

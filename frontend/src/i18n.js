@@ -18,20 +18,13 @@ i18n
       excludeCacheFor: ['cimode'],
       // Convert detected language to supported format
       convertDetectedLanguage: (lng) => {
-        // Normalize language codes - ensure exact match
-        console.log('i18n: convertDetectedLanguage called with:', lng);
-        if (!lng) {
-          console.log('i18n: No language provided, defaulting to en');
+        if (!lng || typeof lng !== 'string') return 'en';
+        const normalized = lng.split('-')[0].toLowerCase();
+        // Reject invalid/truncated codes (e.g. "e" from corrupted "en")
+        if (normalized.length < 2 || !['uz', 'ru', 'en'].includes(normalized)) {
           return 'en';
         }
-        const normalized = lng.split('-')[0].toLowerCase();
-        console.log('i18n: Normalized language:', normalized);
-        if (normalized === 'uz' || normalized === 'ru' || normalized === 'en') {
-          console.log('i18n: Language supported, returning:', normalized);
-          return normalized;
-        }
-        console.log('i18n: Language not supported, defaulting to en');
-        return 'en'; // Default to English if not supported
+        return normalized;
       },
     },
     resources: {
@@ -16895,10 +16888,10 @@ i18n
       },
     },
     fallbackLng: {
-      'uz': ['uz', 'en'], // Uzbek falls back to English only if key missing
-      'ru': ['ru', 'en'], // Russian falls back to English only if key missing
-      'en': ['en'], // English doesn't fall back
-      'default': 'en', // Default fallback
+      uz: ['uz', 'en'],
+      ru: ['ru', 'en'],
+      en: ['en'],
+      default: ['en'], // must be array so i18next's forEach doesn't throw
     },
     supportedLngs: ['en', 'uz', 'ru'],
     load: 'languageOnly', // Only load language code, not region (e.g., 'uz' not 'uz-UZ')
