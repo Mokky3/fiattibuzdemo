@@ -2679,6 +2679,58 @@ async def get_report_by_appointment(
                 pass
             if not isinstance(report_content, dict):
                 report_content = {}
+
+            def _looks_like_header_or_address(line: str) -> bool:
+                if not line:
+                    return True
+                ln = line.strip().lower()
+                if len(ln) < 20:
+                    return True
+                header_tokens = (
+                    "clinic", "medical center", "address", "tel", "phone", "www.", "http", "ул.", "str.",
+                    "ул ", "город", "city", "index", "республика", "uzbekistan"
+                )
+                if any(tok in ln for tok in header_tokens):
+                    return True
+                digit_ratio = sum(c.isdigit() or c in ".,-/+()" for c in ln) / max(len(ln), 1)
+                if digit_ratio > 0.35:
+                    return True
+                return False
+
+            def _derive_chief_and_hpi(subjective_text: str) -> tuple[Optional[str], Optional[str]]:
+                if not subjective_text or not subjective_text.strip():
+                    return None, None
+
+                import re
+                normalized = subjective_text.strip()
+                lines = [ln.strip() for ln in normalized.splitlines() if ln.strip()]
+                clinical_lines = [ln for ln in lines if not _looks_like_header_or_address(ln)]
+                searchable = "\n".join(clinical_lines) if clinical_lines else normalized
+
+                def _extract_by_pattern(pattern: str) -> Optional[str]:
+                    m = re.search(pattern, searchable, re.IGNORECASE | re.DOTALL)
+                    if not m:
+                        return None
+                    val = m.group(1).strip()
+                    return val if len(val) >= 10 else None
+
+                chief = _extract_by_pattern(r"(?:chief\s+complaint|reason\s+for\s+visit|complaints?|жалобы|shikoyat)\s*[:\-]\s*(.+?)(?=\n\n|\n[A-ZА-Я]|$)")
+                hpi = _extract_by_pattern(r"(?:history\s+of\s+present\s+illness|present\s+illness|hpi|анамнез|anamnez)\s*[:\-]\s*(.+?)(?=\n\n|\n[A-ZА-Я]|$)")
+
+                if not chief:
+                    for ln in clinical_lines:
+                        if len(ln) >= 30:
+                            chief = ln[:500]
+                            break
+
+                if not hpi:
+                    hpi = "\n".join(clinical_lines[:8]).strip() or normalized
+
+                if chief and hpi and chief == hpi and len(hpi) > 700:
+                    hpi = hpi[:700] + "…"
+
+                return chief, hpi
+
             # Subjective -> chief complaint / HPI (fill if missing or empty)
             if clinical_note.subjective:
                 hpi = report_content.get("hpi")
@@ -2688,9 +2740,10 @@ async def get_report_by_appointment(
                 if need_subjective:
                     if "hpi" not in report_content or not isinstance(report_content["hpi"], dict):
                         report_content["hpi"] = {}
-                    report_content["hpi"]["free"] = clinical_note.subjective
-                    report_content["chief_complaint"] = clinical_note.subjective
-                    print(f"DEBUG: Filled from ClinicalNote.subjective")
+                    chief_complaint, hpi_text = _derive_chief_and_hpi(clinical_note.subjective)
+                    report_content["hpi"]["free"] = hpi_text or clinical_note.subjective
+                    report_content["chief_complaint"] = chief_complaint or (hpi_text[:220] if hpi_text else clinical_note.subjective[:220])
+                    print(f"DEBUG: Filled chief complaint and HPI from ClinicalNote.subjective")
             # Objective -> physical examination
             if clinical_note.objective:
                 if "pe" not in report_content or not report_content.get("pe") or not (report_content.get("pe") or {}).get("notes"):
